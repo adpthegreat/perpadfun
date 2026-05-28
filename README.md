@@ -4,8 +4,6 @@ Solana launchpad where every coin ships with a public, leveraged perp treasury t
 
 - Live site: https://perpad.fun
 - Whitepaper: https://perpad.fun/paper
-- How it works: https://perpad.fun/docs
-- Treasury wallet: [9Kxfhk9JMckpzAmGm1hXFjdfdL4VjpHvBKu9p4kJWHB7](https://solscan.io/account/9Kxfhk9JMckpzAmGm1hXFjdfdL4VjpHvBKu9p4kJWHB7)
 
 ## What it is
 
