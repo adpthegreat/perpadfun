@@ -1,0 +1,1 @@
+UPDATE public.tokens SET imperial_profile_index = 2 WHERE id = '878a2cdc-d19b-46fe-a11c-024f18c59fa3';

@@ -1,0 +1,1 @@
+ALTER TABLE public.treasury_events ADD COLUMN IF NOT EXISTS tx_sig text;

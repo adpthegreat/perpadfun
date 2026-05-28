@@ -1,0 +1,1 @@
+UPDATE public.tokens SET status = 'deprecated' WHERE id = '3c34543e-6f2a-4336-b94e-14437d0863f5';

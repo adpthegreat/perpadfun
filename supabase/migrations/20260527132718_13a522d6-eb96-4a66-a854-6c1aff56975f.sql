@@ -1,0 +1,1 @@
+UPDATE public.tokens SET position_collateral_usd = 0, position_size_usd = 0, opened_collateral_usd = 0, position_opened_at = NULL WHERE ticker IN ('HYPU','PAMP','HYPE');

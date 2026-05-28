@@ -1,0 +1,14 @@
+import { Connection, PublicKey } from "@solana/web3.js";
+import { DynamicBondingCurveClient } from "@meteora-ag/dynamic-bonding-curve-sdk";
+const conn = new Connection(process.env.HELIUS_RPC_URL || "https://api.mainnet-beta.solana.com", "confirmed");
+const client = new DynamicBondingCurveClient(conn, "confirmed");
+const POOL = new PublicKey("GrdVCkbBjoTVcfXCj4SWMQNZZDCmEKGzfW7RY9WytVdr");
+const pool = await client.state.getPool(POOL);
+const cfg = await client.state.getPoolConfig(pool.config);
+console.log("pool.creator:", pool.creator.toString());
+console.log("config.feeClaimer (partner):", cfg.feeClaimer?.toString());
+console.log("config.owner:", cfg.owner?.toString());
+console.log("config.leftoverReceiver:", cfg.leftoverReceiver?.toString());
+console.log("creatorTradingFeePercentage:", cfg.creatorTradingFeePercentage);
+console.log("partner quote fee unclaimed (lamports):", pool.partnerQuoteFee.toString(), "= SOL", Number(pool.partnerQuoteFee)/1e9);
+console.log("creator quote fee unclaimed (lamports):", pool.creatorQuoteFee.toString());

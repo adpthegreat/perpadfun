@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.tokens_imperial_profile_index_unique;

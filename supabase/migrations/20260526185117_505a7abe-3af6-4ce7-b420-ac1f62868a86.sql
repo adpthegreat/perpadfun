@@ -1,0 +1,1 @@
+ALTER TABLE public.tokens ADD COLUMN IF NOT EXISTS imperial_profile_pda text;
