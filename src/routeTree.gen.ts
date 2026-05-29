@@ -18,8 +18,13 @@ import { Route as DocsRouteImport } from './routes/docs'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TokenIdRouteImport } from './routes/token.$id'
 import { Route as RouteFeesClaimTokenRouteImport } from './routes/route-fees.$claimToken'
+import { Route as ApiAdminBackfillTreasuryWalletsRouteImport } from './routes/api/admin/backfill-treasury-wallets'
 import { Route as ApiPublicSolanaRpcRouteImport } from './routes/api/public/solana/rpc'
+import { Route as ApiPublicKeeperWorkflowsRouteImport } from './routes/api/public/keeper/workflows'
+import { Route as ApiPublicKeeperWorkflowReportRouteImport } from './routes/api/public/keeper/workflow-report'
+import { Route as ApiPublicKeeperWorkflowLocksRouteImport } from './routes/api/public/keeper/workflow-locks'
 import { Route as ApiPublicKeeperTokensRouteImport } from './routes/api/public/keeper/tokens'
+import { Route as ApiPublicKeeperStuckTokensRouteImport } from './routes/api/public/keeper/stuck-tokens'
 import { Route as ApiPublicKeeperReportRouteImport } from './routes/api/public/keeper/report'
 import { Route as ApiPublicKeeperExternalSweepReportRouteImport } from './routes/api/public/keeper/external-sweep-report'
 import { Route as ApiPublicKeeperExternalRoutersRouteImport } from './routes/api/public/keeper/external-routers'
@@ -70,16 +75,46 @@ const RouteFeesClaimTokenRoute = RouteFeesClaimTokenRouteImport.update({
   path: '/$claimToken',
   getParentRoute: () => RouteFeesRoute,
 } as any)
+const ApiAdminBackfillTreasuryWalletsRoute =
+  ApiAdminBackfillTreasuryWalletsRouteImport.update({
+    id: '/api/admin/backfill-treasury-wallets',
+    path: '/api/admin/backfill-treasury-wallets',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicSolanaRpcRoute = ApiPublicSolanaRpcRouteImport.update({
   id: '/api/public/solana/rpc',
   path: '/api/public/solana/rpc',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicKeeperWorkflowsRoute =
+  ApiPublicKeeperWorkflowsRouteImport.update({
+    id: '/api/public/keeper/workflows',
+    path: '/api/public/keeper/workflows',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicKeeperWorkflowReportRoute =
+  ApiPublicKeeperWorkflowReportRouteImport.update({
+    id: '/api/public/keeper/workflow-report',
+    path: '/api/public/keeper/workflow-report',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicKeeperWorkflowLocksRoute =
+  ApiPublicKeeperWorkflowLocksRouteImport.update({
+    id: '/api/public/keeper/workflow-locks',
+    path: '/api/public/keeper/workflow-locks',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicKeeperTokensRoute = ApiPublicKeeperTokensRouteImport.update({
   id: '/api/public/keeper/tokens',
   path: '/api/public/keeper/tokens',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicKeeperStuckTokensRoute =
+  ApiPublicKeeperStuckTokensRouteImport.update({
+    id: '/api/public/keeper/stuck-tokens',
+    path: '/api/public/keeper/stuck-tokens',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicKeeperReportRoute = ApiPublicKeeperReportRouteImport.update({
   id: '/api/public/keeper/report',
   path: '/api/public/keeper/report',
@@ -114,11 +149,16 @@ export interface FileRoutesByFullPath {
   '/tokens': typeof TokensRoute
   '/route-fees/$claimToken': typeof RouteFeesClaimTokenRoute
   '/token/$id': typeof TokenIdRoute
+  '/api/admin/backfill-treasury-wallets': typeof ApiAdminBackfillTreasuryWalletsRoute
   '/api/public/keeper/external-router-seen': typeof ApiPublicKeeperExternalRouterSeenRoute
   '/api/public/keeper/external-routers': typeof ApiPublicKeeperExternalRoutersRoute
   '/api/public/keeper/external-sweep-report': typeof ApiPublicKeeperExternalSweepReportRoute
   '/api/public/keeper/report': typeof ApiPublicKeeperReportRoute
+  '/api/public/keeper/stuck-tokens': typeof ApiPublicKeeperStuckTokensRoute
   '/api/public/keeper/tokens': typeof ApiPublicKeeperTokensRoute
+  '/api/public/keeper/workflow-locks': typeof ApiPublicKeeperWorkflowLocksRoute
+  '/api/public/keeper/workflow-report': typeof ApiPublicKeeperWorkflowReportRoute
+  '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
 }
 export interface FileRoutesByTo {
@@ -131,11 +171,16 @@ export interface FileRoutesByTo {
   '/tokens': typeof TokensRoute
   '/route-fees/$claimToken': typeof RouteFeesClaimTokenRoute
   '/token/$id': typeof TokenIdRoute
+  '/api/admin/backfill-treasury-wallets': typeof ApiAdminBackfillTreasuryWalletsRoute
   '/api/public/keeper/external-router-seen': typeof ApiPublicKeeperExternalRouterSeenRoute
   '/api/public/keeper/external-routers': typeof ApiPublicKeeperExternalRoutersRoute
   '/api/public/keeper/external-sweep-report': typeof ApiPublicKeeperExternalSweepReportRoute
   '/api/public/keeper/report': typeof ApiPublicKeeperReportRoute
+  '/api/public/keeper/stuck-tokens': typeof ApiPublicKeeperStuckTokensRoute
   '/api/public/keeper/tokens': typeof ApiPublicKeeperTokensRoute
+  '/api/public/keeper/workflow-locks': typeof ApiPublicKeeperWorkflowLocksRoute
+  '/api/public/keeper/workflow-report': typeof ApiPublicKeeperWorkflowReportRoute
+  '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
 }
 export interface FileRoutesById {
@@ -149,11 +194,16 @@ export interface FileRoutesById {
   '/tokens': typeof TokensRoute
   '/route-fees/$claimToken': typeof RouteFeesClaimTokenRoute
   '/token/$id': typeof TokenIdRoute
+  '/api/admin/backfill-treasury-wallets': typeof ApiAdminBackfillTreasuryWalletsRoute
   '/api/public/keeper/external-router-seen': typeof ApiPublicKeeperExternalRouterSeenRoute
   '/api/public/keeper/external-routers': typeof ApiPublicKeeperExternalRoutersRoute
   '/api/public/keeper/external-sweep-report': typeof ApiPublicKeeperExternalSweepReportRoute
   '/api/public/keeper/report': typeof ApiPublicKeeperReportRoute
+  '/api/public/keeper/stuck-tokens': typeof ApiPublicKeeperStuckTokensRoute
   '/api/public/keeper/tokens': typeof ApiPublicKeeperTokensRoute
+  '/api/public/keeper/workflow-locks': typeof ApiPublicKeeperWorkflowLocksRoute
+  '/api/public/keeper/workflow-report': typeof ApiPublicKeeperWorkflowReportRoute
+  '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
 }
 export interface FileRouteTypes {
@@ -168,11 +218,16 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/route-fees/$claimToken'
     | '/token/$id'
+    | '/api/admin/backfill-treasury-wallets'
     | '/api/public/keeper/external-router-seen'
     | '/api/public/keeper/external-routers'
     | '/api/public/keeper/external-sweep-report'
     | '/api/public/keeper/report'
+    | '/api/public/keeper/stuck-tokens'
     | '/api/public/keeper/tokens'
+    | '/api/public/keeper/workflow-locks'
+    | '/api/public/keeper/workflow-report'
+    | '/api/public/keeper/workflows'
     | '/api/public/solana/rpc'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -185,11 +240,16 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/route-fees/$claimToken'
     | '/token/$id'
+    | '/api/admin/backfill-treasury-wallets'
     | '/api/public/keeper/external-router-seen'
     | '/api/public/keeper/external-routers'
     | '/api/public/keeper/external-sweep-report'
     | '/api/public/keeper/report'
+    | '/api/public/keeper/stuck-tokens'
     | '/api/public/keeper/tokens'
+    | '/api/public/keeper/workflow-locks'
+    | '/api/public/keeper/workflow-report'
+    | '/api/public/keeper/workflows'
     | '/api/public/solana/rpc'
   id:
     | '__root__'
@@ -202,11 +262,16 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/route-fees/$claimToken'
     | '/token/$id'
+    | '/api/admin/backfill-treasury-wallets'
     | '/api/public/keeper/external-router-seen'
     | '/api/public/keeper/external-routers'
     | '/api/public/keeper/external-sweep-report'
     | '/api/public/keeper/report'
+    | '/api/public/keeper/stuck-tokens'
     | '/api/public/keeper/tokens'
+    | '/api/public/keeper/workflow-locks'
+    | '/api/public/keeper/workflow-report'
+    | '/api/public/keeper/workflows'
     | '/api/public/solana/rpc'
   fileRoutesById: FileRoutesById
 }
@@ -219,11 +284,16 @@ export interface RootRouteChildren {
   RouteFeesRoute: typeof RouteFeesRouteWithChildren
   TokensRoute: typeof TokensRoute
   TokenIdRoute: typeof TokenIdRoute
+  ApiAdminBackfillTreasuryWalletsRoute: typeof ApiAdminBackfillTreasuryWalletsRoute
   ApiPublicKeeperExternalRouterSeenRoute: typeof ApiPublicKeeperExternalRouterSeenRoute
   ApiPublicKeeperExternalRoutersRoute: typeof ApiPublicKeeperExternalRoutersRoute
   ApiPublicKeeperExternalSweepReportRoute: typeof ApiPublicKeeperExternalSweepReportRoute
   ApiPublicKeeperReportRoute: typeof ApiPublicKeeperReportRoute
+  ApiPublicKeeperStuckTokensRoute: typeof ApiPublicKeeperStuckTokensRoute
   ApiPublicKeeperTokensRoute: typeof ApiPublicKeeperTokensRoute
+  ApiPublicKeeperWorkflowLocksRoute: typeof ApiPublicKeeperWorkflowLocksRoute
+  ApiPublicKeeperWorkflowReportRoute: typeof ApiPublicKeeperWorkflowReportRoute
+  ApiPublicKeeperWorkflowsRoute: typeof ApiPublicKeeperWorkflowsRoute
   ApiPublicSolanaRpcRoute: typeof ApiPublicSolanaRpcRoute
 }
 
@@ -292,6 +362,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RouteFeesClaimTokenRouteImport
       parentRoute: typeof RouteFeesRoute
     }
+    '/api/admin/backfill-treasury-wallets': {
+      id: '/api/admin/backfill-treasury-wallets'
+      path: '/api/admin/backfill-treasury-wallets'
+      fullPath: '/api/admin/backfill-treasury-wallets'
+      preLoaderRoute: typeof ApiAdminBackfillTreasuryWalletsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/solana/rpc': {
       id: '/api/public/solana/rpc'
       path: '/api/public/solana/rpc'
@@ -299,11 +376,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSolanaRpcRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/keeper/workflows': {
+      id: '/api/public/keeper/workflows'
+      path: '/api/public/keeper/workflows'
+      fullPath: '/api/public/keeper/workflows'
+      preLoaderRoute: typeof ApiPublicKeeperWorkflowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/keeper/workflow-report': {
+      id: '/api/public/keeper/workflow-report'
+      path: '/api/public/keeper/workflow-report'
+      fullPath: '/api/public/keeper/workflow-report'
+      preLoaderRoute: typeof ApiPublicKeeperWorkflowReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/keeper/workflow-locks': {
+      id: '/api/public/keeper/workflow-locks'
+      path: '/api/public/keeper/workflow-locks'
+      fullPath: '/api/public/keeper/workflow-locks'
+      preLoaderRoute: typeof ApiPublicKeeperWorkflowLocksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/keeper/tokens': {
       id: '/api/public/keeper/tokens'
       path: '/api/public/keeper/tokens'
       fullPath: '/api/public/keeper/tokens'
       preLoaderRoute: typeof ApiPublicKeeperTokensRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/keeper/stuck-tokens': {
+      id: '/api/public/keeper/stuck-tokens'
+      path: '/api/public/keeper/stuck-tokens'
+      fullPath: '/api/public/keeper/stuck-tokens'
+      preLoaderRoute: typeof ApiPublicKeeperStuckTokensRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/keeper/report': {
@@ -358,15 +463,30 @@ const rootRouteChildren: RootRouteChildren = {
   RouteFeesRoute: RouteFeesRouteWithChildren,
   TokensRoute: TokensRoute,
   TokenIdRoute: TokenIdRoute,
+  ApiAdminBackfillTreasuryWalletsRoute: ApiAdminBackfillTreasuryWalletsRoute,
   ApiPublicKeeperExternalRouterSeenRoute:
     ApiPublicKeeperExternalRouterSeenRoute,
   ApiPublicKeeperExternalRoutersRoute: ApiPublicKeeperExternalRoutersRoute,
   ApiPublicKeeperExternalSweepReportRoute:
     ApiPublicKeeperExternalSweepReportRoute,
   ApiPublicKeeperReportRoute: ApiPublicKeeperReportRoute,
+  ApiPublicKeeperStuckTokensRoute: ApiPublicKeeperStuckTokensRoute,
   ApiPublicKeeperTokensRoute: ApiPublicKeeperTokensRoute,
+  ApiPublicKeeperWorkflowLocksRoute: ApiPublicKeeperWorkflowLocksRoute,
+  ApiPublicKeeperWorkflowReportRoute: ApiPublicKeeperWorkflowReportRoute,
+  ApiPublicKeeperWorkflowsRoute: ApiPublicKeeperWorkflowsRoute,
   ApiPublicSolanaRpcRoute: ApiPublicSolanaRpcRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
