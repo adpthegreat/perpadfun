@@ -112,6 +112,10 @@ export const config = {
   reconcileEnabled: String(process.env.RECONCILE_ENABLED ?? 'true').toLowerCase() === 'true',
   reconcileTickMs: Number(process.env.RECONCILE_TICK_MS ?? 90_000),
   reconcileWindowMin: Number(process.env.RECONCILE_WINDOW_MIN ?? 15),
+  // State reconcile (Fix 3c): scans token_workflows and nudges stuck tokens back
+  // into the forward tick (error->idle, clear stale pending, escalate blocked).
+  // PASSIVE — never trades. See KEEPER_RECONCILE.md.
+  stateReconcileEnabled: String(process.env.STATE_RECONCILE_ENABLED ?? 'true').toLowerCase() === 'true',
   // Quiet the per-call Imperial handshake fallback log unless set.
   logVerbose: String(process.env.LOG_VERBOSE ?? 'false').toLowerCase() === 'true',
 };
