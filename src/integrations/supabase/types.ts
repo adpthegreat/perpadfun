@@ -7,13 +7,139 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
+      keeper_actions: {
+        Row: {
+          action_kind: string
+          amount_sol: number | null
+          amount_tokens: number | null
+          amount_usd: number | null
+          confirmed_at: string | null
+          created_at: string
+          error: string | null
+          external_id: string | null
+          id: string
+          intent_hash: string
+          request_payload: Json
+          response_payload: Json
+          signature: string | null
+          status: string
+          token_id: string
+          updated_at: string
+        }
+        Insert: {
+          action_kind: string
+          amount_sol?: number | null
+          amount_tokens?: number | null
+          amount_usd?: number | null
+          confirmed_at?: string | null
+          created_at?: string
+          error?: string | null
+          external_id?: string | null
+          id?: string
+          intent_hash: string
+          request_payload?: Json
+          response_payload?: Json
+          signature?: string | null
+          status?: string
+          token_id: string
+          updated_at?: string
+        }
+        Update: {
+          action_kind?: string
+          amount_sol?: number | null
+          amount_tokens?: number | null
+          amount_usd?: number | null
+          confirmed_at?: string | null
+          created_at?: string
+          error?: string | null
+          external_id?: string | null
+          id?: string
+          intent_hash?: string
+          request_payload?: Json
+          response_payload?: Json
+          signature?: string | null
+          status?: string
+          token_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "keeper_actions_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      keeper_logs: {
+        Row: {
+          created_at: string
+          event: string | null
+          fields: Json
+          id: number
+          level: string
+          message: string
+          tick_id: string | null
+          token_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event?: string | null
+          fields?: Json
+          id?: number
+          level?: string
+          message: string
+          tick_id?: string | null
+          token_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event?: string | null
+          fields?: Json
+          id?: number
+          level?: string
+          message?: string
+          tick_id?: string | null
+          token_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "keeper_logs_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -41,6 +167,92 @@ export type Database = {
         }
         Relationships: []
       }
+      token_workflows: {
+        Row: {
+          attempt_count: number
+          blocked_reason: string | null
+          buyback_reserved_usd: number
+          created_at: string
+          imperial_deposited_usd: number
+          last_observed_at: string | null
+          last_observed_imperial_usdc: number | null
+          last_observed_sub_sol: number | null
+          last_observed_sub_usdc: number | null
+          last_successful_step: string | null
+          locked_at: string | null
+          locked_by: string | null
+          metadata: Json
+          next_retry_at: string | null
+          perp_reserved_usd: number
+          position_collateral_usd: number
+          position_entry_price: number | null
+          position_entry_source: string | null
+          position_size_usd: number
+          state: string
+          token_id: string
+          treasury_reserved_usd: number
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          blocked_reason?: string | null
+          buyback_reserved_usd?: number
+          created_at?: string
+          imperial_deposited_usd?: number
+          last_observed_at?: string | null
+          last_observed_imperial_usdc?: number | null
+          last_observed_sub_sol?: number | null
+          last_observed_sub_usdc?: number | null
+          last_successful_step?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          metadata?: Json
+          next_retry_at?: string | null
+          perp_reserved_usd?: number
+          position_collateral_usd?: number
+          position_entry_price?: number | null
+          position_entry_source?: string | null
+          position_size_usd?: number
+          state?: string
+          token_id: string
+          treasury_reserved_usd?: number
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          blocked_reason?: string | null
+          buyback_reserved_usd?: number
+          created_at?: string
+          imperial_deposited_usd?: number
+          last_observed_at?: string | null
+          last_observed_imperial_usdc?: number | null
+          last_observed_sub_sol?: number | null
+          last_observed_sub_usdc?: number | null
+          last_successful_step?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          metadata?: Json
+          next_retry_at?: string | null
+          perp_reserved_usd?: number
+          position_collateral_usd?: number
+          position_entry_price?: number | null
+          position_entry_source?: string | null
+          position_size_usd?: number
+          state?: string
+          token_id?: string
+          treasury_reserved_usd?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "token_workflows_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: true
+            referencedRelation: "tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tokens: {
         Row: {
           buyback_reserve_usd: number
@@ -61,7 +273,7 @@ export type Database = {
           graduated_pool_address: string | null
           id: string
           image_url: string | null
-          imperial_profile_index: number | null
+          imperial_profile_index: number
           imperial_profile_pda: string | null
           last_fee_claim_at: string | null
           last_fee_claim_signature: string | null
@@ -94,7 +306,7 @@ export type Database = {
           total_supply: number | null
           treasury_pnl_usd: number
           treasury_sol: number
-          treasury_wallet_address: string | null
+          treasury_wallet_address: string
           twitter_url: string | null
           underlying: string
           website_url: string | null
@@ -118,7 +330,7 @@ export type Database = {
           graduated_pool_address?: string | null
           id?: string
           image_url?: string | null
-          imperial_profile_index?: number | null
+          imperial_profile_index?: number
           imperial_profile_pda?: string | null
           last_fee_claim_at?: string | null
           last_fee_claim_signature?: string | null
@@ -151,7 +363,7 @@ export type Database = {
           total_supply?: number | null
           treasury_pnl_usd?: number
           treasury_sol?: number
-          treasury_wallet_address?: string | null
+          treasury_wallet_address: string
           twitter_url?: string | null
           underlying: string
           website_url?: string | null
@@ -175,7 +387,7 @@ export type Database = {
           graduated_pool_address?: string | null
           id?: string
           image_url?: string | null
-          imperial_profile_index?: number | null
+          imperial_profile_index?: number
           imperial_profile_pda?: string | null
           last_fee_claim_at?: string | null
           last_fee_claim_signature?: string | null
@@ -208,7 +420,7 @@ export type Database = {
           total_supply?: number | null
           treasury_pnl_usd?: number
           treasury_sol?: number
-          treasury_wallet_address?: string | null
+          treasury_wallet_address?: string
           twitter_url?: string | null
           underlying?: string
           website_url?: string | null
@@ -441,7 +653,11 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
 } as const
+
