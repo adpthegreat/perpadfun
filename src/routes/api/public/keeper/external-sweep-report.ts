@@ -30,6 +30,94 @@ const ALLOWED_KINDS = [
   "external_perp", // 50% leg routed to perp position
 ] as const;
 
+function actionKindForSweep(kind: (typeof ALLOWED_KINDS)[number]) {
+  switch (kind) {
+    case "external_split_treasury":
+      return "treasury_skim";
+    case "external_buyback":
+      return "buyback";
+    case "external_perp":
+      return "imperial_deposit";
+    case "external_sweep":
+    default:
+      return "fee_claim_pumpfun";
+  }
+}
+
+async function upsertExternalWorkflow(
+  rows: Array<{
+    token_id: string;
+    kind: string;
+    sol_amount: number;
+    tokens_amount: number | null;
+    tx_sig: string | null;
+    note: string | null;
+  }>,
+) {
+  if (!rows.length) return;
+  const now = new Date().toISOString();
+  const byToken = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const list = byToken.get(row.token_id) ?? [];
+    list.push(row);
+    byToken.set(row.token_id, list);
+  }
+
+  for (const [tokenId, tokenRows] of byToken) {
+    const blocked = [...tokenRows]
+      .reverse()
+      .find((row) =>
+        /\b(skip|defer|deferred|failed|err|error|below|unsupported|capacity|unavailable)\b/i.test(
+          row.note ?? "",
+        ),
+      );
+    const hasPerp = tokenRows.some((row) => row.kind === "external_perp");
+    const hasClaim = tokenRows.some((row) => row.kind === "external_sweep" && row.sol_amount > 0);
+    const hasBuyback = tokenRows.some((row) => row.kind === "external_buyback");
+    const state = blocked
+      ? "blocked"
+      : hasPerp
+        ? "imperial_deposited"
+        : hasClaim || hasBuyback
+          ? "split_reserved"
+          : "idle";
+
+    await supabaseAdmin.from("token_workflows").upsert(
+      {
+        token_id: tokenId,
+        state,
+        last_successful_step: blocked ? undefined : "external_sweep",
+        blocked_reason: blocked?.note?.slice(0, 240) ?? null,
+        next_retry_at: blocked ? new Date(Date.now() + 60_000).toISOString() : null,
+        last_observed_at: now,
+        metadata: {
+          source: "external-sweep-report",
+          event_count: tokenRows.length,
+        },
+      },
+      { onConflict: "token_id" },
+    );
+
+    const actionRows = tokenRows.map((row) => ({
+      token_id: row.token_id,
+      action_kind: actionKindForSweep(row.kind as (typeof ALLOWED_KINDS)[number]),
+      intent_hash:
+        `${row.kind}:${row.tx_sig ?? now}:${Math.round((row.sol_amount ?? 0) * 1e9)}`.slice(0, 80),
+      status: blocked && row === blocked ? "blocked" : "confirmed",
+      signature: row.tx_sig,
+      amount_sol: row.sol_amount,
+      amount_tokens: row.tokens_amount,
+      request_payload: { source: "external-sweep-report" },
+      response_payload: { note: row.note },
+      error: blocked && row === blocked ? row.note : null,
+      confirmed_at: blocked && row === blocked ? null : now,
+    }));
+    await supabaseAdmin
+      .from("keeper_actions")
+      .upsert(actionRows, { onConflict: "token_id,action_kind,intent_hash" });
+  }
+}
+
 const Schema = z.object({
   sweeps: z
     .array(
@@ -37,7 +125,7 @@ const Schema = z.object({
         token_id: z.string().uuid(),
         kind: z.enum(ALLOWED_KINDS).optional(),
         swept_sol: z.number().min(0).max(1_000_000),
-          tokens_amount: z.number().min(0).max(1_000_000_000_000_000).optional().nullable(),
+        tokens_amount: z.number().min(0).max(1_000_000_000_000_000).optional().nullable(),
         tx_sig: z.string().min(8).max(200).optional().nullable(),
         note: z.string().max(500).optional().nullable(),
       }),
@@ -70,10 +158,10 @@ export const Route = createFileRoute("/api/public/keeper/external-sweep-report")
         }
         const parsed = Schema.safeParse(body);
         if (!parsed.success) {
-          return new Response(
-            JSON.stringify({ ok: false, error: parsed.error.message }),
-            { status: 400, headers: { "Content-Type": "application/json" } },
-          );
+          return new Response(JSON.stringify({ ok: false, error: parsed.error.message }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         const rows = parsed.data.sweeps.map((s) => ({
@@ -94,6 +182,8 @@ export const Route = createFileRoute("/api/public/keeper/external-sweep-report")
             headers: { "Content-Type": "application/json" },
           });
         }
+
+        await upsertExternalWorkflow(rows);
 
         // Bump cumulative fees_accrued_usd per token from the actual perp-margin
         // leg. Prefer the explicit external_perp event when present; otherwise
@@ -117,7 +207,10 @@ export const Route = createFileRoute("/api/public/keeper/external-sweep-report")
           const perpUsdByToken = new Map<string, number>();
           for (const r of rows) {
             if (r.kind === "external_sweep" && r.sol_amount && r.sol_amount > 0) {
-              claimSolByToken.set(r.token_id, (claimSolByToken.get(r.token_id) ?? 0) + r.sol_amount);
+              claimSolByToken.set(
+                r.token_id,
+                (claimSolByToken.get(r.token_id) ?? 0) + r.sol_amount,
+              );
             }
             if (r.kind === "external_perp" && r.note && !r.note.includes("pre-deposit swap")) {
               const depositUsd = r.note.match(/imperial deposit: \+\$([0-9]+(?:\.[0-9]+)?)/)?.[1];
@@ -129,7 +222,8 @@ export const Route = createFileRoute("/api/public/keeper/external-sweep-report")
           }
           const tokenIds = new Set([...claimSolByToken.keys(), ...perpUsdByToken.keys()]);
           for (const tokenId of tokenIds) {
-            const addUsd = perpUsdByToken.get(tokenId) ?? ((claimSolByToken.get(tokenId) ?? 0) * solUsd * 0.5);
+            const addUsd =
+              perpUsdByToken.get(tokenId) ?? (claimSolByToken.get(tokenId) ?? 0) * solUsd * 0.5;
             if (addUsd <= 0) continue;
             const { data: cur } = await supabaseAdmin
               .from("tokens")
@@ -137,10 +231,7 @@ export const Route = createFileRoute("/api/public/keeper/external-sweep-report")
               .eq("id", tokenId)
               .maybeSingle();
             const next = Number(cur?.fees_accrued_usd ?? 0) + addUsd;
-            await supabaseAdmin
-              .from("tokens")
-              .update({ fees_accrued_usd: next })
-              .eq("id", tokenId);
+            await supabaseAdmin.from("tokens").update({ fees_accrued_usd: next }).eq("id", tokenId);
           }
         }
 
