@@ -1,7 +1,13 @@
 import { Keypair } from "@solana/web3.js";
-import { createHmac } from "crypto";
+import { createHmac, randomUUID } from "crypto";
 import bs58 from "bs58";
 import { getTreasuryKeypair } from "./treasury.server";
+
+// Every perpad token uses Imperial profile slot 1 under its OWN sub-wallet.
+// Isolation comes from the per-token sub-wallet (the signer), not the index —
+// so the index is a constant. Single source of truth for both the native and
+// external creation paths.
+export const TOKEN_IMPERIAL_PROFILE_INDEX = 1;
 
 /**
  * Derive a deterministic per-token sub-wallet from the master treasury secret.
@@ -29,4 +35,24 @@ export function deriveSubWalletAddress(tokenId: string): string {
 export function exportSubWalletPrivateKeyBase58(tokenId: string): string {
   const kp = deriveSubWalletKeypair(tokenId);
   return bs58.encode(kp.secretKey);
+}
+
+// The invariants every token row must carry from the instant it is created.
+// Computed from the (deterministic) token id, so they can be written in the
+// SAME insert — never a fallible post-insert step.
+export function tokenInvariantsFor(tokenId: string): {
+  treasury_wallet_address: string;
+  imperial_profile_index: number;
+} {
+  return {
+    treasury_wallet_address: deriveSubWalletAddress(tokenId),
+    imperial_profile_index: TOKEN_IMPERIAL_PROFILE_INDEX,
+  };
+}
+
+// Fresh identity for a brand-new token: a pre-generated id plus its invariants,
+// so the whole row can be inserted atomically.
+export function newTokenIdentity(): { id: string } & ReturnType<typeof tokenInvariantsFor> {
+  const id = randomUUID();
+  return { id, ...tokenInvariantsFor(id) };
 }

@@ -13,8 +13,8 @@ export const IMPERIAL_MAX_LEVERAGE: Record<string, number> = {
   TAO: 4.99, WLD: 100,
   TSLA: 24.39, NVDA: 24.39, AAPL: 24.39, AMD: 24.39, AMZN: 24.39, SPY: 24.39,
   XAU: 200, XAG: 200, GOLD: 24.78, SILVER: 24.78, WTI: 100, CRUDEOIL: 6.92,
-
-  
+  NATGAS: 11.78, COPPER: 19.86,
+  EUR: 500, GBP: 500, USDJPY: 500, USDCHF: 500, USDCAD: 500, AUD: 500, NZD: 500,
 };
 
 export const BASE_LEVERAGES = [2, 3, 5] as const;
@@ -48,4 +48,18 @@ export function isMarketUnavailable(underlying: string | null | undefined): bool
 export function maxLeverageFor(underlying: string | null | undefined): number {
   if (!underlying) return 0;
   return IMPERIAL_MAX_LEVERAGE[underlying.toUpperCase()] ?? 0;
+}
+
+// A market the keeper's SUPPORTED_MARKETS knows about (case-insensitive).
+export function isSupportedMarket(underlying: string | null | undefined): boolean {
+  if (!underlying) return false;
+  return underlying.toUpperCase() in IMPERIAL_MAX_LEVERAGE;
+}
+
+// Launchable = supported by Imperial AND not in the venue-unavailable set
+// (phoenix/flash_trade markets the keeper can't open yet). This is the gate a
+// token must pass at creation so it can never be born into the "claims fees
+// forever but never opens" state (KEEPER_P1_FIXES.md cause F / Fix 2a).
+export function isLaunchableMarket(underlying: string | null | undefined): boolean {
+  return isSupportedMarket(underlying) && !isMarketUnavailable(underlying);
 }
