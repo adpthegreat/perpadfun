@@ -27,9 +27,10 @@ import { DynamicBondingCurveClient, deriveDammV2PoolAddress } from '@meteora-ag/
 import { CpAmm, getUnClaimLpFee } from '@meteora-ag/cp-amm-sdk';
 import { config } from './config.js';
 import { loadKeypair } from './wallet.js';
+import { WSOL_MINT as SOL_MINT, TOKEN_PROGRAM } from './constants.js';
+import { withRetry } from './rateLimiter.js';
 
 const U64_MAX = new BN('18446744073709551615');
-const SOL_MINT = 'So11111111111111111111111111111111111111112';
 const MIN_CLAIM_USD = Number(process.env.MIN_CLAIM_USD ?? '0.02');
 const MIN_CLAIM_SOL = Number(process.env.MIN_CLAIM_SOL ?? '0.0001');
 const ENABLE_AMM_FEE_CLAIMS = String(process.env.ENABLE_AMM_FEE_CLAIMS ?? 'true').toLowerCase() === 'true';
@@ -199,7 +200,7 @@ async function sendAndConfirm(txOrBuilder, label = 'tx', signer = null) {
 
 
 async function solBalance(pubkey) {
-  const lamports = await conn().getBalance(pubkey, 'confirmed');
+  const lamports = await withRetry(() => conn().getBalance(pubkey, 'confirmed'));
   return lamports / 1e9;
 }
 
@@ -358,10 +359,10 @@ export async function claimAmmFees({ graduatedPoolAddress, mintAddress, lpPositi
 
 
 async function resolveTokenProgram(mintPk) {
-  const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+  const TOKEN_PROGRAM_ID = new PublicKey(TOKEN_PROGRAM);
   const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
   try {
-    const info = await conn().getAccountInfo(mintPk, 'confirmed');
+    const info = await withRetry(() => conn().getAccountInfo(mintPk, 'confirmed'));
     if (info?.owner?.equals(TOKEN_2022_PROGRAM_ID)) return TOKEN_2022_PROGRAM_ID;
   } catch {}
   return TOKEN_PROGRAM_ID;

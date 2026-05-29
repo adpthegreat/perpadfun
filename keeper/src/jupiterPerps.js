@@ -35,6 +35,7 @@ import { createSolanaRpc, address as kitAddress, getProgramDerivedAddress, getAd
 import { config, describeRpcUrl } from './config.js';
 import { loadKeypair } from './wallet.js';
 import { getUsdPriceFor } from './prices.js';
+import { jupFetch } from './rateLimiter.js';
 
 // --- mainnet constants (Jupiter JLP pool + custody addresses) ---
 const PROGRAM_ID = PERPETUALS_PROGRAM_ADDRESS; // 'PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu'
@@ -63,13 +64,15 @@ export const SUPPORTED_SYMBOLS = new Set([
   'SOL', 'ETH', 'BTC',
 ]);
 
-// PDAs / constants used in account meta.
-const ASSOCIATED_TOKEN_PROGRAM = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
-const TOKEN_PROGRAM            = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
-const SYSTEM_PROGRAM           = '11111111111111111111111111111111';
-const JUP_QUOTE                = 'https://lite-api.jup.ag/swap/v1/quote';
-const JUP_SWAP                 = 'https://lite-api.jup.ag/swap/v1/swap';
-const WSOL_MINT                = 'So11111111111111111111111111111111111111112';
+// PDAs / constants used in account meta (shared — see ./constants.js).
+import {
+  ASSOCIATED_TOKEN_PROGRAM,
+  TOKEN_PROGRAM,
+  SYSTEM_PROGRAM,
+  JUP_QUOTE,
+  JUP_SWAP,
+  WSOL_MINT,
+} from './constants.js';
 
 let _connection = null;
 let _treasury = null;
@@ -145,13 +148,13 @@ async function ensureUsdc(kp, neededUsd) {
   qUrl.searchParams.set('onlyDirectRoutes', 'false');
   qUrl.searchParams.set('asLegacyTransaction', 'false');
   let qRes;
-  try { qRes = await fetch(qUrl, { headers: { accept: 'application/json' } }); }
+  try { qRes = await jupFetch(qUrl, { headers: { accept: 'application/json' } }); }
   catch (e) { throw detailedFetchError('jupiter swap quote', e); }
   if (!qRes.ok) throw new Error(`jupiter swap quote ${qRes.status}: ${await qRes.text()}`);
   const quote = await qRes.json();
 
   // Build swap tx
-  const sRes = await fetch(JUP_SWAP, {
+  const sRes = await jupFetch(JUP_SWAP, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({
@@ -260,7 +263,7 @@ async function getJupiterMinimumOut({ inputMint, outputMint, amount, slippageBps
 
   let res;
   try {
-    res = await fetch(url, { headers: { accept: 'application/json' } });
+    res = await jupFetch(url, { headers: { accept: 'application/json' } });
   } catch (e) {
     throw detailedFetchError('jupiter minOut quote', e);
   }
@@ -662,7 +665,7 @@ export async function closePerp({ symbol, side, sizeUsd, collateralUsd, kp = nul
 // wSOL received from a decrease/partialClose settlement is unwrapped back to
 // native SOL on the owner. The buyback path spends native SOL, so without
 // this the realized PnL would just sit as wSOL forever.
-const WSOL_PK = new PublicKey('So11111111111111111111111111111111111111112');
+const WSOL_PK = new PublicKey(WSOL_MINT);
 export async function unwrapWsol(kpArg = null) {
   const kp = pickSigner(kpArg);
   const c = conn();

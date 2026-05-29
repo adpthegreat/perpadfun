@@ -18,6 +18,7 @@
 import { createPrivateKey, createPublicKey, sign as cryptoSign, verify as cryptoVerify, randomBytes } from 'node:crypto';
 import bs58 from 'bs58';
 import { config } from './config.js';
+import { limitedFetch } from './rateLimiter.js';
 
 const PKCS8_ED25519_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
 const SPKI_ED25519_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
@@ -113,7 +114,7 @@ async function call(path, { method = 'GET', body, query, token, baseUrl, skipGlo
   if (authHeader) headers['Authorization'] = authHeader;
   if (config.imperial.apiKey && !skipGlobalAuth) headers['x-api-key'] = config.imperial.apiKey;
 
-  const res = await fetch(url, {
+  const res = await limitedFetch(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -514,21 +515,33 @@ export async function placeOrder(token, order, opts = {}) {
   }
 }
 
-// Fetch mark price for (symbol, venue). Returns 9-decimal fixed point or null.
-// Matches the shape used by scripts/imperial-order-probe.mjs.
-export async function getMarkPrice(symbol, venue, opts = {}) {
+async function readMarkPriceUi(symbol, venue, opts = {}) {
   try {
+    const sym = String(symbol || '').toUpperCase();
+    const venueKey = venue || SUPPORTED_MARKETS[sym]?.venue;
     const res = await call('/mark-prices', { method: 'GET', ...opts });
     const rows = res?.rows || res?.data || (Array.isArray(res) ? res : []);
-    const row = rows.find?.((r) => r.symbol === symbol || r.asset === symbol);
-    const venuePrice = row?.[venue] ?? row?.venues?.[venue] ?? row?.prices?.[venue];
+    const row = rows.find?.((r) => r.symbol === sym || r.asset === sym);
+    const venuePrice = row?.[venueKey] ?? row?.venues?.[venueKey] ?? row?.prices?.[venueKey];
     const price = venuePrice?.price ?? venuePrice?.markPrice ?? row?.price ?? null;
     if (!price) return null;
-    return Math.round(Number(price) * 1_000_000_000);
+    const n = Number(price);
+    return Number.isFinite(n) && n > 0 ? n : null;
   } catch (e) {
     console.warn(`[imperial:markPrice] ${symbol}/${venue} failed: ${e?.message || e}`);
     return null;
   }
+}
+
+// Fetch mark price for (symbol, venue). Returns 9-decimal fixed point or null.
+// Matches the shape used by scripts/imperial-order-probe.mjs.
+export async function getMarkPrice(symbol, venue, opts = {}) {
+  const price = await readMarkPriceUi(symbol, venue, opts);
+  return price ? Math.round(price * 1_000_000_000) : null;
+}
+
+export async function getMarkPriceUi(symbol, venue, opts = {}) {
+  return readMarkPriceUi(symbol, venue, opts);
 }
 
 // Exposed for tests / shadow-mode logging.
