@@ -216,6 +216,47 @@ export async function queryTokenLogs(tokenId: string, limit = 200) {
   }>;
 }
 
+// Mirrors GET /api/public/keeper/logs: reads keeper_logs directly (NOT joined to
+// token_workflows), with the same optional filters + newest-first + limit. token_id
+// omitted -> all tokens incl. global (token_id IS NULL) rows.
+export async function queryKeeperLogs(
+  opts: { tokenId?: string; level?: string; event?: string; before?: string; limit?: number } = {},
+) {
+  let sql =
+    "select id, token_id, tick_id, level, event, message, fields, created_at from public.keeper_logs where 1=1";
+  const params: unknown[] = [];
+  let i = 1;
+  if (opts.tokenId) {
+    sql += ` and token_id = $${i++}`;
+    params.push(opts.tokenId);
+  }
+  if (opts.level) {
+    sql += ` and level = $${i++}`;
+    params.push(opts.level);
+  }
+  if (opts.event) {
+    sql += ` and event = $${i++}`;
+    params.push(opts.event);
+  }
+  if (opts.before) {
+    sql += ` and created_at < $${i++}`;
+    params.push(opts.before);
+  }
+  sql += ` order by created_at desc limit $${i++}`;
+  params.push(Math.min(1000, Math.max(1, opts.limit ?? 100)));
+  const { rows } = await query(sql, params);
+  return rows as Array<{
+    id: number;
+    token_id: string | null;
+    tick_id: string | null;
+    level: string;
+    event: string | null;
+    message: string;
+    fields: Record<string, unknown>;
+    created_at: string;
+  }>;
+}
+
 export async function countActions(id: string, action_kind: string): Promise<number> {
   const { rows } = await query(
     "select count(*)::int as n from public.keeper_actions where token_id = $1 and action_kind = $2",

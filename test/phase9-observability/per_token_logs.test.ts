@@ -21,6 +21,7 @@ import {
   seedToken,
   insertKeeperLog,
   queryTokenLogs,
+  queryKeeperLogs,
   closeDb,
 } from "../helpers/db.ts";
 
@@ -135,5 +136,69 @@ describe.skipIf(!dbAvailable)("Phase 9: per-token timeline read (T3, real keeper
     // the valid path still works after the rejections (autocommit, connection intact)
     await insertKeeperLog(id, { message: "valid", level: "info" });
     expect((await queryTokenLogs(id)).length).toBe(1);
+  });
+});
+
+// The dedicated GET /api/public/keeper/logs endpoint (KEEPER_LOGS_ENDPOINT.md):
+// reads keeper_logs directly (NOT joined to token_workflows), so unlike the
+// /workflows recent_logs it can return a token's timeline, all tokens, AND global
+// (token_id IS NULL) rows, with level/event filters + a time cursor. queryKeeperLogs
+// mirrors the endpoint's exact query.
+describe.skipIf(!dbAvailable)("Phase 9: dedicated /keeper/logs endpoint query (T3, DB reset per test)", () => {
+  beforeAll(async () => {
+    await ensureSchema();
+  });
+  afterEach(async () => {
+    await resetDb();
+  });
+  afterAll(async () => {
+    await closeDb();
+  });
+
+  it("9.7 reaches GLOBAL (token_id IS NULL) rows that /workflows cannot", async () => {
+    const a = await seedToken();
+    await insertKeeperLog(a, { message: "token row", level: "info" });
+    await insertKeeperLog(null, { message: "keeper booted", level: "warn", event: "boot" });
+
+    // the dedicated endpoint (no token_id filter) returns BOTH the token row and the global row
+    const all = await queryKeeperLogs({});
+    const msgs = all.map((r) => r.message);
+    expect(msgs).toContain("keeper booted");
+    expect(all.some((r) => r.token_id === null)).toBe(true);
+
+    // the /workflows-style read (queryTokenLogs requires a token_id) can NEVER surface the global row
+    const viaWorkflows = await queryTokenLogs(a);
+    expect(viaWorkflows.some((r) => r.message === "keeper booted")).toBe(false);
+  });
+
+  it("9.8 filters by token_id, level, and event", async () => {
+    const a = await seedToken();
+    const b = await seedToken();
+    await insertKeeperLog(a, { message: "a-info", level: "info", event: "tick" });
+    await insertKeeperLog(a, { message: "a-err", level: "error", event: "open" });
+    await insertKeeperLog(b, { message: "b-err", level: "error", event: "open" });
+
+    expect((await queryKeeperLogs({ tokenId: a })).every((r) => r.token_id === a)).toBe(true);
+    const errs = await queryKeeperLogs({ level: "error" });
+    expect(errs.length).toBe(2);
+    expect(errs.every((r) => r.level === "error")).toBe(true);
+    const aErr = await queryKeeperLogs({ tokenId: a, level: "error", event: "open" });
+    expect(aErr.map((r) => r.message)).toEqual(["a-err"]);
+  });
+
+  it("9.9 newest-first ordering + before cursor pages older rows", async () => {
+    const a = await seedToken();
+    await insertKeeperLog(a, { message: "oldest", ageSec: 30 });
+    await insertKeeperLog(a, { message: "middle", ageSec: 20 });
+    await insertKeeperLog(a, { message: "newest", ageSec: 10 });
+
+    const page1 = await queryKeeperLogs({ tokenId: a, limit: 2 });
+    expect(page1.map((r) => r.message)).toEqual(["newest", "middle"]);
+
+    // cursor = created_at of the last row on page 1; page 2 is strictly older
+    const cursor = page1[page1.length - 1].created_at;
+    const page2 = await queryKeeperLogs({ tokenId: a, limit: 2, before: cursor });
+    expect(page2.map((r) => r.message)).toEqual(["oldest"]);
+    expect(page2.every((r) => r.created_at < cursor)).toBe(true);
   });
 });
