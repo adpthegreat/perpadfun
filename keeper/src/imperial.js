@@ -249,83 +249,77 @@ export async function getRoute({
   });
 }
 
-// Snapshot of perp markets supported by Imperial as of the last enumeration
-// run (scripts/imperial-route-probe7.mjs). venue + maxLeverage are best-effort
-// hints: the live router may pick a different venue depending on size, and
-// Imperial may add/remove markets over time. Treat as a routing whitelist, not
-// a source of truth for live leverage caps.
-// Re-enumerated via scripts/imperial-route-probe7.mjs (62 markets).
+// ============================================================================
+// SUPPORTED_MARKETS — Phoenix-only routing whitelist
+// ============================================================================
+//
+// Per plan/KEEPER_PHOENIX_LOCK.md: every market routes to Phoenix. Other
+// venues (gmtrade, flash_trade, jupiter) are deprecated for new positions
+// (the helpers remain in repo as legacy fallbacks only).
+//
+// SNAPSHOT SOURCE: /phoenix/markets (Imperial authenticated endpoint).
+// Captured 2026-06-03 via test/live/discover-phoenix-markets.live.test.ts.
+// Re-run that test whenever Phoenix adds / removes a market.
+//
+// The project's primary asset list (per UI): BTC, ETH, SOL, ZEC, HYPE,
+// SILVER, GOLD, OIL. All 8 supported on Phoenix; OIL aliases WTIOIL.
+//
+// CAVEAT: maxLeverage is the venue ceiling. Token creators pick anything
+// up to this number; the keeper clamps if a creator-chosen leverage exceeds it.
+// ============================================================================
 export const SUPPORTED_MARKETS = Object.freeze({
-  // Crypto majors
-  BTC:      { venue: 'gmtrade',     maxLeverage: 500 },
-  ETH:      { venue: 'gmtrade',     maxLeverage: 294 },
-  SOL:      { venue: 'gmtrade',     maxLeverage: 250 },
-  BNB:      { venue: 'phoenix',     maxLeverage: 9.96 },
-  XRP:      { venue: 'gmtrade',     maxLeverage: 250 },
-  DOGE:     { venue: 'gmtrade',     maxLeverage: 200 },
-  ADA:      { venue: 'gmtrade',     maxLeverage: 100 },
-  AVAX:     { venue: 'gmtrade',     maxLeverage: 250 },
-  TON:      { venue: 'phoenix',     maxLeverage: 9.96 },
-  NEAR:     { venue: 'gmtrade',     maxLeverage: 100 },
-  SUI:      { venue: 'phoenix',     maxLeverage: 9.96 },
-  TRX:      { venue: 'gmtrade',     maxLeverage: 250 },
-  LTC:      { venue: 'gmtrade',     maxLeverage: 100 },
-  DOT:      { venue: 'gmtrade',     maxLeverage: 100 },
-  BCH:      { venue: 'gmtrade',     maxLeverage: 100 },
-  XLM:      { venue: 'gmtrade',     maxLeverage: 100 },
-  HYPE:     { venue: 'gmtrade',     maxLeverage: 100 },
-  LINK:     { venue: 'gmtrade',     maxLeverage: 100 },
-  APE:      { venue: 'gmtrade',     maxLeverage: 100 },
-  ZEC:      { venue: 'phoenix',     maxLeverage: 9.96 },
-  // DeFi / Sol-eco
-  ARB:      { venue: 'gmtrade',     maxLeverage: 100 },
-  UNI:      { venue: 'gmtrade',     maxLeverage: 200 },
-  AAVE:     { venue: 'gmtrade',     maxLeverage: 250 },
-  GMX:      { venue: 'gmtrade',     maxLeverage: 100 },
-  JTO:      { venue: 'phoenix',     maxLeverage: 4.99 },
-  ENA:      { venue: 'phoenix',     maxLeverage: 9.96 },
-  JUP:      { venue: 'phoenix',     maxLeverage: 9.96 },
-  PYTH:     { venue: 'flash_trade', maxLeverage: 56.28 },
-  KMNO:     { venue: 'flash_trade', maxLeverage: 53.57 },
-  // Memes
-  BONK:     { venue: 'gmtrade',     maxLeverage: 100 },
-  PEPE:     { venue: 'gmtrade',     maxLeverage: 100 },
-  SHIB:     { venue: 'gmtrade',     maxLeverage: 200 },
-  BOME:     { venue: 'gmtrade',     maxLeverage: 100 },
-  WIF:      { venue: 'gmtrade',     maxLeverage: 100 },
-  FARTCOIN: { venue: 'gmtrade',     maxLeverage: 100 },
-  TRUMP:    { venue: 'gmtrade',     maxLeverage: 100 },
-  MELANIA:  { venue: 'gmtrade',     maxLeverage: 100 },
-  PUMP:     { venue: 'gmtrade',     maxLeverage: 200 },
-  PENGU:    { venue: 'flash_trade', maxLeverage: 28.95 },
-  // AI / Privacy
-  TAO:      { venue: 'phoenix',     maxLeverage: 4.99 },
-  WLD:      { venue: 'gmtrade',     maxLeverage: 100 },
-  // Equities (Imperial xStocks via flash_trade)
-  TSLA:     { venue: 'flash_trade', maxLeverage: 24.39 },
-  NVDA:     { venue: 'flash_trade', maxLeverage: 24.39 },
-  AAPL:     { venue: 'flash_trade', maxLeverage: 24.39 },
-  AMD:      { venue: 'flash_trade', maxLeverage: 24.39 },
-  AMZN:     { venue: 'flash_trade', maxLeverage: 24.39 },
-  SPY:      { venue: 'flash_trade', maxLeverage: 24.39 },
-  // Commodities
-  XAU:      { venue: 'gmtrade',     maxLeverage: 200 },
-  XAG:      { venue: 'gmtrade',     maxLeverage: 200 },
-  GOLD:     { venue: 'phoenix',     maxLeverage: 24.78 },
-  SILVER:   { venue: 'phoenix',     maxLeverage: 24.78 },
-  WTI:      { venue: 'gmtrade',     maxLeverage: 100 },
-  CRUDEOIL: { venue: 'flash_trade', maxLeverage: 6.92 },
-  NATGAS:   { venue: 'flash_trade', maxLeverage: 11.78 },
-  COPPER:   { venue: 'phoenix',     maxLeverage: 19.86 },
-  // Forex
-  EUR:      { venue: 'gmtrade',     maxLeverage: 500 },
-  GBP:      { venue: 'gmtrade',     maxLeverage: 500 },
-  USDJPY:   { venue: 'gmtrade',     maxLeverage: 500 },
-  USDCHF:   { venue: 'gmtrade',     maxLeverage: 500 },
-  USDCAD:   { venue: 'gmtrade',     maxLeverage: 500 },
-  AUD:      { venue: 'gmtrade',     maxLeverage: 500 },
-  NZD:      { venue: 'gmtrade',     maxLeverage: 500 },
+  // ─── Primary 8 (UI-prominent) ───
+  BTC:      { venue: 'phoenix', maxLeverage: 20 },
+  ETH:      { venue: 'phoenix', maxLeverage: 20 },
+  SOL:      { venue: 'phoenix', maxLeverage: 15 },
+  ZEC:      { venue: 'phoenix', maxLeverage: 10 },
+  HYPE:     { venue: 'phoenix', maxLeverage: 10 },
+  SILVER:   { venue: 'phoenix', maxLeverage: 25 },
+  GOLD:     { venue: 'phoenix', maxLeverage: 25 },
+  OIL:      { venue: 'phoenix', maxLeverage: 20, alias: 'WTIOIL' }, // Phoenix calls it WTIOIL
+  WTIOIL:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
+
+  // ─── Other crypto majors ───
+  XRP:      { venue: 'phoenix', maxLeverage: 15 },
+  BNB:      { venue: 'phoenix', maxLeverage: 10 },
+  DOGE:     { venue: 'phoenix', maxLeverage: 10 },
+  ADA:      { venue: 'phoenix', maxLeverage: 10 },
+  SUI:      { venue: 'phoenix', maxLeverage: 10 },
+  TRX:      { venue: 'phoenix', maxLeverage: 10 },
+  NEAR:     { venue: 'phoenix', maxLeverage: 10 },
+  TON:      { venue: 'phoenix', maxLeverage: 10 },
+  XLM:      { venue: 'phoenix', maxLeverage: 5 },
+  XPL:      { venue: 'phoenix', maxLeverage: 10 },
+
+  // ─── DeFi / Sol-eco ───
+  AAVE:     { venue: 'phoenix', maxLeverage: 10 },
+  JTO:      { venue: 'phoenix', maxLeverage: 5 },
+  JUP:      { venue: 'phoenix', maxLeverage: 10 },
+  ENA:      { venue: 'phoenix', maxLeverage: 10 },
+  ONDO:     { venue: 'phoenix', maxLeverage: 10 },
+  MORPHO:   { venue: 'phoenix', maxLeverage: 5 },
+  LIT:      { venue: 'phoenix', maxLeverage: 5 },
+
+  // ─── AI / data ───
+  FET:      { venue: 'phoenix', maxLeverage: 5 },
+  RENDER:   { venue: 'phoenix', maxLeverage: 5 },
+  VIRTUAL:  { venue: 'phoenix', maxLeverage: 5 },
+  TAO:      { venue: 'phoenix', maxLeverage: 5 },
+  WLD:      { venue: 'phoenix', maxLeverage: 10 },
+
+  // ─── Memes / misc ───
+  FARTCOIN: { venue: 'phoenix', maxLeverage: 10 },
+  CHIP:     { venue: 'phoenix', maxLeverage: 5 },
+  SKR:      { venue: 'phoenix', maxLeverage: 3 },
+  MEGA:     { venue: 'phoenix', maxLeverage: 5 },
+  MET:      { venue: 'phoenix', maxLeverage: 5 },
+  VVV:      { venue: 'phoenix', maxLeverage: 5 },
+  MON:      { venue: 'phoenix', maxLeverage: 5 },
+
+  // ─── Commodities ───
+  COPPER:   { venue: 'phoenix', maxLeverage: 20 },
 });
+
 
 export function isSupportedMarket(symbol) {
   return Boolean(symbol && SUPPORTED_MARKETS[String(symbol).toUpperCase()]);
@@ -476,11 +470,20 @@ export async function fetchMarketLookup({ force = false, opts = {} } = {}) {
 }
 
 // Resolve (symbol, side, venue) -> { marketMint, underwriter, raw }.
-// `venue` defaults to the SUPPORTED_MARKETS hint for that symbol.
+//
+// Phoenix-locked after KEEPER_PHOENIX_LOCK.md Phase B: when no explicit
+// venue is passed, default to 'phoenix' instead of consulting
+// SUPPORTED_MARKETS. Operator can override with the IMPERIAL_VENUE_OVERRIDE
+// env (set it to a venue name to force, or 'auto' to restore the previous
+// SUPPORTED_MARKETS lookup behavior).
 export async function resolveMarket(symbol, side, venue, opts = {}) {
   const sym = String(symbol || '').toUpperCase();
   const sd = String(side || '').toLowerCase();
-  const v = venue || SUPPORTED_MARKETS[sym]?.venue;
+  const override = process.env.IMPERIAL_VENUE_OVERRIDE;
+  const v =
+    venue ||
+    (override && override !== 'auto' ? override : null) ||
+    (override === 'auto' ? SUPPORTED_MARKETS[sym]?.venue : 'phoenix');
   if (!v) throw new Error(`resolveMarket: no venue for symbol=${sym}`);
   if (!VENUE_ENDPOINTS[v]) throw new Error(`resolveMarket: unknown venue=${v}`);
   if (sd !== 'long' && sd !== 'short') throw new Error(`resolveMarket: bad side=${side}`);
@@ -492,6 +495,61 @@ export async function resolveMarket(symbol, side, venue, opts = {}) {
 }
 
 // --- Order helpers (gated; will only fire in later phases) ---
+// ============================================================================
+// Phoenix profile registration
+// ============================================================================
+//
+// Phoenix requires a one-time /phoenix/register call per (wallet,profileIndex)
+// before /mobile/orders works. It's idempotent server-side, so re-registering
+// is fine. We cache successes in a process-local Set so we only hit the
+// endpoint once per keeper boot per profile.
+//
+// Per KEEPER_PHOENIX_LOCK.md Phase C.
+const PHOENIX_REGISTERED = new Set();
+
+function phoenixRegisterCacheKey(wallet, profileIndex) {
+  return `${wallet}:${profileIndex ?? 0}`;
+}
+
+/**
+ * Idempotently activate the Phoenix profile for (wallet, profileIndex).
+ * Safe to call before every open — succeeds fast on the cache-hit path.
+ * Returns { activated, profilePda, message, cached } or null on failure.
+ * Never throws — Imperial says /mobile/orders auto-activates on first use,
+ * so a register failure here just degrades to the OpenAPI fallback path.
+ */
+export async function ensurePhoenixRegistered({ wallet, profileIndex = 0 } = {}) {
+  if (!wallet) return null;
+  const key = phoenixRegisterCacheKey(wallet, profileIndex);
+  if (PHOENIX_REGISTERED.has(key)) {
+    return { activated: true, cached: true, profilePda: null, message: 'cache-hit' };
+  }
+  try {
+    const res = await call('/phoenix/register', {
+      method: 'POST',
+      body: { wallet, profileIndex },
+    });
+    PHOENIX_REGISTERED.add(key);
+    return {
+      activated: Boolean(res?.activated ?? true),
+      cached: false,
+      profilePda: res?.profilePda ?? null,
+      message: res?.message ?? 'registered',
+    };
+  } catch (e) {
+    console.warn(
+      `[imperial:phoenix-register] wallet=${String(wallet).slice(0, 8)}... ` +
+        `profile=${profileIndex} failed (continuing — /mobile/orders auto-activates): ${e?.message || e}`,
+    );
+    return null;
+  }
+}
+
+/** Test-only — clear the in-process register cache (e.g. on wallet rotation). */
+export function __clearPhoenixRegisterCache() {
+  PHOENIX_REGISTERED.clear();
+}
+
 //
 // placeOrder accepts a high-level descriptor and resolves the correct
 // marketMint + underwriter per venue. Callers should pass `{ symbol, side,
@@ -515,10 +573,17 @@ export async function placeOrder(token, order, opts = {}) {
   }
 }
 
+// Map our internal venue identifier to the row key used by Imperial's
+// /mark-prices response. The API uses `flash` not `flash_trade`.
+function markPriceVenueKey(venue) {
+  if (venue === 'flash_trade') return 'flash';
+  return venue;
+}
+
 async function readMarkPriceUi(symbol, venue, opts = {}) {
   try {
     const sym = String(symbol || '').toUpperCase();
-    const venueKey = venue || SUPPORTED_MARKETS[sym]?.venue;
+    const venueKey = markPriceVenueKey(venue || SUPPORTED_MARKETS[sym]?.venue);
     const res = await call('/mark-prices', { method: 'GET', ...opts });
     const rows = res?.rows || res?.data || (Array.isArray(res) ? res : []);
     const row = rows.find?.((r) => r.symbol === sym || r.asset === sym);
@@ -533,12 +598,93 @@ async function readMarkPriceUi(symbol, venue, opts = {}) {
   }
 }
 
-// Fetch mark price for (symbol, venue). Returns 9-decimal fixed point or null.
-// Matches the shape used by scripts/imperial-order-probe.mjs.
+// Parse `FLASH_PRICE_EXPONENTS="SOL=6,BTC=2,ETH=4"` into a per-symbol exponent map.
+// Each symbol's value is `10^exp` for the marketPrice field on flash_trade orders.
+// See plan/KEEPER_PHOENIX_MIGRATION.md §1.1 for the bug history.
+function parseFlashPriceExponents(s) {
+  if (!s) return {};
+  const out = {};
+  for (const part of String(s).split(',')) {
+    const [sym, exp] = part.split('=');
+    if (sym && exp !== undefined) {
+      const n = Number(exp);
+      if (Number.isFinite(n)) out[sym.trim().toUpperCase()] = n;
+    }
+  }
+  return out;
+}
+const FLASH_PRICE_EXPONENTS = parseFlashPriceExponents(process.env.FLASH_PRICE_EXPONENTS);
+
+// Per-venue marketPrice scaling from the canonical 1e9 oracle scale.
+//
+// Imperial's /mark-prices returns prices in a uniform 1e9 oracle scale (we
+// internally call this `base = uiPrice × 1e9`), but each venue's order
+// processor expects a different on-chain decimal layout:
+//
+//   - gmtrade / jupiter: read raw 1e9                              -> no scale
+//   - phoenix:           frontend sends 1e6; downstream ×1000 makes 1e9
+//                        on-chain. So we send 1e6 (divide by 1000).
+//   - flash_trade:       per-market Pyth-style exponent. The market metadata
+//                        reports a NEGATIVE `priceExponent` (e.g. HYPE=-8,
+//                        XAU=-3) which means the on-chain integer is
+//                        `uiPrice × 10^(-priceExponent)`. Read from
+//                        FLASH_PRICE_EXPONENTS env ("HYPE=-8,SOL=-8,XAU=-3").
+//                        See scripts/fetch-flash-markets or the live
+//                        discover-flash-exponents test to populate the env.
+//
+// Conversion from our `base = uiPrice × 1e9` representation:
+//   target = base × 10^(-priceExp − 9)
+//   (e.g. priceExp=-8 -> base × 10^-1 = base / 10)
+//
+// Without this scaling: Phoenix sees prices ~1000x too large -> CLOB rejects
+// the IOC. Flash sees oracle mismatch. GMTrade is fine because base == 1e9.
+function scaleMarketPriceForVenue(mp, venue, symbol) {
+  if (!mp) return null;
+  // Phoenix: frontend sends 1e6, downstream order bot ×1000 produces the
+  // correct 1e9 on-chain. So we divide by 1000.
+  if (venue === 'phoenix') return Math.round(mp / 1000);
+  // Flash, GMTrade, Jupiter: asymmetric — Flash OPEN (action=0) accepts raw
+  // 1e9 (verified 2026-06-02 sig=4gAxCax... and 2026-06-03 sig=6XrDVgik...),
+  // but Flash CLOSE (action=1) silently rejects raw 1e9 — confirmed
+  // empirically 2026-06-03 sig=2nac4MeQ6zQahHw2..., which succeeded by
+  // scaling to per-market priceExponent (HYPE = -8 → divide by 10) AND
+  // including the position's `positionPda` as `positionId` in the body.
+  //
+  // Recommended posture if Flash is ever re-enabled:
+  //   1. Set FLASH_PRICE_EXPONENTS env covering every symbol you trade
+  //      (e.g. "HYPE=-8,SOL=-8,BTC=-8,ETH=-8,ZEC=-8,GOLD=-3,SILVER=-5").
+  //      The exponent makes BOTH open AND close work; raw 1e9 only works
+  //      for open.
+  //   2. Always pass `positionId` (the on-chain position PDA from
+  //      /positions[*].positionPda) on close orders. The keeper's
+  //      buildOrderBody already plumbs `positionId` through when present.
+  //
+  // Until then Flash stays gated behind FLASH_TESTS=1 + IMPERIAL_SUPPORTED_
+  // OPEN_VENUES (Phoenix-only by default). See plan/KEEPER_PHOENIX_LOCK.md.
+  if (venue === 'flash_trade') {
+    const sym = String(symbol || '').toUpperCase();
+    const priceExp = FLASH_PRICE_EXPONENTS[sym];
+    if (priceExp === undefined) return mp; // raw 1e9 default — open works, close won't
+    // base = uiPrice × 1e9; on-chain target = uiPrice × 10^(−priceExp)
+    return Math.round(mp * Math.pow(10, -priceExp - 9));
+  }
+  return mp;
+}
+
+// Fetch mark price for (symbol, venue). Returns a venue-scaled fixed-point
+// integer or null. The base oracle scale is 1e9; per-venue scaling is applied
+// inside scaleMarketPriceForVenue.
 export async function getMarkPrice(symbol, venue, opts = {}) {
   const price = await readMarkPriceUi(symbol, venue, opts);
-  return price ? Math.round(price * 1_000_000_000) : null;
+  if (!price) return null;
+  const base = Math.round(price * 1_000_000_000);
+  return scaleMarketPriceForVenue(base, venue, symbol);
 }
+
+// Exposed for tests so they can verify the scaling logic without hitting
+// the live /mark-prices endpoint.
+export const __scaleMarketPriceForVenue = scaleMarketPriceForVenue;
+export const __FLASH_PRICE_EXPONENTS = FLASH_PRICE_EXPONENTS;
 
 export async function getMarkPriceUi(symbol, venue, opts = {}) {
   return readMarkPriceUi(symbol, venue, opts);

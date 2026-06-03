@@ -2027,7 +2027,96 @@ export async function tick() {
           note: `pnl=$${pnlNow.toFixed(2)} hw=$${newHighWater.toFixed(2)} coll=$${collAfter.toFixed(2)} reserve=$${(currentReserve + reserveDelta).toFixed(2)}`,
         });
 
-        if (gainAboveHigh >= config.pnlTriggerUsd) {
+        // ─── BACKSTOP TP (safety patch — see plan/KEEPER_TP_SAFETY_PATCH.md) ───
+        // Fires when the regular TP path has fallen behind and PnL has grown
+        // past backstopRatio × collateral. Always uses partial-close (Mode A)
+        // because the regular path likely failed due to a withdraw bug —
+        // falling back to the same withdraw path here would also fail.
+        let backstopFired = false;
+        const backstopPnlRatio = collAfter > 0 ? pnlNow / collAfter : 0;
+        if (pnlNow > 0 && backstopPnlRatio >= config.backstopRatio) {
+          let backstopSlice = pnlNow - config.backstopTargetRatio * collAfter;
+          backstopSlice = Math.min(backstopSlice, config.backstopMaxPerTick);
+          backstopSlice = Math.floor(backstopSlice / 5) * 5; // snap to $5
+          if (backstopSlice >= config.pnlTriggerUsd) {
+            const sizeUsd = patch.position_size_usd ?? Number(t.position_size_usd ?? 0);
+            try {
+              const res = imperialFullTrade
+                ? await imperialPartialClose({
+                    authToken: await ensureImperialAuth(),
+                    kp,
+                    profileIndex: t.imperial_profile_index,
+                    symbol: underlying,
+                    side,
+                    reduceSizeUsd: backstopSlice,
+                    currentSizeUsd: sizeUsd,
+                  })
+                : imperialTradeEnabled
+                  ? {
+                      signature: null,
+                      simulated: false,
+                      error: `imperial backstop blocked: positionMode=${config.imperial.positionMode}`,
+                    }
+                  : await partialClose({
+                      symbol: underlying,
+                      side,
+                      reduceSizeUsd: backstopSlice,
+                      kp,
+                    });
+              const accepted = !res.error && (config.hedgeMode !== "live" || !!res.signature);
+              if (res.signature) {
+                patch.pending_drift_sig = res.signature;
+                txLog.push(
+                  buildTxLogEntry({
+                    kind: "drift_adjust",
+                    intent: intentHash([t.id, "backstop_tp", bucket, backstopSlice.toFixed(2)]),
+                    status: "pending",
+                    signature: res.signature,
+                    amountUsd: backstopSlice,
+                  }),
+                );
+              }
+              if (accepted) {
+                patch.position_size_usd = Math.max(0, sizeUsd - backstopSlice);
+                const frac = backstopSlice / pnlNow;
+                patch.position_collateral_usd = collAfter * (1 - frac);
+                // ratchet high-water forward to post-close PnL so regular TP
+                // doesn't immediately re-fire on the residual gain
+                newHighWater = pnlNow * (1 - frac);
+                if (config.hedgeMode === "live" && buybackMint) {
+                  reserveDelta += backstopSlice;
+                }
+                backstopFired = true;
+                keeperLog(t, "info", "backstop_tp fired", {
+                  pnl_now: pnlNow,
+                  coll_after: collAfter,
+                  pnl_ratio: backstopPnlRatio,
+                  slice: backstopSlice,
+                  tick_id: tickId,
+                });
+                events.push({
+                  kind: "buyback",
+                  pnl_delta_usd: backstopSlice,
+                  note:
+                    `${imperialFullTrade ? "[imperial] " : ""}BACKSTOP TP $${backstopSlice} ` +
+                    `(pnl=$${pnlNow.toFixed(0)} / coll=$${collAfter.toFixed(0)} = ${(backstopPnlRatio * 100).toFixed(0)}%)` +
+                    (res.simulated && !res.signature ? " [SIMULATED]" : ""),
+                });
+              } else {
+                events.push({
+                  kind: "tick",
+                  note: `backstop_tp not accepted: ${res.error ? res.error.slice(0, 150) : "no signature returned"}`,
+                });
+              }
+            } catch (e) {
+              keeperLog(t, "warn", "backstop_tp failed", { error: e.message, tick_id: tickId });
+              events.push({ kind: "tick", note: `backstop_tp err: ${e.message.slice(0, 150)}` });
+            }
+          }
+        }
+        // ─── end backstop TP ───
+
+        if (!backstopFired && gainAboveHigh >= config.pnlTriggerUsd) {
           const sizeUsd = patch.position_size_usd ?? Number(t.position_size_usd ?? 0);
           // Anchor cap to creator's chosen leverage (NOT sizeNow/openedColl,
           // which compounds with every top-up and effectively disables the cap).
