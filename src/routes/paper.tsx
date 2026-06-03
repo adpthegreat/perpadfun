@@ -82,7 +82,7 @@ function PaperPage() {
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">5. Imperial routing</h2>
             <p className="mt-3 text-muted-foreground">
-              Every open, top-up, and close is quoted through Imperial, a meta-router that compares venues (Jupiter Perps, Drift, Phoenix, GMX-style and Flash-style books, others as they list) and executes on whichever one offers the best round-trip cost for that exact size and side. The keeper records the chosen venue with every action so the route is auditable per claim.
+              Every open, top-up, and close is quoted through Imperial and executed on Phoenix Trade (a Solana CLOB). Phoenix is currently the exclusive venue for new positions — the CLOB gives the keeper deterministic slippage and the lowest round-trip cost we&apos;ve measured across Imperial&apos;s supported venues. The keeper records the chosen venue with every action so the route is auditable per claim.
             </p>
             <p className="mt-3 text-muted-foreground">
               Sub-wallets post USDC as collateral. The keeper swaps SOL to USDC on Jupiter on the same tick that it deposits, so the position is always denominated in dollars and the venue choice is independent of which SPL token the coin is.
