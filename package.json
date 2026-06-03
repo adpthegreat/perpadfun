@@ -10,8 +10,15 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "vitest run",
-    "test:logs": "vitest run --disableConsoleIntercept"
+    "test": "vitest run --exclude 'test/live/**'",
+    "test:logs": "vitest run --disableConsoleIntercept --exclude 'test/live/**'",
+    "test:live": "IMPERIAL_LIVE_TESTS=1 vitest run test/live/",
+    "test:live:pre": "IMPERIAL_LIVE_TESTS=1 vitest run test/live/auth-and-route.live.test.ts test/live/read-position.live.test.ts",
+    "test:live:phoenix": "IMPERIAL_LIVE_TESTS=1 vitest run test/live/phoenix-direct.live.test.ts",
+    "test:live:flash_trade": "IMPERIAL_LIVE_TESTS=1 vitest run test/live/flash_trade-direct.live.test.ts",
+    "test:live:gmtrade": "IMPERIAL_LIVE_TESTS=1 vitest run test/live/gmtrade-direct.live.test.ts",
+    "test:live:profit-extraction": "IMPERIAL_LIVE_TESTS=1 vitest run test/live/profit-extraction-closes-position.live.test.ts",
+    "test:all": "vitest run"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
