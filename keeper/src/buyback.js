@@ -28,6 +28,8 @@ import {
 } from '@solana/spl-token';
 import { config } from './config.js';
 import { loadKeypair } from './wallet.js';
+import { WSOL_MINT as SOL_MINT, JUP_QUOTE, JUP_SWAP } from './constants.js';
+import { jupFetch } from './rateLimiter.js';
 
 // Auto-detect SPL Token vs Token-2022 from the mint's account owner.
 // pump.fun mints today are Token-2022; legacy SPL mints are still
@@ -42,9 +44,6 @@ async function resolveTokenProgram(connection, mintPk) {
   throw new Error(`mint ${mintPk.toBase58()} has unknown token program owner ${owner}`);
 }
 
-const SOL_MINT = 'So11111111111111111111111111111111111111112';
-const JUP_QUOTE = 'https://lite-api.jup.ag/swap/v1/quote';
-const JUP_SWAP = 'https://lite-api.jup.ag/swap/v1/swap';
 const SLIPPAGE_BPS = 200; // 2%
 const PRIORITY_LAMPORTS = 100_000;
 
@@ -131,7 +130,7 @@ async function jupQuote({ inputMint, outputMint, amountLamports }) {
   const url = `${JUP_QUOTE}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountLamports}&slippageBps=${SLIPPAGE_BPS}&onlyDirectRoutes=false&asLegacyTransaction=false`;
   let res;
   try {
-    res = await fetch(url);
+    res = await jupFetch(url);
   } catch (e) {
     throw detailedFetchError('jupiter quote', e);
   }
@@ -142,7 +141,7 @@ async function jupQuote({ inputMint, outputMint, amountLamports }) {
 async function jupSwap(quoteResponse, userPubkey) {
   let res;
   try {
-    res = await fetch(JUP_SWAP, {
+    res = await jupFetch(JUP_SWAP, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

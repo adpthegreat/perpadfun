@@ -70,6 +70,63 @@ const ReportSchema = z.object({
     .max(200),
 });
 
+function actionKindFromTx(kind: z.infer<typeof TxLogSchema>["kind"]) {
+  switch (kind) {
+    case "fee_claim_dbc":
+    case "fee_claim_amm":
+    case "imperial_deposit":
+    case "imperial_open":
+    case "imperial_topup":
+    case "imperial_close":
+      return kind;
+    case "swap":
+      return "buyback";
+    case "burn":
+      return "burn";
+    case "drift_close":
+    case "drift_adjust":
+    default:
+      return "tick";
+  }
+}
+
+function blockedReasonFromEvents(events: z.infer<typeof EventSchema>[]) {
+  const notes = events.map((event) => event.note?.trim()).filter((note): note is string => !!note);
+  const stuck = [...notes]
+    .reverse()
+    .find((note) =>
+      /\b(skip|defer|deferred|failed|err|error|below|unsupported|capacity|unavailable|refunded|dropped)\b/i.test(
+        note,
+      ),
+    );
+  return stuck ? stuck.slice(0, 240) : null;
+}
+
+function workflowStateForReport({
+  report,
+  currentPositionOpen,
+  nextFees,
+  blockedReason,
+}: {
+  report: z.infer<typeof ReportSchema>["reports"][number];
+  currentPositionOpen: boolean;
+  nextFees: number;
+  blockedReason: string | null;
+}) {
+  if (blockedReason) return "blocked";
+  if (report.pending_drift_sig) {
+    return currentPositionOpen || report.position_opened === true
+      ? "topup_pending"
+      : "position_open_pending";
+  }
+  if (report.position_opened === false) return nextFees > 0 ? "split_reserved" : "idle";
+  if (report.position_opened === true || currentPositionOpen) return "position_open";
+  if ((report.position_collateral_usd ?? 0) > 0) return "imperial_deposited";
+  if (nextFees > 0 || (report.buyback_reserve_usd_delta ?? 0) > 0) return "split_reserved";
+  if ((report.fees_accrued_usd_delta ?? 0) > 0) return "fees_claimed";
+  return "idle";
+}
+
 function jsonErr(status: number, msg: string) {
   return new Response(JSON.stringify({ ok: false, error: msg }), {
     status,
@@ -116,7 +173,7 @@ export const Route = createFileRoute("/api/public/keeper/report")({
           const { data: cur } = await supabaseAdmin
             .from("tokens")
             .select(
-               "treasury_sol, tokens_burned, fees_accrued_usd, buyback_reserve_usd, position_opened_at, position_collateral_usd, opened_collateral_usd, launch_mid, leverage, router",
+              "treasury_sol, tokens_burned, fees_accrued_usd, buyback_reserve_usd, position_opened_at, position_collateral_usd, opened_collateral_usd, launch_mid, leverage, router",
             )
             .eq("id", r.token_id)
             .maybeSingle();
@@ -232,7 +289,70 @@ export const Route = createFileRoute("/api/public/keeper/report")({
               .from("tx_log")
               .upsert(rows, { onConflict: "token_id,kind,intent_hash" });
             if (!txErr) txLogInserted += rows.length;
+
+            const actionRows = r.tx_log.map((t) => ({
+              token_id: r.token_id,
+              action_kind: actionKindFromTx(t.kind),
+              intent_hash: t.intent_hash,
+              status:
+                t.status === "pending"
+                  ? "pending"
+                  : t.status === "confirmed"
+                    ? "confirmed"
+                    : "failed",
+              signature: t.signature ?? null,
+              amount_usd: t.amount_usd ?? null,
+              amount_sol: t.amount_sol ?? null,
+              amount_tokens: t.amount_tokens ?? null,
+              request_payload: { source: "keeper-report", tx_kind: t.kind },
+              response_payload: {},
+              error: t.error ?? null,
+              confirmed_at: t.status === "confirmed" ? now : null,
+            }));
+            await supabaseAdmin
+              .from("keeper_actions")
+              .upsert(actionRows, { onConflict: "token_id,action_kind,intent_hash" });
           }
+
+          const nextFees = patch.fees_accrued_usd ?? Number(cur.fees_accrued_usd ?? 0);
+          const nextReserve = patch.buyback_reserve_usd ?? Number(cur.buyback_reserve_usd ?? 0);
+          const nextColl =
+            patch.position_collateral_usd ?? Number(cur.position_collateral_usd ?? 0);
+          const nextSize = patch.position_size_usd ?? 0;
+          const nextEntry = patch.launch_mid ?? cur.launch_mid ?? null;
+          const blockedReason = blockedReasonFromEvents(r.events);
+          const currentPositionOpen =
+            r.position_opened === true ||
+            (r.position_opened !== false && Boolean(cur.position_opened_at));
+          const workflowRow = {
+            token_id: r.token_id,
+            state: workflowStateForReport({
+              report: r,
+              currentPositionOpen,
+              nextFees,
+              blockedReason,
+            }),
+            last_successful_step: blockedReason ? undefined : "keeper_report",
+            blocked_reason: blockedReason,
+            next_retry_at: blockedReason ? new Date(Date.now() + 60_000).toISOString() : null,
+            perp_reserved_usd: Math.max(0, nextFees),
+            buyback_reserved_usd: Math.max(0, nextReserve),
+            treasury_reserved_usd: 0,
+            imperial_deposited_usd: Math.max(0, nextColl),
+            position_entry_price: nextEntry,
+            position_entry_source: nextEntry ? "reconciled" : null,
+            position_size_usd: Math.max(0, nextSize),
+            position_collateral_usd: Math.max(0, nextColl),
+            last_observed_at: now,
+            metadata: {
+              source: "keeper-report",
+              router: cur.router,
+              event_count: r.events.length,
+            },
+          };
+          await supabaseAdmin
+            .from("token_workflows")
+            .upsert(workflowRow, { onConflict: "token_id" });
         }
 
         return Response.json({

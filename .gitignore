@@ -20,6 +20,22 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Live-test env (real wallet key — never commit)
+test/live/.env
+test/live/txns.txt
+test/live/imperial-debug.jsonl
+test-wallet.json
+
+# Supabase CLI local state — never commit
+supabase/.branches/
+supabase/.temp/
+
+# Snapshot artifacts from /imperial /phoenix /flash discovery scripts
+# (raw API dumps, regenerated on demand — do not pin)
+.imperial-openapi.json
+.phoenix-markets.json
+.flash-markets.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -30,3 +46,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+test/live/imperial-bug-report.md

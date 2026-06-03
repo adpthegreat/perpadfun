@@ -52,6 +52,7 @@ import {
   isSupportedMarket,
   MIN_COLLATERAL_USD,
   SUPPORTED_MARKETS,
+  ensurePhoenixRegistered,
 } from './imperial.js';
 import { ensureUsdcForDeposit, depositToImperialProfile } from './imperialDeposit.js';
 
@@ -245,20 +246,40 @@ export async function imperialOpenPosition({
   if (!isSupportedMarket(sym)) {
     return { signature: null, simulated: false, error: `unsupported imperial market ${sym}` };
   }
-  // Venue gate: Imperial /mobile/orders is only verified end-to-end for
-  // gmtrade + jupiter. phoenix and flash_trade need extra body fields
-  // (oracle accounts, lookup tables, etc) that the Imperial dev has not yet
-  // spec'd to us. See scripts/imperial-order-probe.mjs SUPPORTED_VENUES.
-  // Skip opens routed to unsupported venues instead of burning USDC + cost.
+  // Venue gate. Phoenix-only after KEEPER_PHOENIX_LOCK.md Phase A.
+  //
+  //   1. phoenix     -- ONLY supported venue for new opens
+  //   2. flash_trade -- deferred; partial-close polling still flaky
+  //   3. jupiter     -- legacy fallback only
+  //   4. gmtrade     -- DISABLED; keeper-lag, see KEEPER_GMTRADE_REMOVAL.md
+  //
+  // Operator can flip back with IMPERIAL_SUPPORTED_OPEN_VENUES=phoenix,flash_trade,jupiter
+  // if Phoenix has an outage and recovery requires another venue.
   const resolvedVenue = venue || SUPPORTED_MARKETS[sym]?.venue;
-  const SUPPORTED_OPEN_VENUES = new Set(['gmtrade', 'jupiter']);
+  const SUPPORTED_OPEN_VENUES = new Set(
+    (process.env.IMPERIAL_SUPPORTED_OPEN_VENUES ?? 'phoenix')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
   if (!SUPPORTED_OPEN_VENUES.has(resolvedVenue)) {
-    console.log(`[imperial:open] ${sym} skip: venue=${resolvedVenue} not yet supported (need extra fields from Imperial dev)`);
-    return { signature: null, simulated: false, error: `venue ${resolvedVenue} not yet supported` };
+    console.log(
+      `[imperial:open] ${sym} skip: venue=${resolvedVenue} not in SUPPORTED_OPEN_VENUES ` +
+      `(${Array.from(SUPPORTED_OPEN_VENUES).join(',')}). Phoenix is the default; ` +
+      `set IMPERIAL_SUPPORTED_OPEN_VENUES env to override.`,
+    );
+    return { signature: null, simulated: false, error: `venue ${resolvedVenue} not in supported list` };
   }
   const sd = String(side).toLowerCase() === 'short' ? 'short' : 'long';
   const notionalUsd = Number(collateralUsd) * Number(leverage);
   const wallet = kp.publicKey.toBase58();
+
+  // Phase C: pre-activate phoenix profile (idempotent, cached). Best-effort —
+  // Imperial says /mobile/orders auto-activates on first use, so a register
+  // failure here doesn't abort the open.
+  if (resolvedVenue === 'phoenix') {
+    await ensurePhoenixRegistered({ wallet, profileIndex });
+  }
 
   const order = {
     symbol: sym,
@@ -437,6 +458,10 @@ export async function imperialPartialClose({
   currentSizeUsd,
   slippageBps,
   venue,
+  // Optional, but REQUIRED for flash_trade closes — silent reject otherwise.
+  // Read from /positions[*].positionPda before calling. See imperial.js
+  // scaleMarketPriceForVenue comment for the empirical evidence.
+  positionId,
 }) {
   assertTradeMode('partial_close');
   if (!(reduceSizeUsd > 0)) {
@@ -462,6 +487,7 @@ export async function imperialPartialClose({
     notional: notionalUsd.toFixed(6),
     // NO desiredLeverage, NO reduceOnly
     slippageBps: Number(slippageBps ?? config.slippageBps ?? 100),
+    ...(positionId ? { positionId } : {}),
   };
   try {
     const res = await placeOrder(authToken, order);
@@ -552,12 +578,14 @@ export async function imperialClosePosition({
   leverage,
   slippageBps,
   venue,
+  // Optional — required for flash_trade. See imperialPartialClose.
+  positionId,
 }) {
   return imperialPartialClose({
     authToken, kp, profileIndex, symbol, side,
     reduceSizeUsd: sizeUsd,
     currentSizeUsd: sizeUsd, // full close -> snap notional exactly
-    slippageBps, venue,
+    slippageBps, venue, positionId,
   });
 }
 

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { HIDDEN_STATUS_PG_LIST } from "@/lib/launch/launchState";
 
 // New world: DBC pools on Meteora are the source of truth for price/supply.
 // Live token price comes from the on-chain pool. Perp mid is shown as a
@@ -144,7 +145,7 @@ export const listTokens = createServerFn({ method: "GET" })
       let q = supabaseAdmin
         .from("tokens")
         .select("*")
-        .neq("status", "deprecated")
+        .not("status", "in", HIDDEN_STATUS_PG_LIST)
         // Native perpad tokens: must have an on-chain mint.
         // External routers (pump.fun, etc.): only show after the first fee has
         // actually been routed through our treasury. Without this gate, anyone
@@ -439,7 +440,7 @@ export const getOpenPerpPositions = createServerFn({ method: "GET" })
         .select(
           "id,ticker,name,underlying,leverage,direction,position_size_usd,position_collateral_usd,treasury_pnl_usd,launch_mid,last_tick_mid,position_opened_at,status,treasury_wallet_address,router",
         )
-        .neq("status", "deprecated")
+        .not("status", "in", HIDDEN_STATUS_PG_LIST)
         .not("treasury_wallet_address", "is", null);
       if (error) throw error;
       const mids = await fetchAllMids();

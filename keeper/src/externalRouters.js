@@ -47,8 +47,9 @@ function isUnderlyingSupportedForRouter(router, sym) {
 }
 import { getUsdPriceFor } from './prices.js';
 import { claimPumpFunCreatorFees, claimPumpAmmCoinCreatorFees } from './pumpfunClaim.js';
+import { withRetry } from './rateLimiter.js';
 
-const SWEEP_THRESHOLD_USD = Number(process.env.EXTERNAL_SWEEP_THRESHOLD_USD ?? 25);
+export const SWEEP_THRESHOLD_USD = Number(process.env.EXTERNAL_SWEEP_THRESHOLD_USD ?? 25);
 const FALLBACK_SWEEP_THRESHOLD_SOL = Number(process.env.EXTERNAL_SWEEP_THRESHOLD_SOL ?? 0.1);
 // Reserve left in the sub-wallet so it stays rent-exempt and can sign future
 // txs. Kept above the top-up floor so we do not need repeated master top-ups.
@@ -69,7 +70,7 @@ function spendableFromLamports(lamports, legFeeCount = 3) {
 
 async function ensureSubFunded({ sub, master, label, currentLamports = null }) {
   const c = conn();
-  let have = currentLamports == null ? await c.getBalance(sub.publicKey, 'confirmed') : Number(currentLamports);
+  let have = currentLamports == null ? await withRetry(() => c.getBalance(sub.publicKey, 'confirmed')) : Number(currentLamports);
   if (have >= SUB_TOPUP_FLOOR_LAMPORTS) return;
   const need = SUB_TOPUP_AMOUNT_LAMPORTS - have;
   if (need <= 0) return;
@@ -192,7 +193,7 @@ async function prefetchLamports(addresses) {
   for (let i = 0; i < unique.length; i += chunkSize) {
     const chunk = unique.slice(i, i + chunkSize);
     try {
-      const infos = await conn().getMultipleAccountsInfo(chunk.map((a) => new PublicKey(a)), 'confirmed');
+      const infos = await withRetry(() => conn().getMultipleAccountsInfo(chunk.map((a) => new PublicKey(a)), 'confirmed'));
       infos.forEach((info, idx) => out.set(chunk[idx], Number(info?.lamports ?? 0)));
     } catch (e) {
       console.warn(`[externalRouters] balance prefetch failed: ${e.message}`);
@@ -236,7 +237,7 @@ async function legPerp({ router, sub, perpSol, maxSpendLamports, events }) {
   catch (e) { console.warn(`[externalRouters] readPerpPosition failed: ${e.message}`); }
 
   try {
-    const beforeLamports = await conn().getBalance(sub.publicKey, 'confirmed');
+    const beforeLamports = await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'));
     const maxSpendSol = Math.max(0, maxSpendLamports) / LAMPORTS_PER_SOL;
     let res;
     if (existing) {
@@ -262,7 +263,7 @@ async function legPerp({ router, sub, perpSol, maxSpendLamports, events }) {
       note: `${existing ? 'increase' : 'open'} ${sym} ${side} ${lev}x: +$${sizeUsd.toFixed(2)} size, +$${collateralUsd.toFixed(2)} collateral (${perpSol.toFixed(6)} SOL)${res?.simulated ? ' [sim]' : ''}`,
     });
     console.log(`[externalRouters] perp ${router.ticker ?? router.id.slice(0,6)} ${sym} ${side} ${lev}x size=$${sizeUsd.toFixed(2)} sig=${sig?.slice(0,16) ?? 'null'}…`);
-    const afterLamports = await conn().getBalance(sub.publicKey, 'confirmed');
+    const afterLamports = await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'));
     const spentSol = Math.max(0, beforeLamports - afterLamports) / LAMPORTS_PER_SOL;
     if (spentSol > maxSpendSol + 0.01) {
       console.warn(`[externalRouters] perp ${router.ticker ?? router.id.slice(0,6)} overspent split cap: spent=${spentSol.toFixed(6)} SOL cap=${maxSpendSol.toFixed(6)} SOL`);
@@ -296,7 +297,7 @@ async function legImperialDeposit({ router, sub, perpSol, solUsd, events }) {
   // Spendable SOL = full wallet minus rent reserve minus tx fees (already
   // accounts for the master treasury + buyback legs that ran before us).
   let lamports;
-  try { lamports = await conn().getBalance(sub.publicKey, 'confirmed'); }
+  try { lamports = await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed')); }
   catch (e) {
     console.warn(`[externalRouters] imperial deposit balance read failed token=${router.id}: ${e.message}`);
     return false;
@@ -415,7 +416,7 @@ async function legTreasury({ router, sub, master, treasurySol, maxSpendLamports,
   // Re-read live balance (previous legs consumed unknown amounts of SOL on
   // swaps + tx fees). Send everything above SUB_RESERVE + TX_FEE.
   let lamports;
-  try { lamports = await conn().getBalance(sub.publicKey, 'confirmed'); }
+  try { lamports = await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed')); }
   catch (e) {
     console.warn(`[externalRouters] treasury leg balance read failed: ${e.message}`);
     return false;
@@ -553,7 +554,7 @@ export async function sweepExternalRouters() {
             kp: sub,
             label: r.ticker ?? r.id.slice(0, 6),
             solUsd,
-            routeWalletSol: (await conn().getBalance(sub.publicKey, 'confirmed')) / LAMPORTS_PER_SOL,
+            routeWalletSol: (await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'))) / LAMPORTS_PER_SOL,
           });
           if (ammClaim && ammClaim.solClaimed > 0) {
             claimedLamports += Math.floor(ammClaim.solClaimed * LAMPORTS_PER_SOL);
@@ -577,7 +578,7 @@ export async function sweepExternalRouters() {
       }
 
 
-      const lamports = await conn().getBalance(sub.publicKey, 'confirmed');
+      const lamports = await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'));
       const observedIncomingLamports = Math.max(0, lamports - beforeClaimLamports);
       claimedLamports = Math.max(claimedLamports, observedIncomingLamports);
       const solUi = lamports / LAMPORTS_PER_SOL;
@@ -592,7 +593,15 @@ export async function sweepExternalRouters() {
       if (solUsd > 0) {
         if (walletUsd < SWEEP_THRESHOLD_USD) {
           if (solUi > 0.001 && shouldRunEvery(_lastIdleLogAt, r.id, IDLE_LOG_INTERVAL_MS)) {
-            console.log(`[externalRouters] ${r.ticker ?? r.id.slice(0, 6)} skip: route wallet=${solUi.toFixed(6)} SOL ($${walletUsd.toFixed(2)}) < sweep min $${SWEEP_THRESHOLD_USD}`);
+            const note = `route wallet=${solUi.toFixed(6)} SOL ($${walletUsd.toFixed(2)}) < sweep min $${SWEEP_THRESHOLD_USD}`;
+            console.log(`[externalRouters] ${r.ticker ?? r.id.slice(0, 6)} skip: ${note}`);
+            events.push({
+              token_id: r.id,
+              kind: 'external_sweep',
+              swept_sol: 0,
+              tx_sig: null,
+              note: `external sweep deferred: ${note}`,
+            });
           }
           continue;
         }
@@ -621,25 +630,50 @@ export async function sweepExternalRouters() {
         maxSpendLamports: Math.floor(splitBudget * TREASURY_RATIO),
         events,
       });
+      // Fix 2a runtime fallback: if the market can't be routed by Imperial
+      // (not in SUPPORTED_MARKETS), don't strand the perp slice forever. Fold
+      // it into the buyback so fees still burn, and flag the token
+      // market_unsupported instead of silently no-opening the perp leg every
+      // sweep. See KEEPER_P1_FIXES.md Fix 2a.
+      const sym = String(r.underlying ?? '').toUpperCase();
+      const marketSupported = isUnderlyingSupportedForRouter(r, sym);
+
       // Buyback runs before the perp/deposit leg so Imperial deposits cannot
       // consume the token's 25% buyback slice. The deposit helper intentionally
-      // drains accumulated spendable SOL, so it must be the last spender.
-      await legBuyback({ router: r, sub, buybackSol, solUsd, events });
+      // drains accumulated spendable SOL, so it must be the last spender. When
+      // the market is unsupported the perp slice is redirected into the buyback.
+      await legBuyback({
+        router: r,
+        sub,
+        buybackSol: marketSupported ? buybackSol : buybackSol + perpSol,
+        solUsd,
+        events,
+      });
 
-      // Perp leg: Imperial-routed tokens deposit straight to their profile
-      // (Jupiter can't trade HYPE/PUMP/DOGE/ZEC/WLD/NVDA). Legacy Jupiter
-      // routers keep the old openPosition flow.
-      const routerKind = String(r.router ?? 'imperial').toLowerCase();
-      if (routerKind === 'imperial') {
-        await legImperialDeposit({ router: r, sub, perpSol, solUsd, events });
-      } else {
-        await legPerp({
-          router: r,
-          sub,
-          perpSol,
-          maxSpendLamports: Math.floor(splitBudget * PERP_RATIO),
-          events,
+      if (!marketSupported) {
+        events.push({
+          token_id: r.id,
+          kind: 'external_sweep',
+          swept_sol: 0,
+          tx_sig: null,
+          note: `market_unsupported: ${sym || 'unknown'} unavailable for Imperial routing — perp slice redirected to buyback`,
         });
+      } else {
+        // Perp leg: Imperial-routed tokens deposit straight to their profile
+        // (Jupiter can't trade HYPE/PUMP/DOGE/ZEC/WLD/NVDA). Legacy Jupiter
+        // routers keep the old openPosition flow.
+        const routerKind = String(r.router ?? 'imperial').toLowerCase();
+        if (routerKind === 'imperial') {
+          await legImperialDeposit({ router: r, sub, perpSol, solUsd, events });
+        } else {
+          await legPerp({
+            router: r,
+            sub,
+            perpSol,
+            maxSpendLamports: Math.floor(splitBudget * PERP_RATIO),
+            events,
+          });
+        }
       }
 
       processed++;

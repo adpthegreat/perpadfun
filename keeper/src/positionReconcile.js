@@ -19,6 +19,7 @@ import { listActiveTokens, sendReport } from './perpad.js';
 import { authenticate as imperialAuthenticate } from './imperial.js';
 import { imperialReadPosition } from './imperialPerps.js';
 import { loadKeypair, walletForToken } from './wallet.js';
+import { workflowStateFromToken, State } from './workflow.js';
 
 let _master = null;
 function master() {
@@ -94,6 +95,60 @@ export async function runReconcileTick() {
 
     for (const t of tokens) {
       if ((t.router || 'imperial') !== 'imperial') continue;
+
+      // 3c: confirm a late-indexed open. A token stuck in position_open_pending
+      // with no recorded position — re-read /positions; if the venue now shows
+      // one, record it (position_opened + coll/size) so the keeper's 3a guard
+      // sees position_open and won't re-open. Catches positions that index
+      // AFTER the open tick, before 3a's retry deadline could let a duplicate
+      // through. See OPEN_CHAIN_REFACTOR_V2.md.
+      const wf = workflowStateFromToken(t);
+      if (
+        wf?.state === State.POSITION_OPEN_PENDING &&
+        !t.position_opened_at &&
+        t.imperial_profile_index != null
+      ) {
+        checked++;
+        let kpp;
+        try {
+          kpp = walletForToken(master(), t);
+        } catch {
+          continue;
+        }
+        if (!kpp) continue;
+        let authTokenP;
+        try {
+          authTokenP = await getAuthToken(kpp);
+        } catch {
+          continue;
+        }
+        let posP;
+        try {
+          posP = await imperialReadPosition({
+            profileIndex: t.imperial_profile_index,
+            symbol: sym(t),
+            side: side(t),
+            token: authTokenP,
+            wallet: kpp.publicKey.toBase58(),
+          });
+        } catch {
+          continue;
+        }
+        if (posP && Number(posP.sizeUsd) > 0 && Number(posP.collateralUsd) > 0) {
+          fixed++;
+          const note = `[reconcile] ${t.ticker}: confirmed late-indexed open coll=$${Number(posP.collateralUsd).toFixed(2)} size=$${Number(posP.sizeUsd).toFixed(2)}`;
+          console.log(note);
+          reports.push({
+            token_id: t.id,
+            position_opened: true,
+            position_collateral_usd: Number(posP.collateralUsd),
+            position_size_usd: Number(posP.sizeUsd),
+            events: [{ kind: 'tick', note }],
+          });
+        }
+        continue; // pending handled (confirmed) or still genuinely pending
+      }
+
       if (!t.position_opened_at) continue;
       const openedAt = new Date(t.position_opened_at).getTime();
       if (!Number.isFinite(openedAt) || openedAt < cutoff) continue;

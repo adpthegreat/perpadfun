@@ -13,9 +13,13 @@ import { z } from "zod";
 import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getServerSolanaRpcUrl } from "@/lib/wallet/solanaConfig";
+import { isLaunchableMarket } from "@/lib/imperial-markets";
+import { newTokenIdentity, tokenInvariantsFor } from "@/lib/solana/subWallet.server";
+import { transitionLaunch, markLaunchFailed } from "@/lib/launch/launchState";
+import { nextSolRaised, nextMigrationStatus } from "@/lib/launch/poolState";
+import { backOff } from "@/lib/backoff";
 
 const PERP_FEED = "https://api.hyperliquid.xyz/info";
-const TOKEN_IMPERIAL_PROFILE_INDEX = 1;
 
 function assertAllowedLauncher(_addr: string) {
   // Launches are open to any Solana wallet.
@@ -34,6 +38,18 @@ async function getMid(coin: string): Promise<number> {
   return Number(v);
 }
 
+// Phase 5: launch_mid is best-effort. The market is already validated by the
+// isLaunchableMarket refine, and the keeper backfills entry price from Imperial
+// when launch_mid is null — so a price-feed blip must NOT fail a launch.
+async function tryGetMid(coin: string): Promise<number | null> {
+  try {
+    return await getMid(coin);
+  } catch (e) {
+    console.warn(`getMid(${coin}) failed; launch_mid will backfill later:`, e);
+    return null;
+  }
+}
+
 const launchInput = z.object({
   ticker: z
     .string()
@@ -45,7 +61,13 @@ const launchInput = z.object({
   imageUrl: z.string().url().max(500).optional(),
   websiteUrl: z.string().url().max(300).optional(),
   twitterUrl: z.string().url().max(300).optional(),
-  underlying: z.string().min(1).max(20),
+  underlying: z
+    .string()
+    .min(1)
+    .max(20)
+    .refine(isLaunchableMarket, {
+      message: "Unsupported or unavailable market for Imperial routing",
+    }),
   leverage: z.union([z.literal(2), z.literal(3), z.literal(5), z.literal(10), z.literal(25), z.literal(50), z.literal(100)]),
   direction: z.enum(["long", "short"]),
   creatorAddress: z.string().min(32).max(44),
@@ -56,13 +78,20 @@ export const createDraftToken = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       assertAllowedLauncher(data.creatorAddress);
-      const mid = await getMid(data.underlying);
+      const mid = await tryGetMid(data.underlying);
       const preset =
         data.leverage === 2 ? "gentle" : data.leverage >= 5 ? "parabolic" : "standard";
 
+      // Atomic creation: the id + sub-wallet + profile index are derived
+      // up-front and written in the SAME insert, so a token row can never
+      // exist without its invariants (see LAUNCH_REFACTOR.md).
+      const identity = newTokenIdentity();
       const { data: row, error } = await supabaseAdmin
         .from("tokens")
         .insert({
+          id: identity.id,
+          treasury_wallet_address: identity.treasury_wallet_address,
+          imperial_profile_index: identity.imperial_profile_index,
           ticker: data.ticker,
           name: data.name,
           description: data.description ?? null,
@@ -99,6 +128,7 @@ export const createDraftToken = createServerFn({ method: "POST" })
             await supabaseAdmin
               .from("tokens")
               .update({
+                ...tokenInvariantsFor(existing.id),
                 name: data.name,
                 description: data.description ?? null,
                 image_url: data.imageUrl ?? null,
@@ -133,16 +163,6 @@ export const createDraftToken = createServerFn({ method: "POST" })
                 metadata_address: null,
               })
               .eq("id", existing.id);
-            try {
-              const { deriveSubWalletAddress } = await import("@/lib/solana/subWallet.server");
-              const subAddr = deriveSubWalletAddress(existing.id);
-              await supabaseAdmin
-                .from("tokens")
-                .update({ treasury_wallet_address: subAddr, imperial_profile_index: TOKEN_IMPERIAL_PROFILE_INDEX })
-                .eq("id", existing.id);
-            } catch (subErr) {
-              console.error("derive sub-wallet (reuse) failed", subErr);
-            }
             return {
               ok: true as const,
               tokenId: existing.id,
@@ -154,19 +174,6 @@ export const createDraftToken = createServerFn({ method: "POST" })
           return { ok: false as const, error: "Ticker already taken" };
         }
         throw error;
-      }
-
-      // Derive and persist deterministic per-token sub-wallet address.
-      try {
-        const { deriveSubWalletAddress } = await import("@/lib/solana/subWallet.server");
-        const subAddr = deriveSubWalletAddress(row.id);
-        await supabaseAdmin
-          .from("tokens")
-          .update({ treasury_wallet_address: subAddr, imperial_profile_index: TOKEN_IMPERIAL_PROFILE_INDEX })
-          .eq("id", row.id);
-      } catch (subErr) {
-        console.error("derive sub-wallet failed", subErr);
-        // non-fatal: getSubWalletInfo will lazy-backfill on first view.
       }
 
       return {
@@ -199,45 +206,48 @@ export const recordLaunch = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
-      // Best-effort confirmation poll (~30s). If RPC is laggy we still write
-      // the row so the on-chain pool never ends up orphaned in the DB.
+      // Best-effort confirmation poll. If RPC is laggy we still write the row
+      // so the on-chain pool never ends up orphaned in the DB. backOff retries
+      // on ANYTHING — "not yet confirmed" or a transient RPC error — matching
+      // the old loop's error-tolerance, with exponential delay + jitter.
       const conn = new Connection(getServerSolanaRpcUrl(), "confirmed");
       let confirmedErr: unknown = null;
-      for (let i = 0; i < 12; i++) {
-        try {
-          const status = await conn.getSignatureStatus(data.signature, {
-            searchTransactionHistory: true,
-          });
-          const c = status.value;
-          if (c?.err) {
-            confirmedErr = c.err;
-            break;
-          }
-          if (c && (c.confirmationStatus === "confirmed" || c.confirmationStatus === "finalized")) {
-            break;
-          }
-        } catch {
-          // ignore transient RPC errors
-        }
-        await new Promise((r) => setTimeout(r, 2500));
+      try {
+        await backOff(
+          async () => {
+            const c = (
+              await conn.getSignatureStatus(data.signature, { searchTransactionHistory: true })
+            ).value;
+            if (c?.err) {
+              confirmedErr = c.err; // terminal on-chain failure → stop polling
+              return;
+            }
+            if (c && (c.confirmationStatus === "confirmed" || c.confirmationStatus === "finalized")) {
+              return; // confirmed → stop
+            }
+            throw new Error("not yet confirmed"); // pending → poll again
+          },
+          { numOfAttempts: 12, startingDelay: 1000, timeMultiple: 1.5, maxDelay: 8000, jitter: "full", retry: () => true },
+        );
+      } catch {
+        // Exhausted the poll budget without confirmation; proceed best-effort.
       }
 
       if (confirmedErr) {
+        // Terminal: the launch tx failed on-chain. Move the row out of
+        // `launching` so it isn't shown or picked up by the keeper.
+        await markLaunchFailed(data.tokenId, `launch tx failed: ${JSON.stringify(confirmedErr)}`);
         return { ok: false as const, error: `Launch tx failed: ${JSON.stringify(confirmedErr)}` };
       }
 
-      const { error } = await supabaseAdmin
-        .from("tokens")
-        .update({
-          status: "live",
-          launch_signature: data.signature,
-          mint_address: data.mintAddress,
-          dbc_pool_address: data.dbcPoolAddress,
-          dbc_config_address: data.dbcConfigAddress,
-          migration_status: "curve",
-        })
-        .eq("id", data.tokenId);
-      if (error) throw error;
+      const res = await transitionLaunch(data.tokenId, "live", {
+        launch_signature: data.signature,
+        mint_address: data.mintAddress,
+        dbc_pool_address: data.dbcPoolAddress,
+        dbc_config_address: data.dbcConfigAddress,
+        migration_status: "curve",
+      });
+      if (!res.ok) throw new Error(res.error ?? "launch transition failed");
       return { ok: true as const, error: null as string | null };
     } catch (e: unknown) {
       console.error("recordLaunch", e);
@@ -290,9 +300,11 @@ export const refreshPoolState = createServerFn({ method: "POST" })
       const poolPk = new PublicKey(t.dbc_pool_address);
       const pool = await client.state.getPool(poolPk);
 
-      // pool.quoteReserve is in lamports for SOL pools.
-      const quoteReserveRaw = pool?.quoteReserve ? BigInt(pool.quoteReserve.toString()) : 0n;
-      const solRaised = Number(quoteReserveRaw) / 1e9;
+      // pool.quoteReserve is in lamports for SOL pools. If the read doesn't
+      // expose it (e.g. a graduated DBC pool whose reserve migrated to DAMM v2),
+      // keep the last known value instead of overwriting sol_raised with 0.
+      const freshSol = pool?.quoteReserve ? Number(BigInt(pool.quoteReserve.toString())) / 1e9 : null;
+      const solRaised = nextSolRaised(freshSol, Number(t.sol_raised ?? 0));
 
       // Current spot price in SOL per base token, derived from sqrtPrice.
       // DBC defaults: base decimals 6, quote (SOL) decimals 9.
@@ -309,9 +321,13 @@ export const refreshPoolState = createServerFn({ method: "POST" })
         console.warn("price decode failed", priceErr);
       }
 
-      const migrationStatus = (pool as unknown as { isMigrated?: boolean })?.isMigrated
-        ? "graduated"
-        : "curve";
+      // Migration is one-way: never downgrade a token that is already graduated
+      // (a transient/undefined isMigrated read must not flip it back to "curve",
+      // which would send the keeper to the DBC fee-claim path on a DAMM v2 pool).
+      const migrationStatus = nextMigrationStatus(
+        t.migration_status,
+        (pool as unknown as { isMigrated?: boolean })?.isMigrated,
+      );
 
       // After graduation, derive the DAMM v2 pool address so the keeper can
       // claim trading fees from it. Keep the last known DBC price as a floor
@@ -410,14 +426,18 @@ export const recoverLaunch = createServerFn({ method: "POST" })
       const pool = await client.state.getPool(new PublicKey(data.dbcPoolAddress));
       if (!pool) return { ok: false as const, error: "Pool not found on-chain" };
 
-      const mid = await getMid(data.underlying);
+      const mid = await tryGetMid(data.underlying);
       const preset = data.leverage === 2 ? "gentle" : data.leverage >= 5 ? "parabolic" : "standard";
       const quoteReserveRaw = pool?.quoteReserve ? BigInt(pool.quoteReserve.toString()) : 0n;
       const solRaised = Number(quoteReserveRaw) / 1e9;
 
+      const identity = newTokenIdentity();
       const { data: row, error } = await supabaseAdmin
         .from("tokens")
         .insert({
+          id: identity.id,
+          treasury_wallet_address: identity.treasury_wallet_address,
+          imperial_profile_index: identity.imperial_profile_index,
           ticker: data.ticker,
           name: data.name,
           description: data.description ?? null,
@@ -447,6 +467,8 @@ export const recoverLaunch = createServerFn({ method: "POST" })
       return { ok: false as const, error: e instanceof Error ? e.message : "Recover failed" };
     }
   });
+
+
 
 
 // Sub-wallet-signed launch. The user funds the deterministic token sub-wallet,
@@ -483,32 +505,45 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
       // feeClaimer + leftoverReceiver + poolCreator slots so every
       // creator-side trading fee lands in the sub-wallet, not master.
       // The keeper re-derives the same keypair server-side to sign.
+      // The token's sub-wallet (signer). Its address + imperial_profile_index
+      // were written atomically at creation (see LAUNCH_REFACTOR.md), so there
+      // is no re-assignment here.
       const { deriveSubWalletKeypair } = await import("@/lib/solana/subWallet.server");
       const subWallet = deriveSubWalletKeypair(data.tokenId);
-      // Persist sub-wallet address up-front so the row is correct even if a
-      // later step throws.
-      await supabaseAdmin
-        .from("tokens")
-        .update({ treasury_wallet_address: subWallet.publicKey.toBase58(), imperial_profile_index: TOKEN_IMPERIAL_PROFILE_INDEX })
-        .eq("id", data.tokenId);
 
       // 1. Verify the prefund landed when this call includes a fresh transfer.
       // Retries can omit the signature because we re-check the sub-wallet's
       // current balance below and continue without charging the user again.
       if (data.prefundSignature) {
+        // Poll up to 16 times for confirmation. Unlike recordLaunch this is
+        // STRICT: if it never confirms we abort the launch (the balance check
+        // below would fail anyway). backOff retries on "not yet confirmed" AND
+        // transient RPC errors (the old flat loop would abort on either); a
+        // terminal on-chain err stops polling early. const-capture keeps the
+        // signature narrowed to string inside the closure.
+        const sig = data.prefundSignature;
         let prefundOk = false;
-        for (let i = 0; i < 16; i++) {
-          const st = await conn.getSignatureStatus(data.prefundSignature, {
-            searchTransactionHistory: true,
-          });
-          const v = st.value;
-          if (v?.err) return { ok: false as const, error: "Prefund tx failed on-chain" };
-          if (v && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")) {
-            prefundOk = true;
-            break;
-          }
-          await new Promise((r) => setTimeout(r, 2000));
+        let prefundErr: unknown = null;
+        try {
+          await backOff(
+            async () => {
+              const v = (await conn.getSignatureStatus(sig, { searchTransactionHistory: true })).value;
+              if (v?.err) {
+                prefundErr = v.err; // terminal on-chain failure → stop polling
+                return;
+              }
+              if (v && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")) {
+                prefundOk = true; // confirmed → stop
+                return;
+              }
+              throw new Error("not yet confirmed"); // pending → poll again
+            },
+            { numOfAttempts: 16, startingDelay: 1000, timeMultiple: 1.5, maxDelay: 4000, jitter: "full", retry: () => true },
+          );
+        } catch {
+          // Exhausted the 16-attempt budget without a confirmed/finalized status.
         }
+        if (prefundErr) return { ok: false as const, error: "Prefund tx failed on-chain" };
         if (!prefundOk) return { ok: false as const, error: "Prefund tx not confirmed in time" };
       }
 

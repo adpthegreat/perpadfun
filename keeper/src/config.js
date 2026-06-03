@@ -80,6 +80,14 @@ export const config = {
   pnlTriggerUsd: Number(process.env.PNL_TRIGGER_USD ?? 25),
   pnlRealizeMaxUsd: Number(process.env.PNL_REALIZE_MAX_USD ?? 250),
   leverageCapMult: Number(process.env.LEVERAGE_CAP_MULT ?? 2),
+  // --- backstop TP (safety patch — see plan/KEEPER_TP_SAFETY_PATCH.md) ---
+  // Fires when pnl_now / coll ≥ backstopRatio, partial-closes to
+  // backstopTargetRatio × coll buffer, capped at backstopMaxPerTick.
+  // Default 0.5 — fires when floating PnL reaches 50% of collateral.
+  // Set BACKSTOP_RATIO=999 to disable (for safe initial rollout if needed).
+  backstopRatio: Number(process.env.BACKSTOP_RATIO ?? 0.5),
+  backstopTargetRatio: Number(process.env.BACKSTOP_TARGET_RATIO ?? 0.1),
+  backstopMaxPerTick: Number(process.env.BACKSTOP_MAX_PER_TICK ?? 500),
   minLiqBufferPct: Number(process.env.MIN_LIQ_BUFFER_PCT ?? 0.25),
   slippageBps: Number(process.env.HEDGE_SLIPPAGE_BPS ?? 100),
   maxBuybackPerTickUsd: Number(process.env.MAX_BUYBACK_PER_TICK_USD ?? 25),
@@ -112,6 +120,10 @@ export const config = {
   reconcileEnabled: String(process.env.RECONCILE_ENABLED ?? 'true').toLowerCase() === 'true',
   reconcileTickMs: Number(process.env.RECONCILE_TICK_MS ?? 90_000),
   reconcileWindowMin: Number(process.env.RECONCILE_WINDOW_MIN ?? 15),
+  // State reconcile (Fix 3c): scans token_workflows and nudges stuck tokens back
+  // into the forward tick (error->idle, clear stale pending, escalate blocked).
+  // PASSIVE — never trades. See KEEPER_RECONCILE.md.
+  stateReconcileEnabled: String(process.env.STATE_RECONCILE_ENABLED ?? 'true').toLowerCase() === 'true',
   // Quiet the per-call Imperial handshake fallback log unless set.
   logVerbose: String(process.env.LOG_VERBOSE ?? 'false').toLowerCase() === 'true',
 };

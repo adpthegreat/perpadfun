@@ -29,6 +29,15 @@ export async function listActiveTokens() {
   return r.tokens ?? [];
 }
 
+// Tokens whose workflow state is a stuck *candidate* (error / blocked / a
+// *_pending that may be stale). Index-backed + uncapped, INDEPENDENT of the
+// 200-row active feed — so the reconcile job can recover ANY stuck token, not
+// just ones inside the active-feed window. See KEEPER_RECONCILE.md.
+export async function listStuckTokens() {
+  const r = await call('/api/public/keeper/stuck-tokens', { method: 'GET' });
+  return r.tokens ?? [];
+}
+
 export async function sendReport(reports) {
   if (!reports.length) return { ok: true, tokens_updated: 0, events_inserted: 0 };
   return call('/api/public/keeper/report', {

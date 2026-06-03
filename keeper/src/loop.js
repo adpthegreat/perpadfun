@@ -17,6 +17,7 @@
 //   6. On graduation: drain remaining buyback_reserve via real buyback+burn.
 
 import { config } from "./config.js";
+import os from "node:os";
 import {
   getJupPerps,
   getFreeCollateralUsd,
@@ -42,10 +43,24 @@ import { listActiveTokens, sendReport } from "./perpad.js";
 import { getSolUsd } from "./prices.js";
 import { claimDbcFees, claimAmmFees, detectGraduation } from "./fees.js";
 import { buybackAndBurn } from "./buyback.js";
-import { swapSolToUsdc } from "./swap.js";
+import { swapSolToUsdc, MIN_VIABLE_USDC } from "./swap.js";
+import { withRetry } from "./rateLimiter.js";
 import { intentHash, tickBucket, buildTxLogEntry } from "./idempotency.js";
 import { loadKeypair, walletForToken } from "./wallet.js";
 import { quoteIfEnabled as imperialQuoteIfEnabled } from "./imperialRouter.js";
+import {
+  claimWorkflowLocks,
+  queueBlocked,
+  queueWorkflow,
+  workflowPatch,
+  setWorkflowStateSync,
+  workflowStateFromToken,
+  workflowBlocksOpen,
+  keeperLog,
+  State,
+} from "./workflow.js";
+import { tokenLog, newTickId, tickSummary, tokenTickSummary, logInfo, logError } from "./structuredLog.js";
+import { pickEntryMid, captureMarkAsEntry, computePnlFromEntry } from "./pnl.js";
 import {
   gateImperialFunding,
   depositToImperialProfile,
@@ -56,6 +71,7 @@ import {
   isSupportedMarket as isImperialSupportedMarket,
   getProfile as imperialGetProfile,
   getPositions as imperialGetPositions,
+  getMarkPriceUi as imperialGetMarkPriceUi,
   MIN_COLLATERAL_USD as IMPERIAL_MIN_COLLATERAL_USD,
 } from "./imperial.js";
 
@@ -82,6 +98,65 @@ import {
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const MIN_BUYBACK_USD = 1;
+
+// Fix 3a: how long a position_open_pending workflow row may block a re-open
+// before it's treated as stale (the open likely never landed) and a retry is
+// allowed. Bounds the anti-double-open guard so a stuck pending can't stall a
+// token forever before 3c reconciles. See OPEN_CHAIN_REFACTOR_V2.md.
+const OPEN_PENDING_STALE_MS = Number(process.env.OPEN_PENDING_STALE_MS ?? 300_000);
+
+// PnL fix: how long after open we may adopt the current mark as our entry basis
+// when the venue never returned an entry price. Inside this window mark ≈ entry,
+// so it's accurate; past it we never touch launch_mid from mark (that would
+// erase a moved position's real PnL). See KEEPER_PNL.md.
+const ENTRY_CAPTURE_WINDOW_MS = Number(process.env.ENTRY_CAPTURE_WINDOW_MS ?? 180_000);
+
+// --- 4b: hot/warm/cold tick cadence (cause J) ---------------------------------
+// Most tokens at any moment are idle (no reserve, no position, nothing pending)
+// yet were probed every tick, so idle PEND-* spam dominated the per-tick RPC
+// budget. A "cold" token is processed only every COLD_PROBE_INTERVAL_MS instead
+// of every tick; that probe still runs (to catch newly-arrived fees), just not
+// 60x/hour. Tokens with real work (live position, pending sig, fees near the
+// open gate, or any mid-flow workflow state) are NEVER throttled. See
+// KEEPER_RATE_LIMIT_REFACTOR.md (4b).
+export const COLD_PROBE_INTERVAL_MS = Number(process.env.COLD_PROBE_INTERVAL_MS ?? 300_000);
+// In-memory per-token last-probe clock. Bounded by token count; resets on
+// restart (which just probes every cold token once on the first tick — fine).
+const _coldLastProbe = new Map();
+
+// Test-only: clear the probe clock so a suite can simulate ticks deterministically.
+export function _resetColdProbe() {
+  _coldLastProbe.clear();
+}
+
+// Round a number for structured-log metric fields; non-finite -> 0.
+const num2 = (n, d = 2) => (Number.isFinite(Number(n)) ? Number(Number(n).toFixed(d)) : 0);
+
+// A token has work that must run every tick (so it can never be cold-throttled).
+export function tokenHasWork(t) {
+  if (t.pending_drift_sig) return true; // must clear an in-flight open/topup sig
+  if (t.position_opened_at) return true; // live position: PnL reads / topups / close
+  if (Number(t.fees_accrued_usd ?? 0) >= Number(config.feeGateUsd ?? 20)) return true; // at/near open gate
+  const st = workflowStateFromToken(t)?.state;
+  // Any state other than idle/blocked/error means a flow is mid-progress.
+  if (st && ![State.IDLE, State.BLOCKED, State.ERROR].includes(st)) return true;
+  return false;
+}
+
+// True => skip this token on this tick. Cold tokens are probed at most once per
+// COLD_PROBE_INTERVAL_MS; tokens explicitly deferred via next_retry_at are
+// skipped until that time. Side effect: stamps the probe clock when it decides
+// to probe a cold token, so the NEXT call within the window skips it.
+export function shouldSkipColdTick(t, now) {
+  const wf = workflowStateFromToken(t);
+  const retryAt = wf?.next_retry_at ? new Date(wf.next_retry_at).getTime() : null;
+  if (retryAt && now < retryAt) return true; // explicit "come back later"
+  if (tokenHasWork(t)) return false; // hot/warm: always process
+  const last = _coldLastProbe.get(t.id) ?? 0; // cold: throttle probes
+  if (now - last < COLD_PROBE_INTERVAL_MS) return true;
+  _coldLastProbe.set(t.id, now);
+  return false;
+}
 
 // Startup banner so logs prove the keeper deployed the normalized 50/25/25 split build.
 console.log(
@@ -120,6 +195,16 @@ function sanitizeReportPatch(patch) {
   return patch;
 }
 
+export function blockedReasonFromEvents(events) {
+  const notes = [...(events ?? [])]
+    .reverse()
+    .map((event) => event?.note)
+    .filter(Boolean);
+  return notes.find((note) =>
+    /\b(skip|defer|deferred|failed|err|error|below|unsupported|capacity|unavailable|refunded|dropped)\b/i.test(note),
+  ) ?? null;
+}
+
 let _conn = null;
 function conn() {
   if (!_conn) _conn = new Connection(config.rpcUrl, "confirmed");
@@ -153,7 +238,7 @@ async function getImperialTokenFor(kp) {
 async function treasuryUsdcUi() {
   try {
     const ata = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), tre().publicKey);
-    const bal = await conn().getTokenAccountBalance(ata, "confirmed");
+    const bal = await withRetry(() => conn().getTokenAccountBalance(ata, "confirmed"));
     return Number(bal.value.uiAmount ?? 0);
   } catch {
     return 0;
@@ -162,7 +247,7 @@ async function treasuryUsdcUi() {
 
 async function treasurySolUi() {
   try {
-    const lamports = await conn().getBalance(tre().publicKey, "confirmed");
+    const lamports = await withRetry(() => conn().getBalance(tre().publicKey, "confirmed"));
     return lamports / 1_000_000_000;
   } catch {
     return 0;
@@ -171,7 +256,7 @@ async function treasurySolUi() {
 
 async function solUiFor(pubkey) {
   try {
-    const lamports = await conn().getBalance(pubkey, "confirmed");
+    const lamports = await withRetry(() => conn().getBalance(pubkey, "confirmed"));
     return lamports / 1_000_000_000;
   } catch {
     return 0;
@@ -298,7 +383,7 @@ async function skimTreasuryShare({
     // pendingObligationUsd = unspent perp-margin fees + buyback reserve.
     const obligationSol = Math.max(0, Number(pendingObligationUsd) || 0) / solUsd;
     const OBLIGATION_LAMPORTS = Math.floor(obligationSol * 1e9);
-    const lamports = await conn().getBalance(kp.publicKey, "confirmed");
+    const lamports = await withRetry(() => conn().getBalance(kp.publicKey, "confirmed"));
     const wantLamports = Math.floor(holdSol * 1e9);
     const sendable = Math.min(
       wantLamports,
@@ -358,7 +443,7 @@ async function readImperialProfileUsdcUi({ profileIndex, authToken }) {
       try {
         const pdaPk = new PublicKey(prof.profilePda);
         const ata = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), pdaPk, true);
-        const bal = await conn().getTokenAccountBalance(ata, "confirmed");
+        const bal = await withRetry(() => conn().getTokenAccountBalance(ata, "confirmed"));
         const onChain = Number(bal?.value?.uiAmount ?? 0);
         if (onChain > ui) ui = onChain;
       } catch {
@@ -412,10 +497,32 @@ async function readVerifiedImperialPosition({
   return null;
 }
 
+async function resolveImperialEntryPrice({ verifiedPos, symbol, venue, token }) {
+  const picked = pickEntryMid({
+    venueEntry: verifiedPos?.entryPriceUsd,
+    venueMark: verifiedPos?.markPriceUsd,
+    existingMid: token?.launch_mid,
+  });
+  if (picked.price) return picked;
+  try {
+    const markPrice = await imperialGetMarkPriceUi(symbol, venue);
+    if (markPrice) return { price: Number(markPrice), source: "perpad_entry_mid" };
+  } catch (e) {
+    console.warn(`[imperial:entry] ${symbol} mark fallback failed:`, e.message);
+  }
+  return { price: null, source: null };
+}
+
 async function checkSig(sig) {
   if (!sig) return null;
   try {
-    const s = await conn().getSignatureStatus(sig, { searchTransactionHistory: true });
+    // checkSig gates open/top-up progression, so give it a wider retry budget
+    // than a plain read (but not a confirmation-poll budget — it runs per-token
+    // per-tick, so a huge backoff could eat the tick watchdog).
+    const s = await withRetry(
+      () => conn().getSignatureStatus(sig, { searchTransactionHistory: true }),
+      { numOfAttempts: 5, maxDelay: 2000 },
+    );
     const v = s?.value;
     // With searchTransactionHistory:true, a null value means the tx is not in
     // the live status cache AND not in the recent ledger history — it was
@@ -441,8 +548,12 @@ const KEEPER_MINT_ALLOWLIST = (process.env.KEEPER_MINT_ALLOWLIST ?? "")
   .filter(Boolean);
 
 export async function tick() {
+  const tickId = newTickId();
+  const tickStartedAt = Date.now();
+  let tickErrors = 0;
+  let tickClaimedUsd = 0;
   const all = await listActiveTokens();
-  const tokens = KEEPER_MINT_ALLOWLIST.length
+  let tokens = KEEPER_MINT_ALLOWLIST.length
     ? all.filter((t) => {
         const tokenMint = t.mint_address || t.external_mint;
         return tokenMint && KEEPER_MINT_ALLOWLIST.includes(tokenMint);
@@ -457,14 +568,43 @@ export async function tick() {
   }
   if (!tokens.length) return { processed: 0 };
 
-  // Prioritize tokens that actually have work to do so a slow tick (RPC 429s,
-  // long imperial calls) doesn't let the 240s watchdog fire before high-value
-  // vaults are serviced. Order:
+  // 4b: drop cold tokens that don't need a tick right now. Done BEFORE claiming
+  // locks / sorting so cold tokens cost zero RPC and zero lock churn. Hot tokens
+  // (live position, pending sig, near-gate fees, mid-flow state) are never
+  // dropped; deferred tokens (next_retry_at) are skipped until their time.
+  {
+    const nowMs = Date.now();
+    const beforeCadence = tokens.length;
+    tokens = tokens.filter((t) => !shouldSkipColdTick(t, nowMs));
+    const skipped = beforeCadence - tokens.length;
+    if (skipped > 0)
+      console.log(`[loop] cadence: skipped ${skipped} cold/deferred token(s), processing ${tokens.length}`);
+    if (!tokens.length) return { processed: 0, skipped: "all_tokens_cold" };
+  }
+
+  const lockOwner = process.env.FLY_ALLOC_ID || `${os.hostname()}:${process.pid}`;
+  try {
+    const locked = await claimWorkflowLocks(tokens.map((t) => t.id), lockOwner);
+    const before = tokens.length;
+    tokens = tokens.filter((t) => locked.has(t.id));
+    if (tokens.length < before) {
+      console.log(`[loop] workflow locks: processing ${tokens.length}/${before} tokens owner=${lockOwner}`);
+    }
+    if (!tokens.length) return { processed: 0, skipped: "all_tokens_locked" };
+  } catch (e) {
+    console.warn(`[loop] workflow lock acquisition failed; continuing without locks: ${e.message}`);
+  }
+
+  // Cold/idle tokens were already dropped by the 4b cadence filter above, so
+  // this sorts only the hot/warm survivors. It does NOT reduce call volume
+  // (that's 4b's job) — it just orders the survivors so a slow tick (RPC 429s,
+  // 4a backoff waits, long imperial calls) services the highest-value vaults (tokens)
+  // before the 240s watchdog can cut the tick off. Order:
   //   1. tokens with a stuck pending_drift_sig (must clear it to unblock)
   //   2. tokens with a live position AND a funded imperial profile (topups)
   //   3. tokens with a live position (PnL reads / partial close)
   //   4. tokens with accrued fees >= open gate
-  //   5. everything else (mostly idle PEND-* spam)
+  //   5. everything else (e.g. split_reserved accruing below gate)
   tokens.sort((a, b) => {
     const score = (t) => {
       let s = 0;
@@ -511,6 +651,7 @@ export async function tick() {
   _lastTreasurySol = treasurySolNow;
 
   for (const t of tokens) {
+    const tStart = Date.now();
     const events = [];
     const txLog = [];
     const patch = { token_id: t.id };
@@ -527,9 +668,10 @@ export async function tick() {
       try {
         kp = walletForToken(tre(), t);
       } catch (e) {
-        console.error(`[loop] ${t.ticker} wallet resolve failed:`, e.message);
+        keeperLog(t, "error", "wallet resolve failed", { error: e.message, tick_id: tickId });
         events.push({ kind: "tick", note: `wallet resolve err: ${e.message.slice(0, 200)}` });
         patch.events = events;
+        queueBlocked(t, `wallet resolve err: ${e.message.slice(0, 200)}`, { patch });
         reports.push(sanitizeReportPatch(patch));
         processed++;
         continue;
@@ -591,7 +733,7 @@ export async function tick() {
             t.imperial_profile_pda = prof.profilePda;
           }
         } catch (e) {
-          console.warn(`[imperial:pda-backfill] ${t.ticker} failed:`, e.message);
+          keeperLog(t, "warn", "imperial pda backfill failed", { error: e.message, tick_id: tickId });
         }
       }
 
@@ -623,18 +765,28 @@ export async function tick() {
             });
           }
         } catch (e) {
-          console.warn(`[loop] ${t.ticker} graduation detect failed:`, e.message);
+          keeperLog(t, "warn", "graduation detect failed", { error: e.message, tick_id: tickId });
         }
       }
 
       if (!isUnderlyingSupportedForToken(t, underlying)) {
         const routerId = String(t?.router ?? "imperial").toLowerCase();
+        // Fix 2a runtime fallback: terminal market_unsupported classification.
+        // These tokens can never open a perp on this keeper, so flag them with a
+        // distinct reason (for a creator remap) and a long re-check backoff
+        // rather than retrying every tick. Native tokens bail before the claim
+        // step, so there is no perp slice to redirect here (unlike the external
+        // sweep path). See KEEPER_P1_FIXES.md Fix 2a.
         events.push({
           kind: "tick",
-          note: `unsupported underlying ${underlying || "unknown"} for router ${routerId}, skipping hedge`,
+          note: `market_unsupported: ${underlying || "unknown"} not routable by router ${routerId}, skipping hedge`,
         });
         patch.events = events;
         patch.tx_log = txLog;
+        queueBlocked(t, `market_unsupported: ${underlying || "unknown"} (router ${routerId})`, {
+          patch,
+          nextRetryAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+        });
         reports.push(sanitizeReportPatch(patch));
         processed++;
         continue;
@@ -736,7 +888,7 @@ export async function tick() {
             patch.last_fee_claim_signature = lastSig;
           }
         } catch (e) {
-          console.warn(`[loop] ${t.ticker} fee claim failed:`, e.message);
+          keeperLog(t, "warn", "fee claim failed", { error: e.message, tick_id: tickId });
           events.push({ kind: "tick", note: `fee claim error: ${e.message.slice(0, 200)}` });
         }
       }
@@ -803,8 +955,7 @@ export async function tick() {
         if (isExternal || isImperialRouted) {
           try {
             const usdcAta = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), kp.publicKey);
-            const usdcBal = await conn()
-              .getTokenAccountBalance(usdcAta, "confirmed")
+            const usdcBal = await withRetry(() => conn().getTokenAccountBalance(usdcAta, "confirmed"))
               .catch(() => null);
             const usdcUi = Number(usdcBal?.value?.uiAmount ?? 0);
             if (usdcUi >= spendUsd) {
@@ -817,7 +968,7 @@ export async function tick() {
               );
             }
           } catch (e) {
-            console.warn(`[buyback] ${t.ticker} USDC probe failed:`, e.message);
+            keeperLog(t, "warn", "buyback USDC probe failed", { error: e.message, tick_id: tickId });
           }
         }
         if (!isSubWallet && !payMint) {
@@ -902,7 +1053,7 @@ export async function tick() {
               `[buyback] executed token=${t.ticker} input=${payNote} tokens=${r.tokensBurned} swap=${r.swapSig} burn=${r.burnSig}`,
             );
           } catch (e) {
-            console.warn(`[loop] ${t.ticker} buyback drain failed:`, e.message);
+            keeperLog(t, "warn", "buyback drain failed", { error: e.message, tick_id: tickId });
             events.push({ kind: "tick", note: `buyback drain err: ${e.message.slice(0, 200)}` });
           }
         }
@@ -955,8 +1106,23 @@ export async function tick() {
               patch.position_collateral_usd = Number(chainPos.collateralUsd);
             if (Number.isFinite(Number(chainPos.sizeUsd)))
               patch.position_size_usd = Number(chainPos.sizeUsd);
-            if (isImperialRouted && Number.isFinite(Number(chainPos.entryPriceUsd)) && Number(chainPos.entryPriceUsd) > 0)
+            if (isImperialRouted && Number.isFinite(Number(chainPos.entryPriceUsd)) && Number(chainPos.entryPriceUsd) > 0) {
               patch.launch_mid = Number(chainPos.entryPriceUsd);
+            } else if (isImperialRouted) {
+              // Imperial often returns no entry price, which left launch_mid null
+              // and forced the fragile client-side coll=$X tick replay. Right after
+              // open, mark ~ entry, so capture the mark as our durable entry basis;
+              // captureMarkAsEntry's window guard never adopts the mark for an aged
+              // position (which would erase its real PnL). See KEEPER_PNL.md.
+              const captured = captureMarkAsEntry({
+                existingMid: t.launch_mid,
+                mark: chainPos.markPriceUsd,
+                openedAt: t.position_opened_at,
+                now: Date.now(),
+                windowMs: ENTRY_CAPTURE_WINDOW_MS,
+              });
+              if (captured != null) patch.launch_mid = captured;
+            }
             if (!openedColl && Number.isFinite(Number(chainPos.collateralUsd)))
               patch.opened_collateral_usd = Number(chainPos.collateralUsd);
           } else if (wasOpen) {
@@ -975,7 +1141,7 @@ export async function tick() {
             });
           }
         } catch (e) {
-          console.warn(`[loop] ${t.ticker} pre-read position failed:`, e.message);
+          keeperLog(t, "warn", "pre-read position failed", { error: e.message, tick_id: tickId });
         }
       }
 
@@ -1046,7 +1212,7 @@ export async function tick() {
             try {
               const pdaPk = new PublicKey(prof.profilePda);
               const ata = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), pdaPk, true);
-              const bal = await conn().getTokenAccountBalance(ata, "confirmed");
+              const bal = await withRetry(() => conn().getTokenAccountBalance(ata, "confirmed"));
               const onChainUi = Number(bal?.value?.uiAmount ?? 0);
               if (onChainUi > parkedUi) {
                 parkedUi = onChainUi;
@@ -1097,7 +1263,7 @@ export async function tick() {
             );
           }
         } catch (e) {
-          console.warn(`[imperial:deposit] ${t.ticker} profile pre-check failed:`, e.message);
+          keeperLog(t, "warn", "imperial profile pre-check failed", { error: e.message, tick_id: tickId });
         }
       }
 
@@ -1133,7 +1299,17 @@ export async function tick() {
         } else {
           // live: re-cap by actual wallet capacity so we don't burn Jupiter
           // slippage on a swap that can't reach the target amount.
-          const floor = Math.max(1, Number(config.minDepositUsd ?? 5));
+          // Fix 1d: same floors as the funding gate (gateImperialFunding). The
+          // viable-swap floor applies always; an OPEN additionally requires
+          // Imperial's minimum collateral so we never partial-deposit below the
+          // size that can actually open a position. Below the floor the SOL
+          // stays in the wallet to accumulate toward the next viable deposit.
+          const floor = Math.max(
+            1,
+            Number(config.minDepositUsd ?? 5),
+            Number(MIN_VIABLE_USDC) || 0,
+            kind === "open" ? Number(IMPERIAL_MIN_COLLATERAL_USD) || 0 : 0,
+          );
           let finalUsd = gate.allowedUsd;
           try {
             let capacityUsd = await getWalletCapacityUsd({ kp, solUsd, rpcUrl: config.rpcUrl });
@@ -1160,7 +1336,7 @@ export async function tick() {
                 );
                 events.push({
                   kind: "tick",
-                  note: `imperial ${kind} skip: wallet capacity $${capacityUsd.toFixed(2)} < floor $${floor}`,
+                  note: `imperial ${kind} skip: awaiting_swap_size — wallet capacity $${capacityUsd.toFixed(2)} below viable floor $${floor} (reserve accumulating)`,
                 });
                 finalUsd = 0;
               } else {
@@ -1172,7 +1348,7 @@ export async function tick() {
             }
 
           } catch (e) {
-            console.warn(`[imperial:deposit] ${t.ticker} wallet capacity check failed:`, e.message);
+            keeperLog(t, "warn", "imperial wallet capacity check failed", { error: e.message, tick_id: tickId });
           }
           if (finalUsd <= 0) {
             // already logged & skipped above
@@ -1214,7 +1390,7 @@ export async function tick() {
                 });
               }
             } catch (e) {
-              console.warn(`[imperial:deposit] ${t.ticker} ${kind} failed:`, e.message);
+              keeperLog(t, "warn", `imperial deposit ${kind} failed`, { error: e.message, tick_id: tickId, kind });
               events.push({
                 kind: "tick",
                 note: `imperial deposit err: ${e.message.slice(0, 200)}`,
@@ -1227,10 +1403,32 @@ export async function tick() {
       // Any extra fees stay in fees_accrued and feed the next top-up — they
       // do NOT spill into buyback_reserve. That keeps 100% of the perp slice
       // (configurable via the 50/25/25 split) actually backing the position.
+      // Fix 3a: lag-immune double-open guard. The durable workflow state (set
+      // synchronously before the prior open's send by 3b) is authoritative even
+      // when Imperial's /positions read lags. If it says a position is live — or
+      // pending and not yet past its retry deadline — hold off rather than send
+      // a duplicate leveraged order. Additive: in the normal case a live
+      // position already has hasLivePosition=true (so the open gate is closed),
+      // and a missing/idle workflow row disables the guard. See
+      // OPEN_CHAIN_REFACTOR_V2.md.
+      const wfRow = workflowStateFromToken(t);
+      const wfState = wfRow?.state ?? null;
+      const blocksOpen = workflowBlocksOpen({
+        state: wfState,
+        nextRetryAt: wfRow?.next_retry_at,
+        hasLivePosition,
+      });
+      if (blocksOpen) {
+        events.push({
+          kind: "tick",
+          note: `open held: workflow=${wfState} (anti-double-open) — awaiting /positions index or reconcile`,
+        });
+      }
       if (
         !hasLivePosition &&
         !pendingSig &&
         !externallyClosed &&
+        !blocksOpen &&
         (feesAccruedAfter >= config.feeGateUsd || imperialFundingSource === "parked")
       ) {
         const requestedOpenColl = config.openCollateralUsd;
@@ -1277,6 +1475,20 @@ export async function tick() {
                 profileIndex: t.imperial_profile_index,
                 authToken,
               });
+              // Fix 3b: write a durable position_open_pending marker (with a
+              // retry deadline) BEFORE the send, so a crash / 240s watchdog right
+              // after the order lands still leaves a marker that next tick's 3a
+              // guard honors. Best-effort: on failure we proceed (degrade to the
+              // /positions-only guard) rather than blocking the open.
+              try {
+                await setWorkflowStateSync(t.id, State.POSITION_OPEN_PENDING, {
+                  next_retry_at: new Date(Date.now() + OPEN_PENDING_STALE_MS).toISOString(),
+                });
+              } catch (e) {
+                console.warn(
+                  `[3b] ${t.ticker} pre-open pending marker failed (proceeding): ${e.message}`,
+                );
+              }
               const res = await imperialOpenPosition({
                 authToken,
                 kp,
@@ -1371,7 +1583,13 @@ export async function tick() {
                     0,
                     Math.floor((Number(imperialDepositedThisTickUsd || 0) - liveColl) * 100) / 100,
                   );
-                  if (verifiedPos?.entryPriceUsd) patch.launch_mid = Number(verifiedPos.entryPriceUsd);
+                  const entry = await resolveImperialEntryPrice({
+                    verifiedPos,
+                    symbol: underlying,
+                    venue: quote?.venue,
+                    token: t,
+                  });
+                  if (entry.price) patch.launch_mid = entry.price;
                   if (imperialFundingSource === "fresh" || imperialFundingSource === "parked") {
                     feesAccruedDelta -= openColl;
                   }
@@ -1387,7 +1605,7 @@ export async function tick() {
                 });
               }
             } catch (e) {
-              console.warn(`[loop] ${t.ticker} imperial open failed:`, e.message);
+              keeperLog(t, "warn", "imperial open failed", { error: e.message, tick_id: tickId });
               events.push({
                 kind: "tick",
                 note: `imperial open error: ${e.message.slice(0, 200)}`,
@@ -1425,7 +1643,7 @@ export async function tick() {
                 });
               }
             } catch (e) {
-              console.warn(`[loop] ${t.ticker} SOL->USDC swap failed:`, e.message);
+              keeperLog(t, "warn", "SOL->USDC swap failed", { error: e.message, tick_id: tickId });
               events.push({ kind: "tick", note: `SOL->USDC swap err: ${e.message.slice(0, 200)}` });
             }
             // Defer the actual open to the next tick so the USDC balance is
@@ -1488,7 +1706,7 @@ export async function tick() {
                 });
               }
             } catch (e) {
-              console.warn(`[loop] ${t.ticker} open failed:`, e.message);
+              keeperLog(t, "warn", "open failed", { error: e.message, tick_id: tickId });
               events.push({ kind: "tick", note: `open error: ${e.message.slice(0, 200)}` });
             }
           }
@@ -1625,7 +1843,12 @@ export async function tick() {
                     : collateralUsdNow + addColl;
                   patch.position_size_usd = newSize;
                   patch.position_collateral_usd = newColl;
-                  if (verifiedPos?.entryPriceUsd) patch.launch_mid = Number(verifiedPos.entryPriceUsd);
+                  const entry = await resolveImperialEntryPrice({
+                    verifiedPos,
+                    symbol: underlying,
+                    token: t,
+                  });
+                  if (entry.price) patch.launch_mid = entry.price;
                   optimisticImperialPositionState = true;
                   if (imperialFundingSource === "fresh" || imperialFundingSource === "parked") {
                     const consumed = Math.min(addColl, Math.max(0, feesAccruedAfter));
@@ -1643,7 +1866,7 @@ export async function tick() {
                 });
               }
             } catch (e) {
-              console.warn(`[loop] ${t.ticker} imperial top-up failed:`, e.message);
+              keeperLog(t, "warn", "imperial top-up failed", { error: e.message, tick_id: tickId });
               events.push({
                 kind: "tick",
                 note: `imperial top-up error: ${e.message.slice(0, 200)}`,
@@ -1682,7 +1905,7 @@ export async function tick() {
                 });
               }
             } catch (e) {
-              console.warn(`[loop] ${t.ticker} top-up SOL->USDC swap failed:`, e.message);
+              keeperLog(t, "warn", "top-up SOL->USDC swap failed", { error: e.message, tick_id: tickId });
               events.push({
                 kind: "tick",
                 note: `top-up SOL->USDC swap err: ${e.message.slice(0, 200)}`,
@@ -1729,7 +1952,7 @@ export async function tick() {
                 events.push({ kind: "tick", note: `top-up err: ${res.error.slice(0, 200)}` });
               }
             } catch (e) {
-              console.warn(`[loop] ${t.ticker} top-up failed:`, e.message);
+              keeperLog(t, "warn", "top-up failed", { error: e.message, tick_id: tickId });
               events.push({ kind: "tick", note: `top-up error: ${e.message.slice(0, 200)}` });
             }
           }
@@ -1757,7 +1980,7 @@ export async function tick() {
               pos = await readPerpPosition({ symbol: underlying, side, kp });
             }
           } catch (e) {
-            console.warn(`[loop] ${t.ticker} readPos failed:`, e.message);
+            keeperLog(t, "warn", "readPos failed", { error: e.message, tick_id: tickId });
           }
         }
 
@@ -1765,6 +1988,22 @@ export async function tick() {
           pnlNow = Number.isFinite(Number(pos.unrealizedPnlUsd))
             ? Number(pos.unrealizedPnlUsd)
             : pnlNow;
+          if (
+            isImperialRouted &&
+            Math.abs(Number(pnlNow || 0)) < 0.000001 &&
+            !(Number(pos.entryPriceUsd) > 0) &&
+            Number(t.launch_mid) > 0 &&
+            Number(pos.markPriceUsd) > 0 &&
+            Number(pos.sizeUsd) > 0
+          ) {
+            // Venue reported ~$0 and gave no entry: compute from our stored entry.
+            pnlNow = computePnlFromEntry({
+              mark: pos.markPriceUsd,
+              entryMid: t.launch_mid,
+              sizeUsd: pos.sizeUsd,
+              side,
+            });
+          }
           const cAfter = Number(pos.collateralUsd);
           if (Number.isFinite(cAfter) && !optimisticImperialPositionState) {
             collAfter = cAfter;
@@ -1788,7 +2027,96 @@ export async function tick() {
           note: `pnl=$${pnlNow.toFixed(2)} hw=$${newHighWater.toFixed(2)} coll=$${collAfter.toFixed(2)} reserve=$${(currentReserve + reserveDelta).toFixed(2)}`,
         });
 
-        if (gainAboveHigh >= config.pnlTriggerUsd) {
+        // ─── BACKSTOP TP (safety patch — see plan/KEEPER_TP_SAFETY_PATCH.md) ───
+        // Fires when the regular TP path has fallen behind and PnL has grown
+        // past backstopRatio × collateral. Always uses partial-close (Mode A)
+        // because the regular path likely failed due to a withdraw bug —
+        // falling back to the same withdraw path here would also fail.
+        let backstopFired = false;
+        const backstopPnlRatio = collAfter > 0 ? pnlNow / collAfter : 0;
+        if (pnlNow > 0 && backstopPnlRatio >= config.backstopRatio) {
+          let backstopSlice = pnlNow - config.backstopTargetRatio * collAfter;
+          backstopSlice = Math.min(backstopSlice, config.backstopMaxPerTick);
+          backstopSlice = Math.floor(backstopSlice / 5) * 5; // snap to $5
+          if (backstopSlice >= config.pnlTriggerUsd) {
+            const sizeUsd = patch.position_size_usd ?? Number(t.position_size_usd ?? 0);
+            try {
+              const res = imperialFullTrade
+                ? await imperialPartialClose({
+                    authToken: await ensureImperialAuth(),
+                    kp,
+                    profileIndex: t.imperial_profile_index,
+                    symbol: underlying,
+                    side,
+                    reduceSizeUsd: backstopSlice,
+                    currentSizeUsd: sizeUsd,
+                  })
+                : imperialTradeEnabled
+                  ? {
+                      signature: null,
+                      simulated: false,
+                      error: `imperial backstop blocked: positionMode=${config.imperial.positionMode}`,
+                    }
+                  : await partialClose({
+                      symbol: underlying,
+                      side,
+                      reduceSizeUsd: backstopSlice,
+                      kp,
+                    });
+              const accepted = !res.error && (config.hedgeMode !== "live" || !!res.signature);
+              if (res.signature) {
+                patch.pending_drift_sig = res.signature;
+                txLog.push(
+                  buildTxLogEntry({
+                    kind: "drift_adjust",
+                    intent: intentHash([t.id, "backstop_tp", bucket, backstopSlice.toFixed(2)]),
+                    status: "pending",
+                    signature: res.signature,
+                    amountUsd: backstopSlice,
+                  }),
+                );
+              }
+              if (accepted) {
+                patch.position_size_usd = Math.max(0, sizeUsd - backstopSlice);
+                const frac = backstopSlice / pnlNow;
+                patch.position_collateral_usd = collAfter * (1 - frac);
+                // ratchet high-water forward to post-close PnL so regular TP
+                // doesn't immediately re-fire on the residual gain
+                newHighWater = pnlNow * (1 - frac);
+                if (config.hedgeMode === "live" && buybackMint) {
+                  reserveDelta += backstopSlice;
+                }
+                backstopFired = true;
+                keeperLog(t, "info", "backstop_tp fired", {
+                  pnl_now: pnlNow,
+                  coll_after: collAfter,
+                  pnl_ratio: backstopPnlRatio,
+                  slice: backstopSlice,
+                  tick_id: tickId,
+                });
+                events.push({
+                  kind: "buyback",
+                  pnl_delta_usd: backstopSlice,
+                  note:
+                    `${imperialFullTrade ? "[imperial] " : ""}BACKSTOP TP $${backstopSlice} ` +
+                    `(pnl=$${pnlNow.toFixed(0)} / coll=$${collAfter.toFixed(0)} = ${(backstopPnlRatio * 100).toFixed(0)}%)` +
+                    (res.simulated && !res.signature ? " [SIMULATED]" : ""),
+                });
+              } else {
+                events.push({
+                  kind: "tick",
+                  note: `backstop_tp not accepted: ${res.error ? res.error.slice(0, 150) : "no signature returned"}`,
+                });
+              }
+            } catch (e) {
+              keeperLog(t, "warn", "backstop_tp failed", { error: e.message, tick_id: tickId });
+              events.push({ kind: "tick", note: `backstop_tp err: ${e.message.slice(0, 150)}` });
+            }
+          }
+        }
+        // ─── end backstop TP ───
+
+        if (!backstopFired && gainAboveHigh >= config.pnlTriggerUsd) {
           const sizeUsd = patch.position_size_usd ?? Number(t.position_size_usd ?? 0);
           // Anchor cap to creator's chosen leverage (NOT sizeNow/openedColl,
           // which compounds with every top-up and effectively disables the cap).
@@ -1860,7 +2188,7 @@ export async function tick() {
                 });
               }
             } catch (e) {
-              console.warn(`[loop] ${t.ticker} withdraw failed:`, e.message);
+              keeperLog(t, "warn", "withdraw failed", { error: e.message, tick_id: tickId });
               events.push({ kind: "tick", note: `withdraw err: ${e.message.slice(0, 150)}` });
             }
           } else {
@@ -1912,7 +2240,7 @@ export async function tick() {
                 });
               }
             } catch (e) {
-              console.warn(`[loop] ${t.ticker} partial close failed:`, e.message);
+              keeperLog(t, "warn", "partial close failed", { error: e.message, tick_id: tickId });
               events.push({ kind: "tick", note: `partial close err: ${e.message.slice(0, 150)}` });
             }
           }
@@ -1964,21 +2292,77 @@ export async function tick() {
       patch.tokens_burned_delta = tokensBurnedDelta || undefined;
       patch.events = events;
       patch.tx_log = txLog;
+      const blockedReason = blockedReasonFromEvents(events);
+      const wfPatch = workflowPatch(t, patch, {
+        blockedReason,
+        claimedFeesUsd: claimedSolUsd,
+        feesAccruedAfter: feesBefore + feesAccruedDelta,
+        buybackReserveUsd: Number(t.buyback_reserve_usd ?? 0) + reserveDelta,
+        imperialDepositedThisTickUsd,
+        imperialDepositedUsd: patch.position_collateral_usd ?? t.position_collateral_usd ?? 0,
+        positionEntryPrice: patch.launch_mid ?? t.launch_mid ?? undefined,
+        positionEntrySource: patch.launch_mid ? "imperial" : t.launch_mid ? "reconciled" : null,
+        positionSizeUsd: patch.position_size_usd ?? t.position_size_usd ?? 0,
+        positionCollateralUsd: patch.position_collateral_usd ?? t.position_collateral_usd ?? 0,
+      });
+      queueWorkflow(wfPatch);
+      if (blockedReason) {
+        tokenLog(t, "workflow", "token blocked by keeper gate", {
+          blocked_reason: blockedReason,
+        });
+      }
+      tickClaimedUsd += claimedSolUsd || 0;
+      // One structured per-token record for the whole tick (KEEPER_OBSERVABILITY.md).
+      tokenTickSummary(tickId, t, {
+        state: wfPatch?.state ?? null,
+        actions: txLog.map((x) => x.kind),
+        claimed_usd: num2(claimedSolUsd),
+        reserve_delta_usd: num2(reserveDelta),
+        tokens_burned_delta: tokensBurnedDelta || 0,
+        treasury_delta_sol: num2(treasurySolDelta, 6),
+        blocked_reason: blockedReason ?? null,
+        entry_mid: num2(patch.launch_mid ?? t.launch_mid, 8) || null,
+        events: events.length,
+        duration_ms: Date.now() - tStart,
+      });
       reports.push(sanitizeReportPatch(patch));
       processed++;
     } catch (err) {
-      console.error(`[loop] ${t.ticker} failed:`, err.message);
+      tickErrors++;
+      logError("token tick failed", {
+        event: "token_tick",
+        tick_id: tickId,
+        token_id: t.id,
+        ticker: t.ticker,
+        error: err.message,
+        duration_ms: Date.now() - tStart,
+      });
+      queueBlocked(t, `loop error: ${err.message.slice(0, 200)}`, { error: err.message });
     }
   }
 
   try {
     const r = await sendReport(reports);
-    console.log(
-      `[loop] reported processed=${processed} tokens_updated=${r.tokens_updated} events=${r.events_inserted} tx_log=${r.tx_log_inserted ?? 0}`,
-    );
+    logInfo("tick reported", {
+      event: "tick_report",
+      tick_id: tickId,
+      processed,
+      tokens_updated: r.tokens_updated,
+      events_inserted: r.events_inserted,
+      tx_log_inserted: r.tx_log_inserted ?? 0,
+    });
   } catch (err) {
-    console.error("[loop] report failed:", err.message);
+    logError("tick report failed", { event: "tick_report", tick_id: tickId, error: err.message });
   }
+
+  tickSummary(tickId, {
+    tokens: tokens.length,
+    processed,
+    errors: tickErrors,
+    claimed_usd: num2(tickClaimedUsd),
+    sol_usd: solUsd,
+    duration_ms: Date.now() - tickStartedAt,
+  });
 
   return { processed };
 }

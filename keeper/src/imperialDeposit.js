@@ -18,7 +18,9 @@
 import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { config } from './config.js';
-import { swapSolToUsdc } from './swap.js';
+import { swapSolToUsdc, MIN_VIABLE_USDC } from './swap.js';
+import { MIN_COLLATERAL_USD as IMPERIAL_MIN_COLLATERAL_USD } from './imperial.js';
+import { withRetry } from './rateLimiter.js';
 
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const USDC_DECIMALS = 6;
@@ -34,10 +36,20 @@ export function gateImperialFunding({ token, kind, requestedUsd }) {
 
   const fees = Math.max(0, Number(token.fees_accrued_usd ?? 0));
   const gate = kind === 'open' ? config.feeGateUsd : config.topUpFeeGateUsd;
-  const floor = Math.max(1, Number(config.minDepositUsd ?? 5));
+  // Fix 1d: two floors, applied by kind.
+  //  - viableFloor: don't swap+deposit below a size the SOL->USDC swap can fill.
+  //    MIN_VIABLE_USDC is the single source of truth shared with keeper/src/swap.js.
+  //  - OPEN additionally requires Imperial's minimum collateral: there is no
+  //    point swapping+depositing until the reserve can actually OPEN a position.
+  //    A TOPUP adds to an already-funded profile, so it only needs viableFloor.
+  const viableFloor = Math.max(1, Number(config.minDepositUsd ?? 5), Number(MIN_VIABLE_USDC) || 0);
+  const floor =
+    kind === 'open'
+      ? Math.max(viableFloor, Number(IMPERIAL_MIN_COLLATERAL_USD) || 0)
+      : viableFloor;
 
   if (fees < gate) {
-    return { allow: false, fees, gate, reason: `accrued $${fees.toFixed(2)} < ${kind} gate $${gate}` };
+    return { allow: false, fees, gate, floor, reason: `accrued $${fees.toFixed(2)} < ${kind} gate $${gate}` };
   }
 
   // Hard cap: never deposit more than the token has actually earned in fees.
@@ -45,17 +57,29 @@ export function gateImperialFunding({ token, kind, requestedUsd }) {
   const cap = fees;
   const allowedUsd = Math.min(Math.max(0, Number(requestedUsd) || 0), cap);
 
-  // Partial-open floor: if fees cap < requested coll we still proceed, as long
-  // as it clears the small dust floor. This lets long-tail tokens open at $5–$20
-  // instead of stalling waiting for fees that may never come.
+  // Fix 1d: below the viable floor we DON'T attempt a doomed micro-swap. The
+  // reserve keeps accumulating as SOL in the wallet until a single viable
+  // swap+deposit is possible. Surfaced as `awaiting_swap_size` so the dashboard
+  // shows "accumulating", not a hard error.
   if (allowedUsd < floor) {
     return {
-      allow: false, fees, gate,
-      reason: `cap $${cap.toFixed(2)} below floor $${floor}`,
+      allow: false, fees, gate, floor,
+      reason: `awaiting_swap_size: deposit cap $${cap.toFixed(2)} below viable floor $${floor}`,
     };
   }
 
   return { allow: true, allowedUsd, fees, gate, floor };
+}
+
+// Pure: deployable USD a wallet can route into a deposit = parked USDC + (SOL
+// above the keep-alive reserve, USD-valued, minus a 3% swap-slippage haircut).
+// When this is below the minimum-deposit floor we skip the swap entirely
+// (the DUMPED/ELON "capacity-below-floor" case) instead of burning a Jupiter
+// call on a route that lands $0.
+export function walletCapacityUsd({ usdcUi = 0, solUi = 0, solUsd = 0, reserveSol = 0.01 } = {}) {
+  const swappableSol = Math.max(0, Number(solUi) - Math.max(0, Number(reserveSol)));
+  const fromSwap = swappableSol * (Number(solUsd) || 0) * 0.97;
+  return Math.max(0, Number(usdcUi) || 0) + fromSwap;
 }
 
 /**
@@ -71,13 +95,13 @@ export async function getWalletCapacityUsd({ kp, solUsd, rpcUrl }) {
   let usdc = 0;
   try {
     const ata = await getAssociatedTokenAddress(USDC_MINT, kp.publicKey);
-    const bal = await conn.getTokenAccountBalance(ata, 'confirmed');
+    const bal = await withRetry(() => conn.getTokenAccountBalance(ata, 'confirmed'));
     usdc = Number(bal.value.uiAmount ?? 0);
   } catch { /* no ATA = 0 */ }
 
   let solUi = 0;
   try {
-    const lamports = await conn.getBalance(kp.publicKey, 'confirmed');
+    const lamports = await withRetry(() => conn.getBalance(kp.publicKey, 'confirmed'));
     solUi = lamports / 1e9;
   } catch { /* ignore */ }
 
@@ -89,7 +113,7 @@ export async function getWalletCapacityUsd({ kp, solUsd, rpcUrl }) {
 async function getUsdcUi(conn, owner) {
   try {
     const ata = await getAssociatedTokenAddress(USDC_MINT, owner);
-    const bal = await conn.getTokenAccountBalance(ata, 'confirmed');
+    const bal = await withRetry(() => conn.getTokenAccountBalance(ata, 'confirmed'));
     return Number(bal.value.uiAmount ?? 0);
   } catch { return 0; }
 }
@@ -129,12 +153,11 @@ export async function ensureUsdcForDeposit({ kp, usdAmount, solUsd, rpcUrl }) {
   let solUi = 0;
   let lamports = 0;
   try {
-    lamports = await conn.getBalance(kp.publicKey, 'confirmed');
+    lamports = await withRetry(() => conn.getBalance(kp.publicKey, 'confirmed'));
     solUi = lamports / 1e9;
   } catch { /* ignore */ }
-  const swappableSol = Math.max(0, solUi - reserveSol);
-  const capacityFromSwap = swappableSol * Number(solUsd || 0) * 0.97; // 3% slippage haircut
-  const totalCapacityUsd = usdcUiBefore + capacityFromSwap;
+  const totalCapacityUsd = walletCapacityUsd({ usdcUi: usdcUiBefore, solUi, solUsd, reserveSol });
+  const capacityFromSwap = totalCapacityUsd - usdcUiBefore;
   const floor = Math.max(1, Number(config.minDepositUsd ?? 2));
 
   if (totalCapacityUsd < floor) {

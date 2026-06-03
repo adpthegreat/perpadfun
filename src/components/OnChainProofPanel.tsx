@@ -13,10 +13,15 @@ function AddrRow({
   label,
   address,
   hint,
+  // For the Imperial profile / position-owner row we link to jup.ag/portfolio
+  // instead of solscan because that view shows the live perp position state
+  // (collateral, size, PnL, mark) that Imperial routes to Phoenix.
+  linkVariant = "solscan",
 }: {
   label: string;
   address: string | null | undefined;
   hint?: string;
+  linkVariant?: "solscan" | "jup-portfolio";
 }) {
   const [copied, setCopied] = useState(false);
   if (!address) {
@@ -54,12 +59,16 @@ function AddrRow({
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
         </button>
         <a
-          href={`https://solscan.io/account/${address}`}
+          href={
+            linkVariant === "jup-portfolio"
+              ? `https://jup.ag/portfolio/${address}`
+              : `https://solscan.io/account/${address}`
+          }
           target="_blank"
           rel="noreferrer"
           className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary underline underline-offset-2 hover:opacity-80"
         >
-          solscan ↗
+          {linkVariant === "jup-portfolio" ? "jup.ag/portfolio ↗" : "solscan ↗"}
         </a>
       </div>
     </div>
@@ -123,6 +132,7 @@ export function OnChainProofPanel({
               ? "PDA that holds the live perp collateral on Imperial."
               : "Wallet that owns the Jupiter perp position NFT."
           }
+          linkVariant="jup-portfolio"
         />
       </div>
 

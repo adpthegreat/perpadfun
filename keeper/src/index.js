@@ -4,7 +4,9 @@ import { tick, adminCloseHedge, adminForceOpen } from './loop.js';
 import { getJupPerps, getFreeCollateralUsd } from './jupiterPerps.js';
 import { runBurnSweepTick, getBurnSweepStatus } from './buybackQueue.js';
 import { runReconcileTick, getReconcileStatus } from './positionReconcile.js';
+import { runStateReconcileTick, getStateReconcileStatus } from './stateReconcile.js';
 import { sweepExternalRouters, getExternalSweepStatus } from './externalRouters.js';
+import { flushWorkflow, listWorkflows } from './workflow.js';
 
 const app = Fastify({ logger: true });
 
@@ -29,6 +31,7 @@ async function safeTick() {
   }, 240_000);
   try {
     lastResult = await tick();
+    await flushWorkflow();
     lastError = null;
   } catch (e) {
     lastError = e.message;
@@ -73,6 +76,8 @@ async function runBurnSweepForever() {
 async function runReconcileForever() {
   try { await runReconcileTick(); }
   catch (e) { app.log.error({ err: e.message }, 'reconcile tick failed'); }
+  try { await runStateReconcileTick(); }
+  catch (e) { app.log.error({ err: e.message }, 'state reconcile tick failed'); }
   setTimeout(runReconcileForever, config.reconcileTickMs);
 }
 
@@ -97,6 +102,7 @@ app.get('/health', async () => ({
   feeSplit: feeSplitSnapshot(),
   burnSweep: getBurnSweepStatus(),
   reconcile: getReconcileStatus(),
+  stateReconcile: getStateReconcileStatus(),
     externalSweep: getExternalSweepStatus(),
   lastRun, lastResult, lastError,
 }));
@@ -114,6 +120,7 @@ app.get('/status', async () => {
     feeSplit: feeSplitSnapshot(),
     burnSweep: getBurnSweepStatus(),
     reconcile: getReconcileStatus(),
+    stateReconcile: getStateReconcileStatus(),
       externalSweep: getExternalSweepStatus(),
     freeCollateralUsd: free,
     lastRun, lastResult, lastError,
@@ -142,6 +149,18 @@ app.post('/admin/reconcile', async (req, reply) => {
   try {
     const r = await runReconcileTick();
     return { ok: true, ...r };
+  } catch (e) {
+    return reply.code(500).send({ ok: false, error: e.message });
+  }
+});
+
+app.get('/admin/workflows', async (req, reply) => {
+  if (!requireKeeperSecret(req)) return reply.code(401).send({ ok: false, error: 'unauthorized' });
+  try {
+    return await listWorkflows({
+      token_id: req.query?.token_id,
+      limit: req.query?.limit,
+    });
   } catch (e) {
     return reply.code(500).send({ ok: false, error: e.message });
   }
