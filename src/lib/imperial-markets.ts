@@ -1,44 +1,84 @@
-// Client-safe mirror of keeper/src/imperial.js SUPPORTED_MARKETS.
-// Used by /launch and /route-fees to hide leverage options the venue
-// would reject. Keep in sync with the keeper file. Source of truth for
-// routing decisions is still the keeper; this is a UX guard.
+// Client-safe mirror of SUPPORTED_MARKETS in keeper/src/imperial.js.
+//
+// Used by /launch and /route-fees to hide leverage tiers the venue would
+// reject at open. After the Phoenix venue lock (plan/KEEPER_PHOENIX_LOCK.md)
+// every market routes to Phoenix; gmtrade/flash_trade/jupiter are legacy
+// fallbacks only. Phoenix's max-leverage table caps everything below 25×.
+//
+// Source of truth for routing remains keeper/src/imperial.js. Re-sync this
+// file whenever SUPPORTED_MARKETS changes there (test/live/discover-phoenix-markets.live.test.ts
+// regenerates the snippet).
 export const IMPERIAL_MAX_LEVERAGE: Record<string, number> = {
-  BTC: 500, ETH: 294, SOL: 250, BNB: 9.96, XRP: 250, DOGE: 200, ADA: 100,
-  AVAX: 250, TON: 9.96, NEAR: 100, SUI: 9.96, TRX: 250, LTC: 100, DOT: 100,
-  BCH: 100, XLM: 100, HYPE: 100, LINK: 100, APE: 100, ZEC: 9.96,
-  ARB: 100, UNI: 200, AAVE: 250, GMX: 100, JTO: 4.99, ENA: 9.96, JUP: 9.96,
-  PYTH: 56.28, KMNO: 53.57,
-  BONK: 100, PEPE: 100, SHIB: 200, BOME: 100, WIF: 100, FARTCOIN: 100,
-  TRUMP: 100, MELANIA: 100, PUMP: 200, PENGU: 28.95,
-  TAO: 4.99, WLD: 100,
-  TSLA: 24.39, NVDA: 24.39, AAPL: 24.39, AMD: 24.39, AMZN: 24.39, SPY: 24.39,
-  XAU: 200, XAG: 200, GOLD: 24.78, SILVER: 24.78, WTI: 100, CRUDEOIL: 6.92,
-  NATGAS: 11.78, COPPER: 19.86,
-  EUR: 500, GBP: 500, USDJPY: 500, USDCHF: 500, USDCAD: 500, AUD: 500, NZD: 500,
+  // ─── Primary 8 (UI-prominent) ───
+  BTC: 20,
+  ETH: 20,
+  SOL: 15,
+  ZEC: 10,
+  HYPE: 10,
+  SILVER: 25,
+  GOLD: 25,
+  OIL: 20,     // Phoenix lists it as WTIOIL
+  WTIOIL: 20,  // direct passthrough
+
+  // ─── Other crypto majors ───
+  XRP: 15,
+  BNB: 10,
+  DOGE: 10,
+  ADA: 10,
+  SUI: 10,
+  TRX: 10,
+  NEAR: 10,
+  TON: 10,
+  XLM: 5,
+  XPL: 10,
+
+  // ─── DeFi / Sol-eco ───
+  AAVE: 10,
+  JTO: 5,
+  JUP: 10,
+  ENA: 10,
+  ONDO: 10,
+  MORPHO: 5,
+  LIT: 5,
+
+  // ─── AI / data ───
+  FET: 5,
+  RENDER: 5,
+  VIRTUAL: 5,
+  TAO: 5,
+  WLD: 10,
+
+  // ─── Memes / misc ───
+  FARTCOIN: 10,
+  CHIP: 5,
+  SKR: 3,
+  MEGA: 5,
+  MET: 5,
+  VVV: 5,
+  MON: 5,
+
+  // ─── Commodities ───
+  COPPER: 20,
 };
 
+// Phoenix's max across all listed markets is 25× (GOLD, SILVER). Drop the
+// 50× / 100× tiers from the picker entirely — they would never show under
+// any Phoenix-routed asset.
 export const BASE_LEVERAGES = [2, 3, 5] as const;
-export const DEGEN_LEVERAGES = [10, 25, 50, 100] as const;
+export const DEGEN_LEVERAGES = [10, 25] as const;
 
 export const MARKET_DISPLAY_NAMES: Record<string, string> = {
   SPY: "S&P 500",
+  WTIOIL: "Oil",
+  OIL: "Oil",
 };
 
-// Markets that Imperial routes to phoenix or flash_trade. These venues need
-// extra body fields (oracle accounts, lookup tables, etc) that Imperial has
-// not yet spec'd, so the keeper skips opens for them. Surface as UNAVAILABLE
-// in any UI that creates a token or routes fees so users don't pick a market
-// that silently no-ops.
-// Source of truth: keeper/src/imperial.js SUPPORTED_MARKETS venues.
-export const IMPERIAL_UNAVAILABLE_MARKETS: ReadonlySet<string> = new Set([
-  // phoenix
-  "BNB", "TON", "SUI", "ZEC", "JTO", "ENA", "JUP", "TAO",
-  "GOLD", "SILVER", "COPPER",
-  // flash_trade
-  "PYTH", "KMNO", "PENGU",
-  "TSLA", "NVDA", "AAPL", "AMD", "AMZN", "SPY",
-  "CRUDEOIL", "NATGAS",
-]);
+// Per KEEPER_PHOENIX_LOCK.md, every asset in IMPERIAL_MAX_LEVERAGE routes to
+// Phoenix and is openable. The legacy "this market is on a venue the keeper
+// can't open against" set is therefore empty. Keep the helper so callers
+// don't need to change shape; expansion is reserved for markets we
+// explicitly off-board (e.g. a venue de-listing).
+export const IMPERIAL_UNAVAILABLE_MARKETS: ReadonlySet<string> = new Set<string>();
 
 export function isMarketUnavailable(underlying: string | null | undefined): boolean {
   if (!underlying) return false;
@@ -56,10 +96,10 @@ export function isSupportedMarket(underlying: string | null | undefined): boolea
   return underlying.toUpperCase() in IMPERIAL_MAX_LEVERAGE;
 }
 
-// Launchable = supported by Imperial AND not in the venue-unavailable set
-// (phoenix/flash_trade markets the keeper can't open yet). This is the gate a
-// token must pass at creation so it can never be born into the "claims fees
-// forever but never opens" state (KEEPER_P1_FIXES.md cause F / Fix 2a).
+// Launchable = supported by the Phoenix routing whitelist AND not in the
+// off-boarded set (currently empty). The keeper enforces the same gate so a
+// token can never be born into the "claims fees forever but never opens"
+// state (KEEPER_P1_FIXES.md cause F / Fix 2a).
 export function isLaunchableMarket(underlying: string | null | undefined): boolean {
   return isSupportedMarket(underlying) && !isMarketUnavailable(underlying);
 }

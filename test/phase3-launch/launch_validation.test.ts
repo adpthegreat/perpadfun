@@ -12,13 +12,16 @@ import { canTransition } from "../../src/lib/launch/transitions.ts";
 import { dbAvailable, ensureSchema, resetDb, seedToken, getToken, query, closeDb } from "../helpers/db.ts";
 
 describe("Phase 3: launch validation (T1)", () => {
-  it("3.1 isLaunchableMarket: supported + available -> yes; venue-unavailable -> no; unsupported -> no", () => {
+  it("3.1 isLaunchableMarket: supported -> yes (every Phoenix-routed market is launchable); unsupported -> no", () => {
     expect(isLaunchableMarket("SOL")).toBe(true);
     expect(isLaunchableMarket("BTC")).toBe(true);
-    // BNB IS supported (has a max-leverage entry) but routes to phoenix -> UNAVAILABLE -> not launchable
+    // After the Phoenix venue lock (plan/KEEPER_PHOENIX_LOCK.md) every market
+    // in SUPPORTED_MARKETS routes to Phoenix and is launchable. The legacy
+    // "venue-unavailable" set is reserved for future off-boarding and is
+    // currently empty — BNB is supported AND available AND launchable.
     expect(isSupportedMarket("BNB")).toBe(true);
-    expect(isMarketUnavailable("BNB")).toBe(true);
-    expect(isLaunchableMarket("BNB")).toBe(false);
+    expect(isMarketUnavailable("BNB")).toBe(false);
+    expect(isLaunchableMarket("BNB")).toBe(true);
     // genuinely unsupported / missing
     expect(isLaunchableMarket("FOOBAR")).toBe(false);
     expect(isLaunchableMarket(null)).toBe(false);

@@ -432,7 +432,7 @@ function LaunchPage() {
               )}
               {degenMode && degenOpts.length > 0 && (
                 <>
-                  <div className="mt-2 grid grid-cols-4 gap-2">
+                  <div className="mt-2 grid grid-cols-2 gap-2">
                     {degenOpts.map((l) => (
                       <button
                         key={l}
@@ -449,7 +449,7 @@ function LaunchPage() {
                     ))}
                   </div>
                   <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-                    {underlying} routes through Imperial with a venue cap of {maxLev}x. Only leverages at or below the cap are shown.
+                    {underlying} routes through Phoenix with a venue cap of {maxLev}x. Only leverages at or below the cap are shown.
                   </p>
                 </>
               )}
