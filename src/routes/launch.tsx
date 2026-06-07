@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { MarketIcon } from "@/lib/market-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { useMeteoraLaunch } from "@/hooks/useMeteoraLaunch";
-import { BASE_LEVERAGES, DEGEN_LEVERAGES, maxLeverageFor, MARKET_DISPLAY_NAMES, isMarketUnavailable } from "@/lib/imperial-markets";
+import { BASE_LEVERAGES, DEGEN_LEVERAGES, maxLeverageFor, MARKET_DISPLAY_NAMES, isMarketUnavailable, isSupportedMarket, launchableMarketsInOrder, priceFeedSymbol } from "@/lib/imperial-markets";
 import { usePythSnapshot, formatUsdPrice } from "@/hooks/usePythPrices";
 
 export const Route = createFileRoute("/launch")({
@@ -41,42 +41,26 @@ function LaunchPage() {
   });
 
   const markets = marketsQuery.data?.markets ?? [];
-  // Imperial-supported routing whitelist. These are the markets the keeper
-  // can actually hedge once Imperial routing is live. Everything outside
-  // this set is shown as "Soon" and disabled in the picker.
-  const IMPERIAL_SUPPORTED = new Set([
-    "BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","TON","NEAR","SUI","TRX","LTC","DOT","BCH","XLM","HYPE","LINK","APE","ZEC",
-    "ARB","UNI","AAVE","GMX","JTO","ENA","JUP","PYTH","KMNO",
-    "BONK","PEPE","SHIB","BOME","WIF","FARTCOIN","TRUMP","MELANIA","PUMP","PENGU",
-    "TAO","WLD",
-    "TSLA","NVDA","AAPL","AMD","AMZN","SPY",
-    "XAU","XAG","WTI",
-    
-  ]);
-  const marketOrder = [
-    "BTC", "ETH", "SOL", "HYPE",
-    "ZEC", "BONK", "PEPE", "WIF", "FARTCOIN", "PUMP", "PENGU", "TAO", "WLD",
-    "JUP", "TRUMP",
-    "BNB", "XRP", "TON", "DOGE", "SUI", "ADA", "LTC",
-    "BCH", "AVAX", "DOT", "TRX", "NEAR", "XLM", "LINK", "APE",
-    "PYTH", "JTO", "KMNO", "ENA", "AAVE", "UNI", "ARB", "GMX",
-    "BOME", "SHIB", "MELANIA",
-    "TSLA", "NVDA", "AAPL", "AMD", "AMZN", "SPY",
-    "XAU", "XAG", "WTI",
-    
-  ];
+  // Source the picker straight from the Phoenix routing whitelist
+  // (SUPPORTED_MARKETS, mirrored in imperial-markets.ts). This guarantees the UI
+  // only offers markets the keeper can actually open, and uses the Phoenix
+  // symbols (GOLD/SILVER/OIL) rather than the price-feed tickers (XAU/XAG/WTI).
+  const marketOrder = launchableMarketsInOrder();
   const pythSnap = usePythSnapshot();
   const top = marketOrder.map((n) => {
-    const live = markets.find((m) => m.name === n);
-    const pyth = pythSnap[n];
+    // Live mids are keyed by the price-feed symbol, which differs for metals/oil.
+    const feed = priceFeedSymbol(n);
+    const live = markets.find((m) => m.name === feed);
+    const pyth = pythSnap[feed];
     const markPx = live?.markPx ?? pyth?.markPx ?? null;
     const change24h = live?.change24h ?? pyth?.change24h ?? null;
     return {
       name: n,
       displayName: MARKET_DISPLAY_NAMES[n] ?? n,
+      maxLeverage: maxLeverageFor(n),
       markPx,
       change24h,
-      supported: IMPERIAL_SUPPORTED.has(n),
+      supported: isSupportedMarket(n),
       unavailable: isMarketUnavailable(n),
     };
   });
@@ -96,7 +80,7 @@ function LaunchPage() {
   const [showAllMarkets, setShowAllMarkets] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const currentMid = markets.find((m) => m.name === underlying)?.markPx ?? pythSnap[underlying]?.markPx;
+  const currentMid = markets.find((m) => m.name === priceFeedSymbol(underlying))?.markPx ?? pythSnap[priceFeedSymbol(underlying)]?.markPx;
   const maxLev = maxLeverageFor(underlying);
   const baseOpts = BASE_LEVERAGES.filter((l) => l <= maxLev);
   const degenOpts = DEGEN_LEVERAGES.filter((l) => l <= maxLev);
@@ -316,7 +300,7 @@ function LaunchPage() {
                     const title = m.unavailable
                       ? "Unavailable: venue not yet supported by the keeper."
                       : !m.supported
-                      ? "Not on Imperial yet. Coming soon."
+                      ? "Not on Phoenix yet. Coming soon."
                       : undefined;
                     return (
                     <button
@@ -336,7 +320,16 @@ function LaunchPage() {
                       <div className="flex items-center gap-1.5">
                         <MarketIcon name={m.name} size={16} />
                         <div className="font-mono text-sm font-semibold">{m.displayName}</div>
-                        {label && <span className="ml-auto font-mono text-[9px] text-muted-foreground">{label}</span>}
+                        {label ? (
+                          <span className="ml-auto font-mono text-[9px] text-muted-foreground">{label}</span>
+                        ) : (
+                          <span
+                            className="ml-auto rounded-sm bg-amber-400/15 px-1 py-0.5 font-mono text-[9px] font-semibold text-amber-500"
+                            title={`Max leverage ${m.maxLeverage}x on Phoenix`}
+                          >
+                            {m.maxLeverage}x
+                          </span>
+                        )}
                       </div>
                       {m.markPx != null ? (
                         <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
@@ -432,7 +425,7 @@ function LaunchPage() {
               )}
               {degenMode && degenOpts.length > 0 && (
                 <>
-                  <div className="mt-2 grid grid-cols-4 gap-2">
+                  <div className="mt-2 grid grid-cols-3 gap-2">
                     {degenOpts.map((l) => (
                       <button
                         key={l}
@@ -449,7 +442,7 @@ function LaunchPage() {
                     ))}
                   </div>
                   <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-                    {underlying} routes through Imperial with a venue cap of {maxLev}x. Only leverages at or below the cap are shown.
+                    {underlying} routes through Phoenix with a venue cap of {maxLev}x. Only leverages at or below the cap are shown.
                   </p>
                 </>
               )}

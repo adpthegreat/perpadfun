@@ -4,12 +4,11 @@ import { randomBytes, randomUUID } from "crypto";
 import bs58 from "bs58";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { deriveSubWalletAddress, TOKEN_IMPERIAL_PROFILE_INDEX } from "@/lib/solana/subWallet.server";
-import { isLaunchableMarket } from "@/lib/imperial-markets";
+import { isLaunchableMarket, isValidLeverageFor, maxLeverageFor } from "@/lib/imperial-markets";
 
 
 const PLATFORMS = ["pump_fun", "other"] as const;
 const DIRECTIONS = ["long", "short"] as const;
-const LEVERAGES = [2, 3, 5, 10, 25, 50, 100] as const;
 
 const MINT_RX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const CLAIM_TOKEN_RX = /^[1-9A-HJ-NP-Za-km-z]{40,64}$/;
@@ -61,8 +60,17 @@ export const createExternalRouter = createServerFn({ method: "POST" })
           .refine(isLaunchableMarket, {
             message: "Unsupported or unavailable market for Imperial routing",
           }),
-        leverage: z.number().int().refine((n) => (LEVERAGES as readonly number[]).includes(n), "Leverage must be 2, 3, 5, 10, 25, 50, or 100"),
+        leverage: z.number().int().positive(),
         direction: z.enum(DIRECTIONS),
+      })
+      .superRefine((d, ctx) => {
+        if (!isValidLeverageFor(d.underlying, d.leverage)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["leverage"],
+            message: `Unsupported leverage ${d.leverage}x for ${d.underlying} (Phoenix cap ${maxLeverageFor(d.underlying)}x)`,
+          });
+        }
       })
       .parse(d),
   )
@@ -153,8 +161,17 @@ export const reserveExternalRouter = createServerFn({ method: "POST" })
           .refine(isLaunchableMarket, {
             message: "Unsupported or unavailable market for Imperial routing",
           }),
-        leverage: z.number().int().refine((n) => (LEVERAGES as readonly number[]).includes(n), "Leverage must be 2, 3, 5, 10, 25, 50, or 100"),
+        leverage: z.number().int().positive(),
         direction: z.enum(DIRECTIONS),
+      })
+      .superRefine((d, ctx) => {
+        if (!isValidLeverageFor(d.underlying, d.leverage)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["leverage"],
+            message: `Unsupported leverage ${d.leverage}x for ${d.underlying} (Phoenix cap ${maxLeverageFor(d.underlying)}x)`,
+          });
+        }
       })
       .parse(d),
   )
