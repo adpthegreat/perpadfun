@@ -65,7 +65,7 @@ export const IMPERIAL_MAX_LEVERAGE: Record<string, number> = {
 // 50× / 100× tiers from the picker entirely — they would never show under
 // any Phoenix-routed asset.
 export const BASE_LEVERAGES = [2, 3, 5] as const;
-export const DEGEN_LEVERAGES = [10, 25] as const;
+export const DEGEN_LEVERAGES = [10, 20, 25] as const;
 
 export const MARKET_DISPLAY_NAMES: Record<string, string> = {
   SPY: "S&P 500",
