@@ -76,7 +76,58 @@ export const MARKET_DISPLAY_NAMES: Record<string, string> = {
   SPY: "S&P 500",
   WTIOIL: "Oil",
   OIL: "Oil",
+  GOLD: "Gold",
+  SILVER: "Silver",
+  COPPER: "Copper",
 };
+
+// Live mid prices come from Hyperliquid + Pyth, which use the classic ticker
+// (XAU/XAG/WTI) while Phoenix/routing uses GOLD/SILVER/OIL. Map a Phoenix
+// market symbol to the symbol its price feed is keyed by (identity by default).
+export const PRICE_FEED_SYMBOL: Record<string, string> = {
+  GOLD: "XAU",
+  SILVER: "XAG",
+  OIL: "WTI",
+  WTIOIL: "WTI",
+};
+
+export function priceFeedSymbol(underlying: string | null | undefined): string {
+  if (!underlying) return "";
+  const u = underlying.toUpperCase();
+  return PRICE_FEED_SYMBOL[u] ?? u;
+}
+
+// WTIOIL is the raw Phoenix symbol for OIL; the picker shows only "OIL" so the
+// asset isn't listed twice.
+const MARKET_ALIASES: ReadonlySet<string> = new Set(["WTIOIL"]);
+
+// Preferred display order for the launch / route-fees pickers. Anything in the
+// Phoenix whitelist that isn't listed here still shows (appended after), so a
+// newly-added market is never silently dropped.
+const MARKET_PRIORITY: readonly string[] = [
+  "BTC", "ETH", "SOL", "HYPE", "ZEC", "GOLD", "SILVER", "OIL",
+  "XRP", "BNB", "DOGE", "ADA", "SUI", "TRX", "NEAR", "TON", "XLM", "XPL",
+  "AAVE", "JTO", "JUP", "ENA", "ONDO", "MORPHO", "LIT",
+  "FET", "RENDER", "VIRTUAL", "TAO", "WLD",
+  "FARTCOIN", "CHIP", "SKR", "MEGA", "MET", "VVV", "MON",
+  "COPPER",
+];
+
+// The launchable Phoenix markets in display order — THE source for the UI
+// pickers. Derived from IMPERIAL_MAX_LEVERAGE (the Phoenix whitelist) so the
+// picker can never show a market the keeper won't route, and aliases are folded.
+export function launchableMarketsInOrder(): string[] {
+  const all = Object.keys(IMPERIAL_MAX_LEVERAGE).filter((k) => !MARKET_ALIASES.has(k));
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const s of MARKET_PRIORITY) {
+    if (all.includes(s) && !seen.has(s)) { ordered.push(s); seen.add(s); }
+  }
+  for (const s of all) {
+    if (!seen.has(s)) { ordered.push(s); seen.add(s); }
+  }
+  return ordered;
+}
 
 // Per KEEPER_PHOENIX_LOCK.md, every asset in IMPERIAL_MAX_LEVERAGE routes to
 // Phoenix and is openable. The legacy "this market is on a venue the keeper

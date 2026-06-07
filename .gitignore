@@ -20,6 +20,10 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Local env (secrets / placeholders — never commit)
+.env
+.env.local
+
 # Live-test env (real wallet key — never commit)
 test/live/.env
 test/live/txns.txt

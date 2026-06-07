@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { ArrowRight, Copy, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { MarketIcon } from "@/lib/market-icons";
 import { HowItWorksButton } from "@/components/HowItWorksButton";
-import { BASE_LEVERAGES, DEGEN_LEVERAGES, maxLeverageFor, MARKET_DISPLAY_NAMES, isMarketUnavailable } from "@/lib/imperial-markets";
+import { BASE_LEVERAGES, DEGEN_LEVERAGES, maxLeverageFor, MARKET_DISPLAY_NAMES, isMarketUnavailable, isSupportedMarket, launchableMarketsInOrder, priceFeedSymbol } from "@/lib/imperial-markets";
 import { usePythSnapshot, formatUsdPrice } from "@/hooks/usePythPrices";
 
 export const Route = createFileRoute("/route-fees")({
@@ -57,41 +57,25 @@ function RouteFeesPage() {
     refetchInterval: 15000,
   });
   const markets = marketsQuery.data?.markets ?? [];
-  // Imperial-supported routing whitelist (mirrors keeper/src/imperial.js SUPPORTED_MARKETS).
-  // Anything outside this set is shown as SOON and disabled.
-  const IMPERIAL_SUPPORTED = new Set([
-    "BTC","ETH","SOL","BNB","XRP","DOGE","ADA","AVAX","TON","NEAR","SUI","TRX","LTC","DOT","BCH","XLM","HYPE","LINK","APE","ZEC",
-    "ARB","UNI","AAVE","GMX","JTO","ENA","JUP","PYTH","KMNO",
-    "BONK","PEPE","SHIB","BOME","WIF","FARTCOIN","TRUMP","MELANIA","PUMP","PENGU",
-    "TAO","WLD",
-    "TSLA","NVDA","AAPL","AMD","AMZN","SPY",
-    "XAU","XAG","WTI",
-    
-  ]);
-  const marketOrder = [
-    "BTC", "ETH", "SOL",
-    "HYPE", "XAU", "XAG", "ZEC", "TSLA", "NVDA",
-    "BONK", "PEPE", "WIF", "FARTCOIN", "PUMP", "TAO", "WLD",
-    "JUP", "TRUMP", "WTI",
-    "BNB", "XRP", "TON", "DOGE", "SUI", "ADA", "LTC",
-    "BCH", "AVAX", "LINK", "DOT", "TRX", "NEAR",
-    "PYTH", "JTO", "KMNO", "ENA", "AAVE", "UNI", "ARB", "GMX",
-    "PENGU", "BOME", "SHIB", "MELANIA", "APE",
-    "SPY", "AAPL", "AMD", "AMZN",
-    
-  ];
+  // Source the picker straight from the Phoenix routing whitelist
+  // (SUPPORTED_MARKETS, mirrored in imperial-markets.ts) so it only offers
+  // markets the keeper can open, using Phoenix symbols (GOLD/SILVER/OIL) not the
+  // price-feed tickers (XAU/XAG/WTI).
+  const marketOrder = launchableMarketsInOrder();
   const pythSnap = usePythSnapshot();
   const top = marketOrder.map((n) => {
-    const live = markets.find((m) => m.name === n);
-    const pyth = pythSnap[n];
+    const feed = priceFeedSymbol(n);
+    const live = markets.find((m) => m.name === feed);
+    const pyth = pythSnap[feed];
     const markPx = live?.markPx ?? pyth?.markPx ?? null;
     const change24h = live?.change24h ?? pyth?.change24h ?? null;
     return {
       name: n,
       displayName: MARKET_DISPLAY_NAMES[n] ?? n,
+      maxLeverage: maxLeverageFor(n),
       markPx,
       change24h,
-      supported: IMPERIAL_SUPPORTED.has(n),
+      supported: isSupportedMarket(n),
       unavailable: isMarketUnavailable(n),
     };
   });
@@ -293,7 +277,7 @@ function RouteFeesPage() {
                           const title = m.unavailable
                             ? "Unavailable: venue not yet supported by the keeper."
                             : !m.supported
-                            ? "Not on Imperial yet. Coming soon."
+                            ? "Not on Phoenix yet. Coming soon."
                             : undefined;
                           return (
                             <button
@@ -313,7 +297,16 @@ function RouteFeesPage() {
                               <div className="flex items-center gap-1.5">
                                 <MarketIcon name={m.name} size={16} />
                                 <div className="font-mono text-sm font-semibold">{m.displayName}</div>
-                                {label && <span className="ml-auto font-mono text-[9px] text-muted-foreground">{label}</span>}
+                                {label ? (
+                                  <span className="ml-auto font-mono text-[9px] text-muted-foreground">{label}</span>
+                                ) : (
+                                  <span
+                                    className="ml-auto rounded-sm bg-amber-400/15 px-1 py-0.5 font-mono text-[9px] font-semibold text-amber-500"
+                                    title={`Max leverage ${m.maxLeverage}x on Phoenix`}
+                                  >
+                                    {m.maxLeverage}x
+                                  </span>
+                                )}
                               </div>
 
 
@@ -432,7 +425,7 @@ function RouteFeesPage() {
                           ))}
                         </div>
                         <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-                          {underlying} caps at {maxLev}x on Imperial. Only allowed leverages are shown.
+                          {underlying} caps at {maxLev}x on Phoenix. Only allowed leverages are shown.
                         </p>
                       </>
                     )}
