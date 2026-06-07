@@ -67,6 +67,11 @@ export const IMPERIAL_MAX_LEVERAGE: Record<string, number> = {
 export const BASE_LEVERAGES = [2, 3, 5] as const;
 export const DEGEN_LEVERAGES = [10, 20, 25] as const;
 
+// Every discrete leverage tier the UI can show, ascending. Single source of
+// truth shared by the picker and the server-side validators, so the two can
+// never drift (the picker only hides bad options — it can be bypassed).
+export const ALLOWED_LEVERAGES: readonly number[] = [...BASE_LEVERAGES, ...DEGEN_LEVERAGES];
+
 export const MARKET_DISPLAY_NAMES: Record<string, string> = {
   SPY: "S&P 500",
   WTIOIL: "Oil",
@@ -88,6 +93,18 @@ export function isMarketUnavailable(underlying: string | null | undefined): bool
 export function maxLeverageFor(underlying: string | null | undefined): number {
   if (!underlying) return 0;
   return IMPERIAL_MAX_LEVERAGE[underlying.toUpperCase()] ?? 0;
+}
+
+// A leverage is valid for a market iff it is one of the allowed tiers AND at or
+// below that market's venue cap. This is the gate the server MUST enforce; the
+// picker hiding over-cap tiers is only a UX convenience.
+export function isValidLeverageFor(
+  underlying: string | null | undefined,
+  leverage: number,
+): boolean {
+  if (!Number.isInteger(leverage) || !ALLOWED_LEVERAGES.includes(leverage)) return false;
+  const cap = maxLeverageFor(underlying);
+  return cap > 0 && leverage <= cap;
 }
 
 // A market the keeper's SUPPORTED_MARKETS knows about (case-insensitive).

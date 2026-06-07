@@ -13,7 +13,7 @@ import { z } from "zod";
 import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getServerSolanaRpcUrl } from "@/lib/wallet/solanaConfig";
-import { isLaunchableMarket } from "@/lib/imperial-markets";
+import { isLaunchableMarket, isValidLeverageFor, maxLeverageFor } from "@/lib/imperial-markets";
 import { newTokenIdentity, tokenInvariantsFor } from "@/lib/solana/subWallet.server";
 import { transitionLaunch, markLaunchFailed } from "@/lib/launch/launchState";
 import { nextSolRaised, nextMigrationStatus } from "@/lib/launch/poolState";
@@ -68,9 +68,20 @@ const launchInput = z.object({
     .refine(isLaunchableMarket, {
       message: "Unsupported or unavailable market for Imperial routing",
     }),
-  leverage: z.union([z.literal(2), z.literal(3), z.literal(5), z.literal(10), z.literal(25), z.literal(50), z.literal(100)]),
+  leverage: z.number().int().positive(),
   direction: z.enum(["long", "short"]),
   creatorAddress: z.string().min(32).max(44),
+}).superRefine((d, ctx) => {
+  // Leverage must be an allowed tier AND at or below the market's venue cap.
+  // The picker enforces this client-side; re-check here so a stale/crafted
+  // request can't launch an over-cap (e.g. 50×/100×) or off-tier position.
+  if (!isValidLeverageFor(d.underlying, d.leverage)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["leverage"],
+      message: `Unsupported leverage ${d.leverage}x for ${d.underlying} (Phoenix cap ${maxLeverageFor(d.underlying)}x)`,
+    });
+  }
 });
 
 export const createDraftToken = createServerFn({ method: "POST" })
@@ -407,12 +418,21 @@ export const recoverLaunch = createServerFn({ method: "POST" })
         description: z.string().max(500).optional(),
         imageUrl: z.string().url().max(500).optional(),
         underlying: z.string().min(1).max(20),
-        leverage: z.union([z.literal(2), z.literal(3), z.literal(5), z.literal(10), z.literal(25), z.literal(50), z.literal(100)]),
+        leverage: z.number().int().positive(),
         direction: z.enum(["long", "short"]),
         creatorAddress: z.string().min(32).max(44),
         dbcPoolAddress: z.string().min(32).max(44),
         dbcConfigAddress: z.string().min(32).max(44),
         signature: z.string().min(32).max(120).optional(),
+      })
+      .superRefine((d, ctx) => {
+        if (!isValidLeverageFor(d.underlying, d.leverage)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["leverage"],
+            message: `Unsupported leverage ${d.leverage}x for ${d.underlying} (Phoenix cap ${maxLeverageFor(d.underlying)}x)`,
+          });
+        }
       })
       .parse(d),
   )

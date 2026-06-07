@@ -6,7 +6,14 @@
 //   3.4 launch status transitions are enforced (canTransition)
 //   3.2 (e2e) a created token always carries its signer + profile index (atomic)
 import { describe, it, expect, beforeAll, afterEach, afterAll } from "vitest";
-import { isLaunchableMarket, isSupportedMarket, isMarketUnavailable } from "../../src/lib/imperial-markets.ts";
+import {
+  isLaunchableMarket,
+  isSupportedMarket,
+  isMarketUnavailable,
+  isValidLeverageFor,
+  maxLeverageFor,
+  ALLOWED_LEVERAGES,
+} from "../../src/lib/imperial-markets.ts";
 import { nextSolRaised, nextMigrationStatus } from "../../src/lib/launch/poolState.ts";
 import { canTransition } from "../../src/lib/launch/transitions.ts";
 import { dbAvailable, ensureSchema, resetDb, seedToken, getToken, query, closeDb } from "../helpers/db.ts";
@@ -27,6 +34,50 @@ describe("Phase 3: launch validation (T1)", () => {
     expect(isLaunchableMarket(null)).toBe(false);
     // case-insensitive
     expect(isLaunchableMarket("sol")).toBe(true);
+  });
+
+  it("3.5 isValidLeverageFor: enforces allowed tiers AND the per-market venue cap", () => {
+    // Within cap, allowed tier -> ok.
+    expect(isValidLeverageFor("BTC", 20)).toBe(true); // BTC cap 20
+    expect(isValidLeverageFor("SOL", 10)).toBe(true); // SOL cap 15
+    expect(isValidLeverageFor("GOLD", 25)).toBe(true); // GOLD cap 25
+    expect(isValidLeverageFor("SKR", 3)).toBe(true); // SKR cap 3 -> base tier 3
+
+    // Over the per-market cap -> rejected (this is what the picker hides; the
+    // server must independently reject it).
+    expect(isValidLeverageFor("SOL", 25)).toBe(false); // 25 > SOL cap 15
+    expect(isValidLeverageFor("ZEC", 20)).toBe(false); // 20 > ZEC cap 10
+    expect(isValidLeverageFor("SKR", 5)).toBe(false); // 5 > SKR cap 3
+
+    // Off-tier values are rejected even if <= cap (e.g. 4, 7).
+    expect(isValidLeverageFor("BTC", 4)).toBe(false);
+    expect(isValidLeverageFor("BTC", 7)).toBe(false);
+    expect(isValidLeverageFor("BTC", 0)).toBe(false);
+    expect(isValidLeverageFor("BTC", -5)).toBe(false);
+    expect(isValidLeverageFor("BTC", 2.5)).toBe(false);
+
+    // The retired degen tiers (50x/100x) are no longer accepted for ANY market
+    // — this is the regression that let 100x positions through (logdumps).
+    for (const sym of Object.keys({ BTC: 1, ETH: 1, SOL: 1, GOLD: 1, SILVER: 1 })) {
+      expect(isValidLeverageFor(sym, 50)).toBe(false);
+      expect(isValidLeverageFor(sym, 100)).toBe(false);
+    }
+
+    // The newly-added 20x tier (commit 1b7e648) is a real allowed tier.
+    expect(ALLOWED_LEVERAGES).toContain(20);
+    expect(isValidLeverageFor("ETH", 20)).toBe(true); // ETH cap 20
+
+    // Unknown markets have no cap -> nothing is valid.
+    expect(isValidLeverageFor("FOOBAR", 2)).toBe(false);
+    expect(isValidLeverageFor(null, 2)).toBe(false);
+
+    // Every allowed tier is valid for at least one real market (no dead tiers).
+    for (const lev of ALLOWED_LEVERAGES) {
+      const someMarketAccepts = ["SOL", "BTC", "ETH", "GOLD", "SILVER"].some(
+        (m) => lev <= maxLeverageFor(m),
+      );
+      expect(someMarketAccepts).toBe(true);
+    }
   });
 
   it("3.3 sol_raised is preserved when the on-chain read exposes none (never zeroed)", () => {
