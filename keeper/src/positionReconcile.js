@@ -90,21 +90,22 @@ export async function runReconcileTick() {
       return { checked: 0, fixed: 0, errors: 1 };
     }
 
-    const windowMs = config.reconcileWindowMin * 60_000;
-    const cutoff = Date.now() - windowMs;
+    // (no cutoff — every live imperial position is reconciled every tick so
+    // the UI and TP math always match what's actually on-chain)
 
     for (const t of tokens) {
       if ((t.router || 'imperial') !== 'imperial') continue;
 
-      // 3c: confirm a late-indexed open. A token stuck in position_open_pending
-      // with no recorded position — re-read /positions; if the venue now shows
-      // one, record it (position_opened + coll/size) so the keeper's 3a guard
-      // sees position_open and won't re-open. Catches positions that index
-      // AFTER the open tick, before 3a's retry deadline could let a duplicate
-      // through. See OPEN_CHAIN_REFACTOR_V2.md.
-      const wf = workflowStateFromToken(t);
+      // 3c (broadened): adopt ANY live Imperial position that isn't recorded
+      // in the DB yet, regardless of workflow state. The original guard only
+      // fired for state === POSITION_OPEN_PENDING, which meant tokens whose
+      // workflow got stuck in 'blocked' or 'error' (e.g. external sweep's
+      // add-margin failed against a position the open path never recorded)
+      // would have a live venue position the DB never imported. Result:
+      // UI position card stays empty forever, fees pile up, every sweep
+      // re-tries add-margin against a phantom. Adopting the venue truth
+      // whenever (no DB open) AND (venue has a real position) fixes that.
       if (
-        wf?.state === State.POSITION_OPEN_PENDING &&
         !t.position_opened_at &&
         t.imperial_profile_index != null
       ) {
@@ -136,22 +137,36 @@ export async function runReconcileTick() {
         }
         if (posP && Number(posP.sizeUsd) > 0 && Number(posP.collateralUsd) > 0) {
           fixed++;
-          const note = `[reconcile] ${t.ticker}: confirmed late-indexed open coll=$${Number(posP.collateralUsd).toFixed(2)} size=$${Number(posP.sizeUsd).toFixed(2)}`;
+          const venueColl = Number(posP.collateralUsd);
+          const venueSize = Number(posP.sizeUsd);
+          const venueEntry = Number(posP.entryPriceUsd ?? posP.avgEntryPrice ?? 0);
+          const note = `[reconcile] ${t.ticker}: adopted live venue position coll=$${venueColl.toFixed(2)} size=$${venueSize.toFixed(2)} lev=${(venueSize / Math.max(venueColl, 0.01)).toFixed(2)}x (db had no open recorded)`;
           console.log(note);
-          reports.push({
+          const report = {
             token_id: t.id,
             position_opened: true,
-            position_collateral_usd: Number(posP.collateralUsd),
-            position_size_usd: Number(posP.sizeUsd),
+            position_collateral_usd: venueColl,
+            position_size_usd: venueSize,
             events: [{ kind: 'tick', note }],
-          });
+          };
+          // Only set launch_mid if the DB has never recorded one. Per the
+          // Imperial PnL rule, launch_mid must be set ONCE on first open and
+          // never overwritten (the venue avgEntryPrice drifts on every
+          // add-margin which would collapse our computed PnL).
+          if (!Number(t.launch_mid) && venueEntry > 0) {
+            report.launch_mid = venueEntry;
+          }
+          reports.push(report);
         }
-        continue; // pending handled (confirmed) or still genuinely pending
+        continue; // adopted or still no venue position
       }
 
+
       if (!t.position_opened_at) continue;
-      const openedAt = new Date(t.position_opened_at).getTime();
-      if (!Number.isFinite(openedAt) || openedAt < cutoff) continue;
+      // Previously this skipped any position older than reconcileWindowMin.
+      // That meant long-running positions drifted from venue truth (the UI
+      // and PnL math both read DB collateral/size). We now reconcile EVERY
+      // live imperial position every tick so cards always mirror on-chain.
       if (Number(t.position_collateral_usd ?? 0) <= 0) continue; // not an open
       if (t.imperial_profile_index == null) continue;
 

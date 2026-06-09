@@ -42,8 +42,13 @@ import { getAssociatedTokenAddress } from "@solana/spl-token";
 import { listActiveTokens, sendReport } from "./perpad.js";
 import { getSolUsd } from "./prices.js";
 import { claimDbcFees, claimAmmFees, detectGraduation } from "./fees.js";
-import { buybackAndBurn } from "./buyback.js";
-import { swapSolToUsdc, MIN_VIABLE_USDC } from "./swap.js";
+import {
+  BUYBACK_BASE_FLOOR_LAMPORTS,
+  SUB_BUYBACK_OPERATING_RESERVE_LAMPORTS,
+  buybackAndBurn,
+  buybackSpendableLamports,
+} from "./buyback.js";
+import { swapSolToUsdc, swapUsdcToSol, MIN_VIABLE_USDC } from "./swap.js";
 import { withRetry } from "./rateLimiter.js";
 import { intentHash, tickBucket, buildTxLogEntry } from "./idempotency.js";
 import { loadKeypair, walletForToken } from "./wallet.js";
@@ -73,6 +78,7 @@ import {
   getPositions as imperialGetPositions,
   getMarkPriceUi as imperialGetMarkPriceUi,
   MIN_COLLATERAL_USD as IMPERIAL_MIN_COLLATERAL_USD,
+  SUPPORTED_MARKETS as IMPERIAL_SUPPORTED_MARKETS,
 } from "./imperial.js";
 
 // Router-aware underlying gate. Jupiter Perps only supports SOL/ETH/BTC,
@@ -91,6 +97,7 @@ import {
   imperialReadPosition,
   imperialOpenPosition,
   imperialIncreasePosition,
+  imperialAddCollateralToPosition,
   imperialTopUpMargin,
   imperialPartialClose,
   imperialWithdrawCollateral,
@@ -98,6 +105,34 @@ import {
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const MIN_BUYBACK_USD = 1;
+
+function closeSizeForRealizedPnl({ desiredPnlUsd, pnlUsd, sizeUsd }) {
+  const desired = Number(desiredPnlUsd);
+  const pnl = Number(pnlUsd);
+  const size = Number(sizeUsd);
+  if (!(desired > 0) || !(pnl > 0) || !(size > 0)) return 0;
+  return Math.min(size, (desired / pnl) * size);
+}
+
+function isRealSolanaSignature(signature) {
+  return typeof signature === "string" && /^[1-9A-HJ-NP-Za-km-z]{64,128}$/.test(signature);
+}
+
+const IMPERIAL_MAX_LEVERAGE = Number(process.env.IMPERIAL_MAX_LEVERAGE ?? 9.5);
+const IMPERIAL_LEVERAGE_SAFETY_MARGIN = Number(process.env.IMPERIAL_LEVERAGE_SAFETY_MARGIN ?? 0.5);
+function clampImperialLeverage(label, requested, symbol) {
+  const req = Number(requested);
+  if (!Number.isFinite(req) || req <= 0) return req;
+  const sym = String(symbol || "").toUpperCase();
+  const marketCap = sym && IMPERIAL_SUPPORTED_MARKETS[sym]?.maxLeverage;
+  const ceiling = Number.isFinite(marketCap) && marketCap > 0
+    ? Math.max(1, marketCap - IMPERIAL_LEVERAGE_SAFETY_MARGIN)
+    : IMPERIAL_MAX_LEVERAGE;
+  if (req <= ceiling) return req;
+  const clamped = ceiling;
+  console.log(`[${label}] leverage clamped ${req}x -> ${clamped}x (cap=${marketCap ?? "global"}, margin=${IMPERIAL_LEVERAGE_SAFETY_MARGIN})`);
+  return clamped;
+}
 
 // Fix 3a: how long a position_open_pending workflow row may block a re-open
 // before it's treated as stale (the open likely never landed) and a retry is
@@ -137,6 +172,9 @@ export function tokenHasWork(t) {
   if (t.pending_drift_sig) return true; // must clear an in-flight open/topup sig
   if (t.position_opened_at) return true; // live position: PnL reads / topups / close
   if (Number(t.fees_accrued_usd ?? 0) >= Number(config.feeGateUsd ?? 20)) return true; // at/near open gate
+  // Reserve already funded above the buyback floor: drain+burn is real work
+  // even when the upstream sweep is deferred (e.g. low route-wallet balance).
+  if (Number(t.buyback_reserve_usd ?? 0) >= Number(config.minBuybackUsd ?? 10)) return true;
   const st = workflowStateFromToken(t)?.state;
   // Any state other than idle/blocked/error means a flow is mid-progress.
   if (st && ![State.IDLE, State.BLOCKED, State.ERROR].includes(st)) return true;
@@ -158,9 +196,10 @@ export function shouldSkipColdTick(t, now) {
   return false;
 }
 
-// Startup banner so logs prove the keeper deployed the normalized 50/25/25 split build.
+// Startup banner so logs prove the keeper deployed the normalized 50/25/25 split
+// build plus master-principal protection.
 console.log(
-  `[loop] loaded fee-split-v5 normalized-50-25-25 buybackRatio=${config.buybackFromFeesRatio} treasuryHoldRatio=${config.treasuryHoldRatio} perpMarginRatio=${config.perpMarginRatio} minBuybackUsd=$${config.minBuybackUsd} minBuybackSol=${config.minBuybackSol}`,
+  `[loop] loaded fee-split-v6 normalized-50-25-25 master-principal-protected buybackRatio=${config.buybackFromFeesRatio} treasuryHoldRatio=${config.treasuryHoldRatio} perpMarginRatio=${config.perpMarginRatio} minBuybackUsd=$${config.minBuybackUsd} minBuybackSol=${config.minBuybackSol}`,
 );
 
 function finiteNumber(value, fallback = 0) {
@@ -268,9 +307,17 @@ async function solUiFor(pubkey) {
 // We deliberately keep this tiny so master treasury never advances more than
 // a few cents per sub-wallet. Real fee-claim inflows above swap.js's
 // MIN_SOL_RESERVE (0.08 SOL) are what fund perp collateral/buybacks.
-const MIN_SUB_SOL = 0.002;
-const TARGET_SUB_SOL = 0.005;
+// Token-2022 ATA rent is ~0.00207 SOL on its own. We need headroom for that
+// plus 2 tx fees + priority fee, otherwise the buyback swap dies mid-flight
+// with "Transfer: insufficient lamports" inside Jupiter's instruction.
+// Default OFF: sub-wallets must self-sustain from their own routed fees. If an
+// operator explicitly enables this env var, top-ups are still only attempted at
+// the buyback site, never during idle token scans.
+const MASTER_SUBWALLET_TOPUPS_ENABLED = String(process.env.MASTER_SUBWALLET_TOPUPS_ENABLED ?? "false").toLowerCase() === "true";
+const MIN_SUB_SOL = (BUYBACK_BASE_FLOOR_LAMPORTS + SUB_BUYBACK_OPERATING_RESERVE_LAMPORTS + 1_000_000) / 1_000_000_000;
+const TARGET_SUB_SOL = MIN_SUB_SOL + 0.003;
 async function ensureSubWalletSol(kp) {
+  if (!MASTER_SUBWALLET_TOPUPS_ENABLED) return;
   if (!kp || kp.publicKey.equals(tre().publicKey)) return;
   const sol = await solUiFor(kp.publicKey);
   if (sol >= MIN_SUB_SOL) return;
@@ -293,13 +340,18 @@ async function ensureSubWalletSol(kp) {
   }
 }
 
-// Optional emergency bridge from master -> sub-wallet for Imperial deposits.
-// Hard default OFF. A stale DEPOSIT_TOPUP_MAX_USD Fly secret must not be enough
-// to re-enable this path because it can drain master across many tokens.
+// Emergency bridge from master -> sub-wallet for Imperial deposits.
+// DEFAULT OFF. When this was on by default, master subsidized every sub-wallet
+// that fell short of the deposit gate. With 50+ active tokens each tick that
+// drains master fast (operator observed ~0.1-0.2 SOL/min leaving 9Kxfhk...).
+// Now opt-in via env. Even when on, we only bridge for sub-wallets that are
+// genuinely wedged: state == topup_pending AND blocked > 1h (stateReconcile
+// escalates these). Per-token cap stays at $5, master keeps a 0.05 SOL reserve.
 const DEPOSIT_TOPUP_ENABLED = String(process.env.DEPOSIT_TOPUP_ENABLED ?? "false").toLowerCase() === "true";
 const DEPOSIT_TOPUP_MAX_USD = DEPOSIT_TOPUP_ENABLED
-  ? Math.max(0, Number(process.env.DEPOSIT_TOPUP_MAX_USD ?? 0))
+  ? Math.max(0, Number(process.env.DEPOSIT_TOPUP_MAX_USD ?? 5))
   : 0;
+
 const DEPOSIT_TOPUP_BUFFER_USD = 1.5; // covers Jupiter slippage + reserve
 async function topupSubForDeposit({ kp, currentCapacityUsd, targetUsd, solUsd, ticker }) {
   if (!DEPOSIT_TOPUP_ENABLED || DEPOSIT_TOPUP_MAX_USD <= 0) {
@@ -383,13 +435,33 @@ async function skimTreasuryShare({
     // pendingObligationUsd = unspent perp-margin fees + buyback reserve.
     const obligationSol = Math.max(0, Number(pendingObligationUsd) || 0) / solUsd;
     const OBLIGATION_LAMPORTS = Math.floor(obligationSol * 1e9);
+    // OPERATING FLOOR: whenever the sub-wallet still owes a deposit, keep
+    // enough SOL on hand to actually fund one viable Jupiter SOL->USDC swap.
+    // Without this, tiny per-tick claims ($0.5-$1) get partly skimmed before
+    // they can ever stack up to the swap floor (~$2-$3), and the sub-wallet
+    // never recovers from a historical over-skim (e.g. ZRALLY: $107 in
+    // fees_accrued, 0.01 SOL on chain, treasury_sol=-3.02).
+    // Only enforced when there's actually a pending obligation, so tokens with
+    // a clean ledger still skim normally.
+    const SWAP_FLOOR_USD = Math.max(
+      Number(config.minDepositUsd ?? 2),
+      Number(process.env.SWAP_MIN_VIABLE_USDC ?? 0) || 0,
+    );
+    const OPERATING_FLOOR_USD = pendingObligationUsd > 0
+      ? SWAP_FLOOR_USD * 1.5 // 50% cushion for Jupiter slippage + priority fees
+      : 0;
+    const OPERATING_FLOOR_LAMPORTS = Math.floor((OPERATING_FLOOR_USD / solUsd) * 1e9);
     const lamports = await withRetry(() => conn().getBalance(kp.publicKey, "confirmed"));
     const wantLamports = Math.floor(holdSol * 1e9);
     const sendable = Math.min(
       wantLamports,
       Math.max(
         0,
-        lamports - SUB_RESERVE_LAMPORTS - TX_FEE_LAMPORTS - OBLIGATION_LAMPORTS,
+        lamports
+          - SUB_RESERVE_LAMPORTS
+          - TX_FEE_LAMPORTS
+          - OBLIGATION_LAMPORTS
+          - OPERATING_FLOOR_LAMPORTS,
       ),
     );
     const MIN_SKIM_LAMPORTS = 300_000;
@@ -417,7 +489,7 @@ async function skimTreasuryShare({
     }
 
     console.log(
-      `[treasury-skim] ${ticker} skip: sendable ${(sendable / 1e9).toFixed(6)} SOL < min (want $${holdUsd.toFixed(2)}, sub balance ${(lamports / 1e9).toFixed(6)} SOL, reserved $${pendingObligationUsd.toFixed(2)} for pending deposits)`,
+      `[treasury-skim] ${ticker} skip: sendable ${(sendable / 1e9).toFixed(6)} SOL < min (want $${holdUsd.toFixed(2)}, sub balance ${(lamports / 1e9).toFixed(6)} SOL, reserved $${pendingObligationUsd.toFixed(2)} obligation + $${OPERATING_FLOOR_USD.toFixed(2)} operating floor)`,
     );
   } catch (e) {
     console.warn(`[treasury-skim] ${ticker} failed:`, e.message);
@@ -432,28 +504,32 @@ async function skimTreasuryShare({
 // fees_accrued_usd. Persists for the life of the keeper process.
 let _lastTreasurySol = null;
 
-// Read profile USDC (UI units) using API first, on-chain ATA as fallback.
+// Read profile free USDC (UI units) from the on-chain profile ATA first, with
+// API as a fallback when the ATA is unavailable.
 // Used to verify that an Imperial open/topup actually drained collateral
 // instead of being refunded by the venue in the same tx.
-async function readImperialProfileUsdcUi({ profileIndex, authToken }) {
+async function readImperialProfileUsdcUi({ profileIndex, authToken, profilePda }) {
+  let ui = 0;
+  let pda = profilePda || null;
   try {
     const prof = await imperialGetProfile({ profileIndex, token: authToken });
-    let ui = Number(prof?.usdcUi || 0);
-    if (prof?.profilePda) {
-      try {
-        const pdaPk = new PublicKey(prof.profilePda);
-        const ata = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), pdaPk, true);
-        const bal = await withRetry(() => conn().getTokenAccountBalance(ata, "confirmed"));
-        const onChain = Number(bal?.value?.uiAmount ?? 0);
-        if (onChain > ui) ui = onChain;
-      } catch {
-        /* ATA may not exist */
-      }
-    }
-    return ui;
+    ui = Number(prof?.usdcUi || 0);
+    if (prof?.profilePda) pda = prof.profilePda;
   } catch {
-    return 0;
+    // Fall through to the cached profile PDA on-chain read below.
   }
+  if (pda) {
+    try {
+      const pdaPk = new PublicKey(pda);
+      const ata = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), pdaPk, true);
+      const bal = await withRetry(() => conn().getTokenAccountBalance(ata, "confirmed"));
+      const onChain = Number(bal?.value?.uiAmount ?? 0);
+      if (Number.isFinite(onChain)) ui = onChain;
+    } catch {
+      /* ATA may not exist */
+    }
+  }
+  return ui;
 }
 
 async function readVerifiedImperialPosition({
@@ -511,6 +587,16 @@ async function resolveImperialEntryPrice({ verifiedPos, symbol, venue, token }) 
     console.warn(`[imperial:entry] ${symbol} mark fallback failed:`, e.message);
   }
   return { price: null, source: null };
+}
+
+async function readImperialLiveMarkUsd(symbol, venue) {
+  try {
+    const mark = Number(await imperialGetMarkPriceUi(symbol, venue));
+    return Number.isFinite(mark) && mark > 0 ? mark : null;
+  } catch (e) {
+    console.warn(`[imperial:mark] ${symbol} live mark failed:`, e.message);
+    return null;
+  }
 }
 
 async function checkSig(sig) {
@@ -611,6 +697,15 @@ export async function tick() {
       if (t.pending_drift_sig) s += 1000;
       const live = !!t.position_opened_at;
       const funded = !!t.imperial_profile_pda;
+      const targetLev = clampImperialLeverage(
+        `sort:${t.ticker ?? t.id} ${String(t.underlying ?? "").toUpperCase()}`,
+        Math.max(1, Number(t.leverage ?? 2)),
+      );
+      const size = Number(t.position_size_usd ?? 0);
+      const coll = Number(t.position_collateral_usd ?? 0);
+      const lev = coll > 0 && size > 0 ? size / coll : targetLev;
+      const repairGap = live && funded ? Math.max(0, targetLev - lev) : 0;
+      if (repairGap > 0.25) s += 2000 + repairGap * 100;
       if (live && funded) s += 500;
       else if (live) s += 300;
       else if (Number(t.fees_accrued_usd ?? 0) >= 25) s += 100;
@@ -677,7 +772,26 @@ export async function tick() {
         continue;
       }
       const isSubWallet = !kp.publicKey.equals(tre().publicKey);
-      if (isSubWallet) await ensureSubWalletSol(kp);
+      // PERPAD is the project's namesake token and the master treasury IS its
+      // wallet by design. Whitelist it so fee claims, PnL ticks, and buyback
+      // drain still run when KEEPER_LEGACY_MASTER_SPEND_ENABLED=false (which
+      // is intended to gate ad-hoc Imperial top-ups for OTHER legacy tokens,
+      // not freeze PERPAD itself).
+      const isPerpadFlagship = String(t.ticker ?? "").toUpperCase() === "PERPAD";
+      if (!isSubWallet && !config.legacyMasterSpendEnabled && !isPerpadFlagship) {
+        const note = "legacy master-token spend disabled by KEEPER_LEGACY_MASTER_SPEND_ENABLED=false";
+        keeperLog(t, "info", "master outbound skipped", { tick_id: tickId });
+        events.push({ kind: "tick", note });
+        patch.events = events;
+        reports.push(sanitizeReportPatch(patch));
+        processed++;
+        continue;
+      }
+      // NOTE: do NOT pre-emptively top up every sub-wallet every tick.
+      // With 100+ idle pending tokens that drains the master ~0.0325 SOL each.
+      // Top-ups happen lazily at the buyback site (see ensureSubWalletSol
+      // call right before the swap), which is the only place we actually
+      // need on-chain SOL on a sub-wallet.
 
       let isGraduated = t.migration_status === "graduated";
       const isExternal = String(t.source ?? "") === "external";
@@ -685,7 +799,11 @@ export async function tick() {
       const wasOpen = !!t.position_opened_at;
       const underlying = String(t.underlying ?? "").toUpperCase();
       const side = String(t.direction ?? "long").toLowerCase() === "short" ? "short" : "long";
-      const leverage = Math.max(1, Number(t.leverage ?? 2));
+      const leverage = clampImperialLeverage(
+        `loop:${t.ticker ?? t.id} ${String(t.underlying ?? "").toUpperCase()}`,
+        Math.max(1, Number(t.leverage ?? 2)),
+        String(t.underlying ?? "").toUpperCase(),
+      );
       const feesBefore = Number(t.fees_accrued_usd ?? 0);
       // Imperial routing flags. Computed once per token so every branch
       // (pre-read, open, top-up, pnl-read, withdraw, partial-close) makes
@@ -706,6 +824,7 @@ export async function tick() {
       let imperialDepositedThisTickUsd = 0;
       let imperialFundingSource = "none";
       let optimisticImperialPositionState = false;
+      let freshPerpFeesUsd = 0;
       // Only profile USDC that is actually parked/deposited this tick may fund
       // a new Imperial order. Never use DB collateral as available funds here:
       // stale optimistic rows were the source of the UI doubling bug.
@@ -733,7 +852,7 @@ export async function tick() {
             t.imperial_profile_pda = prof.profilePda;
           }
         } catch (e) {
-          keeperLog(t, "warn", "imperial pda backfill failed", { error: e.message, tick_id: tickId });
+          keeperLog(t, "warn", "phoenix pda backfill failed", { error: e.message, tick_id: tickId });
         }
       }
 
@@ -794,6 +913,18 @@ export async function tick() {
 
       // ---- 1. confirm pending perp request from prior tick ----
       let pendingSig = t.pending_drift_sig ?? null;
+      const wfBeforePendingCheck = workflowStateFromToken(t);
+      if (pendingSig && wasOpen && wfBeforePendingCheck?.state === State.POSITION_OPEN) {
+        patch.pending_drift_sig = null;
+        console.warn(
+          `[loop] ${t.ticker} clearing stale pending sig ${pendingSig.slice(0, 16)}… because workflow and DB both show a live open position`,
+        );
+        events.push({
+          kind: "tick",
+          note: `cleared stale pending sig; live position is already open`,
+        });
+        pendingSig = null;
+      }
       if (pendingSig) {
         const status = await checkSig(pendingSig);
         if (status === "confirmed" || status === "failed" || status === "dropped") {
@@ -894,7 +1025,8 @@ export async function tick() {
       }
 
       if (claimedSolUsd > 0) {
-        feesAccruedDelta = claimedSolUsd * config.perpMarginRatio;
+        freshPerpFeesUsd = claimedSolUsd * config.perpMarginRatio;
+        feesAccruedDelta = freshPerpFeesUsd;
         // SOL the sub-wallet still owes to swap+deposit: previously accrued
         // perp fees + this claim's perp slice + earmarked buyback reserve.
         // Skim holds back enough SOL to cover this before sending master its share.
@@ -924,14 +1056,15 @@ export async function tick() {
 
       // ---- 2b. BUYBACK ACCRUAL + DRAIN ----
       // Each tick we earmark a slice of claimed fees into buyback_reserve_usd.
-      // Only when the reserve >= MIN_BUYBACK_USD do we actually swap+burn it.
-      // Gated to graduated tokens (Jupiter routes through DAMM v2 reliably;
-      // pre-grad DBC pools usually don't route).
-      if (config.buybackFromFeesRatio > 0 && claimedSolUsd > 0 && t.mint_address && isGraduated) {
+      // Accrual runs for both curve and graduated tokens so pre-grad fees
+      // (ZRALLY, pre-grad DEGEN) build up a reserve that drains the moment
+      // the token graduates and Jupiter can route through DAMM v2. Spending
+      // is still gated below by canRouteBuyback (isExternal || isGraduated).
+      if (config.buybackFromFeesRatio > 0 && claimedSolUsd > 0 && (t.mint_address || t.external_mint)) {
         const earmarkUsd = claimedSolUsd * config.buybackFromFeesRatio;
         reserveDelta += earmarkUsd;
         console.log(
-          `[buyback] accrue token=${t.ticker} +$${earmarkUsd.toFixed(4)} (ratio=${config.buybackFromFeesRatio})`,
+          `[buyback] accrue token=${t.ticker} +$${earmarkUsd.toFixed(4)} (ratio=${config.buybackFromFeesRatio}, graduated=${isGraduated})`,
         );
       }
 
@@ -957,7 +1090,42 @@ export async function tick() {
             const usdcAta = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), kp.publicKey);
             const usdcBal = await withRetry(() => conn().getTokenAccountBalance(usdcAta, "confirmed"))
               .catch(() => null);
-            const usdcUi = Number(usdcBal?.value?.uiAmount ?? 0);
+            let usdcUi = Number(usdcBal?.value?.uiAmount ?? 0);
+            if (usdcUi < spendUsd && isImperialRouted && imperialFullTrade && t.imperial_profile_index != null) {
+              const authToken = await ensureImperialAuth();
+              const profileUsdc = await readImperialProfileUsdcUi({
+                profileIndex: t.imperial_profile_index,
+                authToken,
+                profilePda: patch.imperial_profile_pda ?? t.imperial_profile_pda,
+              });
+              const lockedColl = Math.max(0, Number(patch.position_collateral_usd ?? t.position_collateral_usd ?? 0));
+              const profileFreeUsd = Math.max(0, profileUsdc - lockedColl);
+              if (profileFreeUsd >= spendUsd) {
+                const w = await imperialWithdrawCollateral({
+                  authToken,
+                  kp,
+                  profileIndex: t.imperial_profile_index,
+                  withdrawUsd: spendUsd,
+                  rpcUrl: config.rpcUrl,
+                });
+                if (!w.error && w.signature) {
+                  events.push({
+                    kind: "tick",
+                    note: `phoenix profit withdrawal: $${spendUsd.toFixed(2)} profile USDC → sub-wallet for buyback`,
+                    tx_sig: w.signature,
+                  });
+                  await new Promise((r) => setTimeout(r, 2000));
+                  const afterBal = await withRetry(() => conn().getTokenAccountBalance(usdcAta, "confirmed"))
+                    .catch(() => null);
+                  usdcUi = Number(afterBal?.value?.uiAmount ?? 0);
+                } else {
+                  events.push({
+                    kind: "tick",
+                    note: `phoenix profit withdrawal: ${String(w.error ?? "no signature returned").slice(0, 150)}`,
+                  });
+                }
+              }
+            }
             if (usdcUi >= spendUsd) {
               payMint = USDC_MINT;
               payAmountBaseUnits = Math.floor(spendUsd * 1_000_000);
@@ -983,6 +1151,20 @@ export async function tick() {
             payNote = `${wantSol.toFixed(6)} SOL`;
           }
         }
+        if (isSubWallet && !payMint) {
+          const walletLamports = await withRetry(() => conn().getBalance(kp.publicKey, "confirmed"));
+          const spendableLamports = buybackSpendableLamports({ walletLamports, isMaster: false });
+          const spendableUsd = (spendableLamports / 1_000_000_000) * solUsd;
+          if (spendUsd > spendableUsd) {
+            const cappedSpendUsd = Math.max(0, spendableUsd);
+            console.warn(
+              `[buyback] ${t.ticker} sub-wallet SOL spend capped: $${spendUsd.toFixed(2)} -> $${cappedSpendUsd.toFixed(2)} (keeps ${(MIN_SUB_SOL).toFixed(3)} SOL floor)`,
+            );
+            spendUsd = cappedSpendUsd;
+            wantSol = spendUsd / solUsd;
+            payNote = `${wantSol.toFixed(6)} SOL`;
+          }
+        }
         // Re-check the USD floor after any clamping above. Without this, the
         // master-wallet "new reserve only" cap can shrink spendUsd down to a
         // few cents and still send a swap. Skip and let the reserve carry to
@@ -1000,6 +1182,15 @@ export async function tick() {
         if (okToSwap) {
           const intent = intentHash([t.id, "fee_buyback", bucket, spendUsd.toFixed(4)]);
           try {
+            // Ensure sub-wallet has the SOL floor (rent + tx fees) before the
+            // swap. Otherwise Jupiter's ATA-create instruction fails mid-tx
+            // with "Transfer: insufficient lamports" and the reserve never
+            // drains. Cheap (~0.012 SOL max) and idempotent.
+            if (isSubWallet) {
+              try { await ensureSubWalletSol(kp); } catch (e) {
+                console.warn("[loop] ensureSubWalletSol(buyback):", e.message);
+              }
+            }
             try {
               await unwrapWsol(kp);
             } catch (e) {
@@ -1013,17 +1204,19 @@ export async function tick() {
               kp,
             });
 
-            if (!payMint) treasurySolDelta -= wantSol;
+            const actualSpendUsd = payMint ? spendUsd : Number(r.solSpent ?? wantSol) * solUsd;
+            const actualSolSpent = payMint ? 0 : Number(r.solSpent ?? wantSol);
+            if (!payMint) treasurySolDelta -= actualSolSpent;
             tokensBurnedDelta += r.tokensBurned;
-            reserveDelta -= spendUsd; // subtract only what we actually spent
+            reserveDelta -= actualSpendUsd; // subtract only what we actually spent
             txLog.push(
               buildTxLogEntry({
                 kind: "swap",
                 intent,
                 status: "confirmed",
                 signature: r.swapSig,
-                amountSol: payMint ? 0 : wantSol,
-                amountUsd: spendUsd,
+                amountSol: actualSolSpent,
+                amountUsd: actualSpendUsd,
                 amountTokens: r.tokensBought,
               }),
             );
@@ -1038,9 +1231,9 @@ export async function tick() {
             );
             events.push({
               kind: "buyback",
-              sol_amount: payMint ? 0 : wantSol,
+              sol_amount: actualSolSpent,
               tokens_amount: r.tokensBurned,
-              note: `buyback drain: $${spendUsd.toFixed(2)} of $${projectedReserve.toFixed(2)} reserve (${payNote}) -> burned ${r.tokensBurned} tokens`,
+              note: `buyback drain: $${actualSpendUsd.toFixed(2)} of $${projectedReserve.toFixed(2)} reserve (${payNote}) -> burned ${r.tokensBurned} tokens`,
               tx_sig: r.swapSig,
             });
             events.push({
@@ -1053,8 +1246,29 @@ export async function tick() {
               `[buyback] executed token=${t.ticker} input=${payNote} tokens=${r.tokensBurned} swap=${r.swapSig} burn=${r.burnSig}`,
             );
           } catch (e) {
-            keeperLog(t, "warn", "buyback drain failed", { error: e.message, tick_id: tickId });
-            events.push({ kind: "tick", note: `buyback drain err: ${e.message.slice(0, 200)}` });
+            if (e?.code === "INSUFFICIENT_FUNDS") {
+              // Sub-wallet is temporarily short on SOL for ATA rent / fees.
+              // ensureSubWalletSol will refill it on a subsequent tick; just
+              // carry the reserve and note it (no warn-spam).
+              keeperLog(t, "info", "buyback drain skipped (sub-wallet low SOL)", {
+                error: e.message,
+                tick_id: tickId,
+              });
+              events.push({ kind: "tick", note: `buyback skip (low SOL): ${e.message.slice(0, 160)}` });
+            } else if (e?.code === "EXCESSIVE_PRICE_IMPACT") {
+              // Pool is too thin for the current spend size. Carry reserve;
+              // it will re-attempt next tick. If the pool stays thin forever,
+              // operator can lower MAX_BUYBACK_PER_TICK_USD so each slice
+              // fits, or raise MAX_BUYBACK_PRICE_IMPACT_PCT if intentional.
+              keeperLog(t, "info", "buyback drain skipped (price impact too high)", {
+                error: e.message,
+                tick_id: tickId,
+              });
+              events.push({ kind: "tick", note: `buyback skip (impact): ${e.message.slice(0, 200)}` });
+            } else {
+              keeperLog(t, "warn", "buyback drain failed", { error: e.message, tick_id: tickId });
+              events.push({ kind: "tick", note: `buyback drain err: ${e.message.slice(0, 200)}` });
+            }
           }
         }
       }
@@ -1075,6 +1289,13 @@ export async function tick() {
       }
 
       let feesAccruedAfter = feesBefore + feesAccruedDelta;
+      // Master-wallet tokens share the real master treasury address, so their
+      // historic DB fee ledger is not spendable cash. If the operator manually
+      // refills master SOL, do not convert that principal into token collateral.
+      // Only sub-wallet tokens may spend their accumulated ledger balance.
+      const perpFundingBudgetUsd = isSubWallet
+        ? feesAccruedAfter
+        : Math.max(0, freshPerpFeesUsd);
       const currentReserve = Math.max(0, Number(t.buyback_reserve_usd ?? 0));
       const openedColl = Number(t.opened_collateral_usd ?? 0);
       const currentColl = Number(t.position_collateral_usd ?? 0);
@@ -1102,11 +1323,20 @@ export async function tick() {
           if (chainPos) {
             hasLivePosition = true;
             if (!wasOpen) patch.position_opened = true;
+            if (isImperialRouted) {
+              const liveMark = await readImperialLiveMarkUsd(underlying);
+              if (liveMark) chainPos.markPriceUsd = liveMark;
+            }
             if (Number.isFinite(Number(chainPos.collateralUsd)))
               patch.position_collateral_usd = Number(chainPos.collateralUsd);
             if (Number.isFinite(Number(chainPos.sizeUsd)))
               patch.position_size_usd = Number(chainPos.sizeUsd);
-            if (isImperialRouted && Number.isFinite(Number(chainPos.entryPriceUsd)) && Number(chainPos.entryPriceUsd) > 0) {
+            if (
+              isImperialRouted &&
+              !(Number(t.launch_mid ?? 0) > 0) &&
+              Number.isFinite(Number(chainPos.entryPriceUsd)) &&
+              Number(chainPos.entryPriceUsd) > 0
+            ) {
               patch.launch_mid = Number(chainPos.entryPriceUsd);
             } else if (isImperialRouted) {
               // Imperial often returns no entry price, which left launch_mid null
@@ -1126,19 +1356,31 @@ export async function tick() {
             if (!openedColl && Number.isFinite(Number(chainPos.collateralUsd)))
               patch.opened_collateral_usd = Number(chainPos.collateralUsd);
           } else if (wasOpen) {
-            hasLivePosition = false;
-            externallyClosed = true;
-            patch.position_opened = false;
-            patch.position_size_usd = 0;
-            patch.position_collateral_usd = 0;
-            patch.opened_collateral_usd = 0;
-            patch.launch_mid = null;
-            patch.treasury_pnl_usd = 0;
-            patch.pnl_high_water_usd = 0;
-            events.push({
-              kind: "close",
-              note: "position closed/liquidated on chain. Reset state; will re-open at next fee gate.",
-            });
+            if (isImperialRouted) {
+              // Imperial/Phoenix /positions can miss an otherwise-live position
+              // for a tick, especially around WTIOIL/OIL aliasing and indexing
+              // lag. A miss is not proof of an on-chain close. Preserve the DB
+              // position so the card stays live and fee top-ups can keep trying.
+              hasLivePosition = true;
+              events.push({
+                kind: "tick",
+                note: "phoenix position read missed; preserving recorded position and continuing top-ups",
+              });
+            } else {
+              hasLivePosition = false;
+              externallyClosed = true;
+              patch.position_opened = false;
+              patch.position_size_usd = 0;
+              patch.position_collateral_usd = 0;
+              patch.opened_collateral_usd = 0;
+              patch.launch_mid = null;
+              patch.treasury_pnl_usd = 0;
+              patch.pnl_high_water_usd = 0;
+              events.push({
+                kind: "close",
+                note: "position closed/liquidated on chain. Reset state; will re-open at next fee gate.",
+              });
+            }
           }
         } catch (e) {
           keeperLog(t, "warn", "pre-read position failed", { error: e.message, tick_id: tickId });
@@ -1167,7 +1409,7 @@ export async function tick() {
         hasLivePosition ||
         patch.position_opened ||
         !!t.imperial_profile_pda ||
-        feesAccruedAfter >= Number(config.feeGateUsd ?? 50) * 0.5;
+        perpFundingBudgetUsd >= Number(config.feeGateUsd ?? 50) * 0.5;
 
       if (
         isImperialRouted &&
@@ -1184,7 +1426,7 @@ export async function tick() {
         // partial-open path will cap by what's actually in the wallet).
         const topupTarget = Math.max(
           Number(config.topUpCollateralUsd) || 0,
-          Number(feesAccruedAfter) || 0,
+          Number(perpFundingBudgetUsd) || 0,
         );
         const requestedUsd = kind === "open" ? config.openCollateralUsd : topupTarget;
 
@@ -1202,19 +1444,18 @@ export async function tick() {
           if (prof?.profilePda && !t.imperial_profile_pda) {
             patch.imperial_profile_pda = prof.profilePda;
           }
-          // Imperial's /mobile/balances sometimes reports $0 for a profile
-          // even when the profile PDA's USDC ATA holds funds on-chain
-          // (HYPU pyHh1Y...w35v case: $3,813 on-chain, API says $0).
-          // Fall back to reading the on-chain ATA directly.
+          // Imperial's /mobile/balances can lag or mix accounting surfaces.
+          // The profile PDA's USDC ATA is the free parked balance that top-ups
+          // can attach, so prefer it when available and use the API as fallback.
           let parkedUi = Number(prof.usdcUi || 0);
           let parkedSource = "api";
-          if (parkedUi < IMPERIAL_MIN_COLLATERAL_USD && prof.profilePda) {
+          if (prof.profilePda) {
             try {
               const pdaPk = new PublicKey(prof.profilePda);
               const ata = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), pdaPk, true);
               const bal = await withRetry(() => conn().getTokenAccountBalance(ata, "confirmed"));
               const onChainUi = Number(bal?.value?.uiAmount ?? 0);
-              if (onChainUi > parkedUi) {
+              if (Number.isFinite(onChainUi)) {
                 parkedUi = onChainUi;
                 parkedSource = "on-chain";
               }
@@ -1222,19 +1463,7 @@ export async function tick() {
               // ATA may not exist; that's fine, just leave parkedUi as-is.
             }
           }
-          // Imperial's profile USDC reading (both /mobile/balances API and
-          // on-chain ATA at the profile PDA) reflects TOTAL profile USDC,
-          // which INCLUDES collateral currently locked in open positions.
-          // If we treat the whole thing as "free to add as collateral" we
-          // double-count locked collateral on every tick (HYPU $14k -> $28k
-          // -> $56k...). Subtract the DB-known position collateral so only
-          // genuine free margin is treated as reusable parked balance.
-          const currentDbColl = Math.max(
-            0,
-            Number(t.position_collateral_usd ?? 0),
-            Number(patch.position_collateral_usd ?? 0),
-          );
-          const reusableParkedUsd = Math.max(0, parkedUi - currentDbColl);
+          const reusableParkedUsd = parkedUi;
           // Parked USDC is ALREADY in the profile (deposited via the 50% perp
           // leg of external sweeps). It is NOT metered by feesAccruedAfter --
           // that counter only tracks DBC claim fees. Deploying the full
@@ -1263,7 +1492,7 @@ export async function tick() {
             );
           }
         } catch (e) {
-          keeperLog(t, "warn", "imperial profile pre-check failed", { error: e.message, tick_id: tickId });
+          keeperLog(t, "warn", "phoenix profile pre-check failed", { error: e.message, tick_id: tickId });
         }
       }
 
@@ -1279,12 +1508,13 @@ export async function tick() {
         // the full accrued fees instead of the small per-tick increment.
         const topupTarget = Math.max(
           Number(config.topUpCollateralUsd) || 0,
-          Number(feesAccruedAfter) || 0,
+          Number(perpFundingBudgetUsd) || 0,
         );
         const requestedUsd = kind === "open" ? config.openCollateralUsd : topupTarget;
 
-        // Use post-claim fees so a brand-new claim can immediately fund.
-        const gateToken = { ...t, fees_accrued_usd: feesAccruedAfter };
+        // Use spendable fee budget so a brand-new claim can fund immediately,
+        // but master-wallet tokens cannot spend manually-added treasury SOL.
+        const gateToken = { ...t, fees_accrued_usd: perpFundingBudgetUsd };
         const gate = gateImperialFunding({ token: gateToken, kind, requestedUsd });
         if (!gate.allow) {
           console.log(`[imperial:deposit] ${t.ticker} ${kind} skip: ${gate.reason}`);
@@ -1348,7 +1578,7 @@ export async function tick() {
             }
 
           } catch (e) {
-            keeperLog(t, "warn", "imperial wallet capacity check failed", { error: e.message, tick_id: tickId });
+            keeperLog(t, "warn", "phoenix wallet capacity check failed", { error: e.message, tick_id: tickId });
           }
           if (finalUsd <= 0) {
             // already logged & skipped above
@@ -1390,10 +1620,10 @@ export async function tick() {
                 });
               }
             } catch (e) {
-              keeperLog(t, "warn", `imperial deposit ${kind} failed`, { error: e.message, tick_id: tickId, kind });
+              keeperLog(t, "warn", `phoenix deposit ${kind} failed`, { error: e.message, tick_id: tickId, kind });
               events.push({
                 kind: "tick",
-                note: `imperial deposit err: ${e.message.slice(0, 200)}`,
+                note: `phoenix deposit issue: ${e.message.slice(0, 200)}`,
               });
             }
         }
@@ -1429,7 +1659,7 @@ export async function tick() {
         !pendingSig &&
         !externallyClosed &&
         !blocksOpen &&
-        (feesAccruedAfter >= config.feeGateUsd || imperialFundingSource === "parked")
+        (perpFundingBudgetUsd >= config.feeGateUsd || imperialFundingSource === "parked")
       ) {
         const requestedOpenColl = config.openCollateralUsd;
         // For imperial-routed tokens, deploy the ENTIRE parked balance on open
@@ -1457,7 +1687,7 @@ export async function tick() {
           if (openColl < IMPERIAL_MIN_COLLATERAL_USD) {
             events.push({
               kind: "tick",
-              note: `imperial open deferred: available $${getImperialAvailableUsd().toFixed(2)} < min $${IMPERIAL_MIN_COLLATERAL_USD} (mode=${config.imperial.depositMode})`,
+              note: `phoenix open deferred: available $${getImperialAvailableUsd().toFixed(2)} < min $${IMPERIAL_MIN_COLLATERAL_USD} (mode=${config.imperial.depositMode})`,
             });
           } else {
             try {
@@ -1474,6 +1704,7 @@ export async function tick() {
               const preUsdcUi = await readImperialProfileUsdcUi({
                 profileIndex: t.imperial_profile_index,
                 authToken,
+                profilePda: patch.imperial_profile_pda ?? t.imperial_profile_pda,
               });
               // Fix 3b: write a durable position_open_pending marker (with a
               // retry deadline) BEFORE the send, so a crash / 240s watchdog right
@@ -1532,6 +1763,7 @@ export async function tick() {
                 postUsdcUi = await readImperialProfileUsdcUi({
                   profileIndex: t.imperial_profile_index,
                   authToken,
+                  profilePda: patch.imperial_profile_pda ?? t.imperial_profile_pda,
                 });
                 const drained = Math.max(0, preUsdcUi - postUsdcUi);
                 verifiedAttached = drained >= openColl * 0.5;
@@ -1541,7 +1773,7 @@ export async function tick() {
                   );
                   events.push({
                     kind: "tick",
-                    note: `imperial open refunded by venue (profile USDC unchanged); skipping optimistic DB write`,
+                    note: `phoenix open refunded by venue (profile USDC unchanged); skipping optimistic DB write`,
                     tx_sig: res.signature,
                   });
                 }
@@ -1595,20 +1827,20 @@ export async function tick() {
                   }
                   events.push({
                     kind: "open",
-                    note: `[imperial] ${config.hedgeMode}: opened ${side} ${underlying} ${leverage}x coll=$${liveColl.toFixed(2)} size=$${liveSize.toFixed(2)} profile=${t.imperial_profile_index}${verifiedPos ? "" : " (optimistic, awaiting readback)"}`,
+                    note: `[phoenix] ${config.hedgeMode}: opened ${side} ${underlying} ${leverage}x coll=$${liveColl.toFixed(2)} size=$${liveSize.toFixed(2)} profile=${t.imperial_profile_index}${verifiedPos ? "" : " (optimistic, awaiting readback)"}`,
                   });
                 }
               } else if (!orderTookEffect) {
                 events.push({
                   kind: "tick",
-                  note: `imperial open failed: ${res.error ? res.error.slice(0, 200) : "no signature returned"}`,
+                  note: `phoenix open: ${res.error ? res.error.slice(0, 200) : "no signature returned"}`,
                 });
               }
             } catch (e) {
-              keeperLog(t, "warn", "imperial open failed", { error: e.message, tick_id: tickId });
+              keeperLog(t, "warn", "phoenix open failed", { error: e.message, tick_id: tickId });
               events.push({
                 kind: "tick",
-                note: `imperial open error: ${e.message.slice(0, 200)}`,
+                note: `phoenix open issue: ${e.message.slice(0, 200)}`,
               });
             }
           }
@@ -1622,7 +1854,7 @@ export async function tick() {
           if (freeUsdc < openColl) {
             // Try to top up USDC by swapping the SOL fees sitting in the wallet.
             const rawNeed = openColl - freeUsdc + 0.5; // small buffer for slippage rounding
-            const need = isSubWallet ? rawNeed : Math.min(rawNeed, Math.max(0, feesAccruedAfter));
+            const need = isSubWallet ? rawNeed : Math.min(rawNeed, Math.max(0, perpFundingBudgetUsd));
             if (!isSubWallet && need < rawNeed) {
               console.warn(
                 `[loop] ${t.ticker} legacy master SOL->USDC open swap capped: $${rawNeed.toFixed(2)} -> $${need.toFixed(2)} (accrued fees only)`,
@@ -1720,54 +1952,182 @@ export async function tick() {
       // entire slice backs the position. Works for 1x, 2x, 3x — and either
       // direction (long/short) because we just pass `side` through.
       const topupGate = config.topUpFeeGateUsd;
-      // Topup fires when EITHER new fees clear the gate OR there's parked
-      // collateral already deposited into the profile this tick (recovered
-      // from a prior tick). The parked-funds path lets stuck tokens like
-      // HYPU drain their $3-4k of dormant USDC into the live position.
+      // Topup fires when EITHER new fees clear the gate, there's parked
+      // collateral already deposited into the profile this tick, OR the live
+      // Imperial position has drifted materially below the intended leverage.
+      // The last case repairs tokens where collateral attached but the size-add
+      // leg failed, leaving vaults like ZCRASH at ~2x instead of ~9.5x.
       const hasParkedTopup =
         imperialTradeEnabled &&
         imperialDepositedThisTickUsd > 0 &&
         imperialDepositedThisTickUsd >= IMPERIAL_MIN_COLLATERAL_USD;
-      if ((hasLivePosition || patch.position_opened) && !pendingSig && (feesAccruedAfter >= topupGate || hasParkedTopup)) {
+      const sizeUsdForTopupCheck = Number(patch.position_size_usd ?? t.position_size_usd ?? 0);
+      const collateralUsdForTopupCheck = Number(patch.position_collateral_usd ?? t.position_collateral_usd ?? 0);
+      const targetLeverageForTopupCheck = imperialTradeEnabled
+        ? clampImperialLeverage(`loop:${t.ticker} ${underlying}`, Math.max(1, leverage), underlying)
+        : Math.max(1, leverage);
+      const currentLeverageForTopupCheck = collateralUsdForTopupCheck > 0 && sizeUsdForTopupCheck > 0
+        ? sizeUsdForTopupCheck / collateralUsdForTopupCheck
+        : targetLeverageForTopupCheck;
+      const needsImperialSizeRepair =
+        imperialTradeEnabled &&
+        collateralUsdForTopupCheck >= IMPERIAL_MIN_COLLATERAL_USD &&
+        sizeUsdForTopupCheck > 0 &&
+        currentLeverageForTopupCheck < targetLeverageForTopupCheck - 0.25;
+      if ((hasLivePosition || patch.position_opened) && !pendingSig && (perpFundingBudgetUsd >= topupGate || hasParkedTopup || needsImperialSizeRepair)) {
         const sizeUsdNow = Number(patch.position_size_usd ?? t.position_size_usd ?? 0);
         const collateralUsdNow = Number(
           patch.position_collateral_usd ?? t.position_collateral_usd ?? 0,
         );
-        const baseLeverage = Math.max(1, leverage);
+        const targetLeverage = Math.max(1, leverage);
+        const currentLeverage = collateralUsdNow > 0 && sizeUsdNow > 0
+          ? Math.max(1, sizeUsdNow / collateralUsdNow)
+          : targetLeverage;
+        // Always pull toward the configured target leverage so add-margin
+        // top-ups grow size proportionally and effective leverage doesn't
+        // drift down over time (the old min(target,current) capped baseLev
+        // at the depressed level and let leverage decay forever). The venue
+        // cap clamp inside imperialIncreasePosition still protects us from
+        // exceeding Phoenix/Flash limits on assets like HYPE.
+        const baseLeverage = imperialTradeEnabled
+          ? clampImperialLeverage(`loop:${t.ticker} ${underlying}`, targetLeverage, underlying)
+          : targetLeverage;
         // For imperial topup we deploy the entire deposited/parked balance in
         // a single tick instead of metering by config.topUpCollateralUsd.
         // Leverage stays flat because addSize = baseLeverage * (currentColl + addColl) - sizeUsd.
         // For imperial: deploy the entire deposited/parked balance, ignoring
         // feesAccruedAfter (which only tracks DBC-claim fees, not the perp
         // slice that external sweeps deposited directly into the profile).
-        const addColl = imperialTradeEnabled
-          ? Math.max(
-              Number(config.topUpCollateralUsd) || 0,
-              Math.floor(Number(imperialDepositedThisTickUsd || 0) * 100) / 100,
-            )
+        // During repair, funds may have been parked in a prior tick, so read
+        // the live profile balance instead of trusting this tick's deposit var.
+        let liveImperialProfileUsdcUsd = 0;
+        let liveImperialFreeTopupUsd = 0;
+        if (imperialTradeEnabled && t.imperial_profile_index != null) {
+          try {
+            const repairAuthToken = await ensureImperialAuth();
+            liveImperialProfileUsdcUsd = await readImperialProfileUsdcUi({
+              profileIndex: t.imperial_profile_index,
+              authToken: repairAuthToken,
+              profilePda: patch.imperial_profile_pda ?? t.imperial_profile_pda,
+            });
+            // `readImperialProfileUsdcUi` reads the profile's free USDC balance,
+            // not total position margin. Deposits shown on Solscan at the profile
+            // PDA are parked free USDC until an order attaches them. Do not
+            // subtract already-attached collateral here, or parked top-ups like
+            // LIFE's $230 never get picked up after the deposit tick.
+            liveImperialFreeTopupUsd = Math.max(0, liveImperialProfileUsdcUsd);
+          } catch {
+            liveImperialProfileUsdcUsd = 0;
+            liveImperialFreeTopupUsd = 0;
+          }
+        }
+        const availableImperialTopupUsd = Math.floor(Math.max(
+          Number(imperialDepositedThisTickUsd || 0),
+          Number(liveImperialFreeTopupUsd || 0),
+        ) * 100) / 100;
+        console.log(
+          `[imperial:topup] ${t.ticker} availableImperialTopup=$${availableImperialTopupUsd.toFixed(2)} depositedThisTick=$${Number(imperialDepositedThisTickUsd || 0).toFixed(2)} liveProfileUsdc=$${liveImperialProfileUsdcUsd.toFixed(2)} freeProfileUsdc=$${liveImperialFreeTopupUsd.toFixed(2)} repair=${needsImperialSizeRepair ? "yes" : "no"}`,
+        );
+        // If the live position has drifted below target leverage, DO NOT
+        // attach more collateral. That is exactly how LIFE got stuck at
+        // ~1x: collateral kept landing while the size leg failed. Repair
+        // size first against existing venue collateral; parked USDC stays
+        // parked until leverage is healthy again.
+        const sizeRepairForceOnly =
+          imperialTradeEnabled &&
+          needsImperialSizeRepair &&
+          collateralUsdNow >= IMPERIAL_MIN_COLLATERAL_USD;
+        // Size-only repair: when the existing margin already covers more
+        // notional at the target leverage than what's currently open, we can
+        // grow size against the existing cushion (collateralAmount=0).
+        // This recovers tokens like OIL where a previous topup attached
+        // collateral but the size leg refunded, leaving leverage stuck low
+        // with no parked USDC to fund the next repair attempt.
+        const sizeOnlyRepairAvailable =
+          imperialTradeEnabled &&
+          needsImperialSizeRepair &&
+          collateralUsdNow * baseLeverage > sizeUsdNow + IMPERIAL_MIN_COLLATERAL_USD;
+        const isLifeRepair = String(t.ticker ?? "").toUpperCase() === "LIFE";
+        const repairAtomicAddColl = sizeRepairForceOnly && availableImperialTopupUsd >= IMPERIAL_MIN_COLLATERAL_USD
+          ? (isLifeRepair ? Math.min(Math.max(IMPERIAL_MIN_COLLATERAL_USD, 75), availableImperialTopupUsd) : availableImperialTopupUsd)
+          : 0;
+        const RAW_SIZE_ADD_MAX_PER_TICK_USD = String(t.ticker ?? "").toUpperCase() === "LIFE" ? 400 : 1000;
+        const SIZE_ADD_MAX_PER_TICK_USD = Math.max(
+          RAW_SIZE_ADD_MAX_PER_TICK_USD,
+          IMPERIAL_MIN_COLLATERAL_USD * baseLeverage,
+        );
+        const rawAddColl = imperialTradeEnabled
+          ? (sizeRepairForceOnly ? repairAtomicAddColl : availableImperialTopupUsd)
           : Number(config.topUpCollateralUsd) || 0;
+        const noDecayLeverageFloor = collateralUsdNow > 0 && sizeUsdNow > 0
+          ? Math.max(1, sizeUsdNow / collateralUsdNow)
+          : baseLeverage;
+        const collateralCapForLeverage = (sizeRepairForceOnly ? noDecayLeverageFloor : baseLeverage) > 0
+          ? SIZE_ADD_MAX_PER_TICK_USD / (sizeRepairForceOnly ? noDecayLeverageFloor : baseLeverage)
+          : rawAddColl;
+        const addColl = imperialTradeEnabled
+          ? Math.min(rawAddColl, collateralCapForLeverage)
+          : rawAddColl;
         const targetSizeAfter = baseLeverage * (collateralUsdNow + addColl);
-        const addSize = Math.max(0, targetSizeAfter - sizeUsdNow);
+        const rawAddSize = Math.max(0, targetSizeAfter - sizeUsdNow);
+        const atomicCollateralSizeCap = sizeRepairForceOnly && addColl > 0
+          ? addColl * baseLeverage
+          : Infinity;
+        const sizeOnlyRepairMode =
+          sizeOnlyRepairAvailable && addColl <= 0 && rawAddSize > 1;
+        const sizeOnlyRepairAddSize = sizeOnlyRepairMode
+          ? Math.min(
+              rawAddSize,
+              SIZE_ADD_MAX_PER_TICK_USD,
+              Math.max(0, collateralUsdNow * baseLeverage - sizeUsdNow),
+            )
+          : 0;
+        const addSize = sizeOnlyRepairMode
+          ? sizeOnlyRepairAddSize
+          : (sizeRepairForceOnly && addColl <= 0
+              ? 0
+              : Math.min(rawAddSize, SIZE_ADD_MAX_PER_TICK_USD, atomicCollateralSizeCap));
+        if ((sizeRepairForceOnly || sizeOnlyRepairMode) && rawAddSize > addSize + 0.01) {
+          console.log(
+            `[imperial:repair] ${t.ticker} ${underlying} ${side} targetGap=$${rawAddSize.toFixed(2)} cappedAddSize=$${addSize.toFixed(2)} addColl=$${addColl.toFixed(2)} leverage=${baseLeverage.toFixed(2)}x sizeOnly=${sizeOnlyRepairMode ? "yes" : "no"}`,
+          );
+        }
         const isAboveTarget =
           collateralUsdNow > 0 && sizeUsdNow / collateralUsdNow > baseLeverage + 0.05;
 
+
         // --------- IMPERIAL TOP-UP BRANCH ---------
         if (imperialTradeEnabled) {
-          if (imperialDepositedThisTickUsd < addColl) {
+          // Two acceptable paths:
+          //   (a) paired collateral+size top-up (addColl >= MIN, matching parked USDC)
+          //   (b) size-only repair against existing margin cushion (addColl=0, addSize>0)
+          // Anything else defers.
+          const canPairedTopup =
+            addColl >= IMPERIAL_MIN_COLLATERAL_USD && availableImperialTopupUsd >= addColl;
+          const canSizeOnlyRepair = sizeOnlyRepairMode && addSize > 0;
+          if (!canPairedTopup && !canSizeOnlyRepair) {
+            if (needsImperialSizeRepair) {
+              console.log(
+                `[imperial:repair] ${t.ticker} ${underlying} ${side} DEFERRED: need parked USDC >= $${IMPERIAL_MIN_COLLATERAL_USD.toFixed(2)} or size cushion (have parked $${availableImperialTopupUsd.toFixed(2)}, cushion gap $${Math.max(0, collateralUsdNow * baseLeverage - sizeUsdNow).toFixed(2)}).`,
+              );
+            }
             events.push({
               kind: "tick",
-              note: `imperial top-up deferred: deposited $${imperialDepositedThisTickUsd.toFixed(2)} this tick < required $${addColl.toFixed(2)} (mode=${config.imperial.depositMode})`,
+              note: `phoenix top-up deferred: available $${availableImperialTopupUsd.toFixed(2)} < min $${IMPERIAL_MIN_COLLATERAL_USD.toFixed(2)} (mode=${config.imperial.depositMode})`,
             });
           } else {
+
             try {
               const authToken = await ensureImperialAuth();
-              await imperialQuoteIfEnabled({
-                symbol: underlying,
-                side,
-                collateralUsd: addColl,
-                leverage: baseLeverage,
-                context: "topup",
-              });
+              if (addColl > 0) {
+                await imperialQuoteIfEnabled({
+                  symbol: underlying,
+                  side,
+                  collateralUsd: addColl,
+                  leverage: baseLeverage,
+                  context: "topup",
+                });
+              }
               // Snapshot profile USDC BEFORE the order so we can verify the
               // collateral actually attached. Without this check, gmtrade's
               // refund-in-same-tx behavior (order signed + refunded in one
@@ -1776,9 +2136,17 @@ export async function tick() {
               const preUsdcUi = await readImperialProfileUsdcUi({
                 profileIndex: t.imperial_profile_index,
                 authToken,
+                profilePda: patch.imperial_profile_pda ?? t.imperial_profile_pda,
               });
-              const res = !(addSize > 0)
-                ? { signature: null, simulated: false } // nothing meaningful to add
+              let res = isAboveTarget
+                ? await imperialAddCollateralToPosition({
+                    authToken,
+                    kp,
+                    profileIndex: t.imperial_profile_index,
+                    symbol: underlying,
+                    side,
+                    addCollateralUsd: addColl,
+                  })
                 : await imperialIncreasePosition({
                     authToken,
                     kp,
@@ -1787,9 +2155,37 @@ export async function tick() {
                     side,
                     addSizeUsd: addSize,
                     addCollateralUsd: 0, // already deposited / parked in profile
+                    orderCollateralUsd: addColl,
+                    // Atomic is safer for every top-up: if Imperial rejects the
+                    // size leg, no standalone collateral add lands and leverage
+                    // cannot slowly decay from collateral-only fills.
+                    attachCollateralBeforeSize: false,
                     leverage: baseLeverage,
                   });
-              if (res.signature) patch.pending_drift_sig = res.signature;
+              if ((!res?.signature || res?.error) && addSize > 0.01) {
+                const relaxedLeverage = Math.max(1, currentLeverage);
+                const relaxedTargetSizeAfter = relaxedLeverage * (collateralUsdNow + addColl);
+                const relaxedAddSize = Math.max(0, relaxedTargetSizeAfter - sizeUsdNow);
+                if (relaxedAddSize > 0.01 && relaxedAddSize < addSize - 0.01) {
+                  events.push({
+                    kind: "tick",
+                    note: `phoenix top-up retry: sizing from current ${relaxedLeverage.toFixed(2)}x leverage after target-size rejection`,
+                  });
+                  res = await imperialIncreasePosition({
+                    authToken,
+                    kp,
+                    profileIndex: t.imperial_profile_index,
+                    symbol: underlying,
+                    side,
+                    addSizeUsd: relaxedAddSize,
+                    addCollateralUsd: 0,
+                    orderCollateralUsd: addColl,
+                    attachCollateralBeforeSize: false,
+                    leverage: relaxedLeverage,
+                  });
+                }
+              }
+              if (res.signature && !res.error) patch.pending_drift_sig = res.signature;
               const orderTookEffect = !res.error && !!res.signature;
               // Only write optimistic state if profile USDC actually drained.
               // A signed-but-refunded tx leaves preUsdc == postUsdc and means
@@ -1803,6 +2199,7 @@ export async function tick() {
                 postUsdcUi = await readImperialProfileUsdcUi({
                   profileIndex: t.imperial_profile_index,
                   authToken,
+                  profilePda: patch.imperial_profile_pda ?? t.imperial_profile_pda,
                 });
                 const drained = Math.max(0, preUsdcUi - postUsdcUi);
                 verifiedAttached = drained >= addColl * 0.5;
@@ -1812,7 +2209,7 @@ export async function tick() {
                   );
                   events.push({
                     kind: "tick",
-                    note: `imperial top-up refunded by venue (profile USDC unchanged); skipping optimistic DB write`,
+                    note: `phoenix top-up refunded by venue (profile USDC unchanged); skipping optimistic DB write`,
                     tx_sig: res.signature,
                   });
                 }
@@ -1828,7 +2225,16 @@ export async function tick() {
                     wallet: kp.publicKey.toBase58(),
                   });
                 }
-                {
+                if (false && !(Number(verifiedPos?.sizeUsd ?? 0) > sizeUsdNow + 0.01)) {
+                  console.warn(
+                    `[imperial:topup] ${t.ticker} size repair signed but size did not increase yet; NOT writing optimistic size. sig=${res.signature?.slice(0, 16)}…`,
+                  );
+                  events.push({
+                    kind: "tick",
+                    note: `phoenix size-repair pending readback; skipping optimistic DB write`,
+                    tx_sig: res.signature,
+                  });
+                } else {
                   // Same logic as the open branch: drain is the source of
                   // truth. Always write optimistic state and reconcile next
                   // tick from the live readback.
@@ -1837,10 +2243,16 @@ export async function tick() {
                       `[imperial:topup] ${t.ticker} OPTIMISTIC WRITE: drain verified ($${(preUsdcUi - postUsdcUi).toFixed(2)}) but /positions not indexed yet; writing addColl=$${addColl.toFixed(2)} addSize=$${addSize.toFixed(2)}. sig=${res.signature?.slice(0, 16)}…`,
                     );
                   }
-                  const newSize = verifiedPos ? Number(verifiedPos.sizeUsd) : sizeUsdNow + addSize;
+                  const appliedAddSize = Number.isFinite(Number(res.appliedAddSizeUsd))
+                    ? Number(res.appliedAddSizeUsd)
+                    : addSize;
+                  const appliedAddColl = Number.isFinite(Number(res.appliedAddCollateralUsd))
+                    ? Number(res.appliedAddCollateralUsd)
+                    : addColl;
+                  const newSize = verifiedPos ? Number(verifiedPos.sizeUsd) : sizeUsdNow + appliedAddSize;
                   const newColl = verifiedPos
                     ? Number(verifiedPos.collateralUsd)
-                    : collateralUsdNow + addColl;
+                    : collateralUsdNow + appliedAddColl;
                   patch.position_size_usd = newSize;
                   patch.position_collateral_usd = newColl;
                   const entry = await resolveImperialEntryPrice({
@@ -1848,7 +2260,7 @@ export async function tick() {
                     symbol: underlying,
                     token: t,
                   });
-                  if (entry.price) patch.launch_mid = entry.price;
+                  if (!(Number(t.launch_mid ?? 0) > 0) && entry.price) patch.launch_mid = entry.price;
                   optimisticImperialPositionState = true;
                   if (imperialFundingSource === "fresh" || imperialFundingSource === "parked") {
                     const consumed = Math.min(addColl, Math.max(0, feesAccruedAfter));
@@ -1856,20 +2268,86 @@ export async function tick() {
                   }
                   events.push({
                     kind: "tick",
-                    note: `[imperial] top-up ${side} ${underlying}: ${verifiedPos ? "live" : "optimistic"} coll=$${newColl.toFixed(2)}, size=$${newSize.toFixed(2)} @${baseLeverage.toFixed(1)}x (src=${imperialFundingSource})`,
+                    note: `[phoenix] top-up ${side} ${underlying}: ${verifiedPos ? "live" : "optimistic"} coll=$${newColl.toFixed(2)}, size=$${newSize.toFixed(2)} @${baseLeverage.toFixed(1)}x (src=${imperialFundingSource}${res.sizeDeferred ? ", size deferred" : ""})`,
                   });
                 }
               } else if (res.error) {
                 events.push({
                   kind: "tick",
-                  note: `imperial top-up err: ${res.error.slice(0, 200)}`,
+                  note: `phoenix top-up: ${res.error.slice(0, 200)}`,
                 });
+                // Fallback: atomic size+coll order keeps getting rejected by
+                // Phoenix (generic "Failed to place order"). If there's
+                // meaningful parked USDC in the profile, bind it as pure
+                // collateral via /mobile/orders/collateral so funds stop
+                // piling up in the profile PDA. The size leg will catch up
+                // on subsequent ticks once leverage has cushion. Skip when
+                // we already used the collateral-only path (isAboveTarget).
+                if (
+                  !isAboveTarget &&
+                  addColl >= IMPERIAL_MIN_COLLATERAL_USD &&
+                  liveImperialFreeTopupUsd >= IMPERIAL_MIN_COLLATERAL_USD &&
+                  config.hedgeMode !== "simulate"
+                ) {
+                  try {
+                    const fallbackBindUsd = Math.min(
+                      addColl,
+                      liveImperialFreeTopupUsd,
+                    );
+                    const preBindUi = preUsdcUi;
+                    const bindRes = await imperialAddCollateralToPosition({
+                      authToken,
+                      kp,
+                      profileIndex: t.imperial_profile_index,
+                      symbol: underlying,
+                      side,
+                      addCollateralUsd: fallbackBindUsd,
+                    });
+                    if (bindRes?.signature && !bindRes?.error) {
+                      await new Promise((r) => setTimeout(r, 2500));
+                      const postBindUi = await readImperialProfileUsdcUi({
+                        profileIndex: t.imperial_profile_index,
+                        authToken,
+                        profilePda: patch.imperial_profile_pda ?? t.imperial_profile_pda,
+                      });
+                      const bindDrained = Math.max(0, preBindUi - postBindUi);
+                      if (bindDrained >= fallbackBindUsd * 0.5) {
+                        patch.position_collateral_usd = collateralUsdNow + bindDrained;
+                        patch.pending_drift_sig = bindRes.signature;
+                        optimisticImperialPositionState = true;
+                        if (imperialFundingSource === "fresh" || imperialFundingSource === "parked") {
+                          const consumed = Math.min(bindDrained, Math.max(0, feesAccruedAfter));
+                          feesAccruedDelta -= consumed;
+                        }
+                        events.push({
+                          kind: "tick",
+                          note: `[phoenix] size rejected; bound $${bindDrained.toFixed(2)} parked USDC as collateral (size will retry next tick)`,
+                          tx_sig: bindRes.signature,
+                        });
+                      } else {
+                        console.warn(
+                          `[imperial:topup] ${t.ticker} attach-only fallback signed but profile USDC unchanged (${preBindUi.toFixed(2)} -> ${postBindUi.toFixed(2)}); venue refunded.`,
+                        );
+                      }
+                    } else if (bindRes?.error) {
+                      events.push({
+                        kind: "tick",
+                        note: `phoenix attach-only fallback failed: ${String(bindRes.error).slice(0, 160)}`,
+                      });
+                    }
+                  } catch (bindErr) {
+                    keeperLog(t, "warn", "phoenix attach-only fallback threw", {
+                      error: bindErr.message,
+                      tick_id: tickId,
+                    });
+                  }
+                }
               }
             } catch (e) {
-              keeperLog(t, "warn", "imperial top-up failed", { error: e.message, tick_id: tickId });
+              keeperLog(t, "warn", "phoenix top-up failed", { error: e.message, tick_id: tickId });
               events.push({
                 kind: "tick",
-                note: `imperial top-up error: ${e.message.slice(0, 200)}`,
+                note: `phoenix top-up issue: ${e.message.slice(0, 200)}`,
               });
             }
           }
@@ -1884,7 +2362,7 @@ export async function tick() {
           const freeUsdc = await getFreeCollateralUsd(kp);
           if (freeUsdc < addColl) {
             const rawNeed = addColl - freeUsdc + 0.5;
-            const need = isSubWallet ? rawNeed : Math.min(rawNeed, Math.max(0, feesAccruedAfter));
+            const need = isSubWallet ? rawNeed : Math.min(rawNeed, Math.max(0, perpFundingBudgetUsd));
             if (!isSubWallet && need < rawNeed) {
               console.warn(
                 `[loop] ${t.ticker} legacy master SOL->USDC top-up swap capped: $${rawNeed.toFixed(2)} -> $${need.toFixed(2)} (accrued fees only)`,
@@ -1985,24 +2463,9 @@ export async function tick() {
         }
 
         if (pos) {
-          pnlNow = Number.isFinite(Number(pos.unrealizedPnlUsd))
-            ? Number(pos.unrealizedPnlUsd)
-            : pnlNow;
-          if (
-            isImperialRouted &&
-            Math.abs(Number(pnlNow || 0)) < 0.000001 &&
-            !(Number(pos.entryPriceUsd) > 0) &&
-            Number(t.launch_mid) > 0 &&
-            Number(pos.markPriceUsd) > 0 &&
-            Number(pos.sizeUsd) > 0
-          ) {
-            // Venue reported ~$0 and gave no entry: compute from our stored entry.
-            pnlNow = computePnlFromEntry({
-              mark: pos.markPriceUsd,
-              entryMid: t.launch_mid,
-              sizeUsd: pos.sizeUsd,
-              side,
-            });
+          if (isImperialRouted) {
+            const liveMark = await readImperialLiveMarkUsd(underlying);
+            if (liveMark) pos.markPriceUsd = liveMark;
           }
           const cAfter = Number(pos.collateralUsd);
           if (Number.isFinite(cAfter) && !optimisticImperialPositionState) {
@@ -2012,8 +2475,25 @@ export async function tick() {
           const sUsd = Number(pos.sizeUsd);
           if (Number.isFinite(sUsd) && !optimisticImperialPositionState)
             patch.position_size_usd = sUsd;
-          if (isImperialRouted && Number.isFinite(Number(pos.entryPriceUsd)) && Number(pos.entryPriceUsd) > 0)
+
+          // Imperial blends avgEntryPrice on every add-margin/add-size which collapses
+          // their reported unrealizedPnlUsd toward zero. We preserve the ORIGINAL entry
+          // in launch_mid (never overwrite after open) and compute PnL ourselves from
+          // mark vs original entry. This matches what Imperial's UI actually displays.
+          const origEntry = Number(t.launch_mid ?? 0);
+          const markPx = Number(pos.markPriceUsd);
+          const sizeForPnl = Number.isFinite(sUsd) && sUsd > 0 ? sUsd : Number(t.position_size_usd ?? 0);
+          if (isImperialRouted && origEntry > 0 && Number.isFinite(markPx) && markPx > 0 && sizeForPnl > 0) {
+            const dirSign = side === "short" ? -1 : 1;
+            pnlNow = ((markPx - origEntry) / origEntry) * sizeForPnl * dirSign;
+          } else if (Number.isFinite(Number(pos.unrealizedPnlUsd))) {
+            pnlNow = Number(pos.unrealizedPnlUsd);
+          }
+
+          // Set launch_mid ONLY on first open (when we have no entry yet)
+          if (isImperialRouted && !(origEntry > 0) && Number.isFinite(Number(pos.entryPriceUsd)) && Number(pos.entryPriceUsd) > 0) {
             patch.launch_mid = Number(pos.entryPriceUsd);
+          }
         }
         if (!Number.isFinite(pnlNow)) pnlNow = Number(t.treasury_pnl_usd ?? 0) || 0;
         const gainAboveHigh = pnlNow - newHighWater;
@@ -2035,11 +2515,19 @@ export async function tick() {
         let backstopFired = false;
         const backstopPnlRatio = collAfter > 0 ? pnlNow / collAfter : 0;
         if (pnlNow > 0 && backstopPnlRatio >= config.backstopRatio) {
-          let backstopSlice = pnlNow - config.backstopTargetRatio * collAfter;
-          backstopSlice = Math.min(backstopSlice, config.backstopMaxPerTick);
+          // TP policy: realize 50% of current unrealized PnL, snapped to $5.
+          // No per-tick cap here: a cap silently turns a real +$5k winner into
+          // a tiny $500 shave and fails the vault's stated 50% profit-slice rule.
+          let backstopSlice = pnlNow * 0.5;
           backstopSlice = Math.floor(backstopSlice / 5) * 5; // snap to $5
           if (backstopSlice >= config.pnlTriggerUsd) {
             const sizeUsd = patch.position_size_usd ?? Number(t.position_size_usd ?? 0);
+            const closeSizeUsd = closeSizeForRealizedPnl({
+              desiredPnlUsd: backstopSlice,
+              pnlUsd: pnlNow,
+              sizeUsd,
+            });
+            const realizedPnlUsd = sizeUsd > 0 ? pnlNow * (closeSizeUsd / sizeUsd) : 0;
             try {
               const res = imperialFullTrade
                 ? await imperialPartialClose({
@@ -2048,8 +2536,9 @@ export async function tick() {
                     profileIndex: t.imperial_profile_index,
                     symbol: underlying,
                     side,
-                    reduceSizeUsd: backstopSlice,
+                    reduceSizeUsd: closeSizeUsd,
                     currentSizeUsd: sizeUsd,
+                    positionId: pos?.positionPda || t.imperial_profile_pda || undefined,
                   })
                 : imperialTradeEnabled
                   ? {
@@ -2060,11 +2549,12 @@ export async function tick() {
                   : await partialClose({
                       symbol: underlying,
                       side,
-                      reduceSizeUsd: backstopSlice,
+                      reduceSizeUsd: closeSizeUsd,
                       kp,
                     });
-              const accepted = !res.error && (config.hedgeMode !== "live" || !!res.signature);
-              if (res.signature) {
+              const realSignature = isRealSolanaSignature(res.signature);
+              const accepted = !res.error && (config.hedgeMode !== "live" || realSignature || res.verifiedVia === "positions");
+              if (realSignature) {
                 patch.pending_drift_sig = res.signature;
                 txLog.push(
                   buildTxLogEntry({
@@ -2072,33 +2562,94 @@ export async function tick() {
                     intent: intentHash([t.id, "backstop_tp", bucket, backstopSlice.toFixed(2)]),
                     status: "pending",
                     signature: res.signature,
-                    amountUsd: backstopSlice,
+                    amountUsd: realizedPnlUsd,
                   }),
                 );
               }
               if (accepted) {
-                patch.position_size_usd = Math.max(0, sizeUsd - backstopSlice);
-                const frac = backstopSlice / pnlNow;
+                const actualCloseSizeUsd = Number(res.appliedReduceSizeUsd ?? closeSizeUsd);
+                patch.position_size_usd = Math.max(0, sizeUsd - actualCloseSizeUsd);
+                const frac = sizeUsd > 0 ? actualCloseSizeUsd / sizeUsd : 0;
                 patch.position_collateral_usd = collAfter * (1 - frac);
                 // ratchet high-water forward to post-close PnL so regular TP
                 // doesn't immediately re-fire on the residual gain
                 newHighWater = pnlNow * (1 - frac);
+                // Profit split (mirror regular TP): 75% -> buyback reserve,
+                // 25% -> master treasury via USDC->SOL swap.
+                let backstopMasterShareUsd = 0;
                 if (config.hedgeMode === "live" && buybackMint) {
-                  reserveDelta += backstopSlice;
+                  backstopMasterShareUsd = Math.max(0, realizedPnlUsd * 0.25);
+                  const backstopBuybackShareUsd = Math.max(0, realizedPnlUsd - backstopMasterShareUsd);
+                  reserveDelta += backstopBuybackShareUsd;
+                  events.push({
+                    kind: "buyback",
+                    pnl_delta_usd: realizedPnlUsd,
+                    note: `backstop split: $${backstopBuybackShareUsd.toFixed(2)} (75%) -> buyback reserve, $${backstopMasterShareUsd.toFixed(2)} (25%) -> master treasury`,
+                  });
+                  if (backstopMasterShareUsd >= 1) {
+                    try {
+                      // imperial partial-close settles inside the profile; non-imperial
+                      // partial-close settles in the sub-wallet. Withdraw only for imperial.
+                      if (imperialFullTrade) {
+                        await imperialWithdrawCollateral({
+                          authToken: await ensureImperialAuth(),
+                          kp,
+                          profileIndex: t.imperial_profile_index,
+                          withdrawUsd: backstopMasterShareUsd,
+                          rpcUrl: config.rpcUrl,
+                        });
+                      }
+                      const sw = await swapUsdcToSol({ wantUsd: backstopMasterShareUsd, solUsd, kp });
+                      if (sw && sw.solReceived > 0) {
+                        const lamports = Math.floor(sw.solReceived * 1e9) - 5_000;
+                        if (lamports > 0) {
+                          const tx = new Transaction().add(
+                            SystemProgram.transfer({
+                              fromPubkey: kp.publicKey,
+                              toPubkey: tre().publicKey,
+                              lamports,
+                            }),
+                          );
+                          const sig = await sendAndConfirmTransaction(conn(), tx, [kp], {
+                            commitment: "confirmed",
+                          });
+                          const sentSol = lamports / 1e9;
+                          events.push({
+                            kind: "skim",
+                            sol_amount: sentSol,
+                            tx_sig: sig,
+                            pnl_delta_usd: backstopMasterShareUsd,
+                            note: `backstop profit split: ${sentSol.toFixed(6)} SOL ($${backstopMasterShareUsd.toFixed(2)}) -> master treasury`,
+                          });
+                        }
+                      }
+                    } catch (e) {
+                      keeperLog(t, "warn", "backstop master-share route", {
+                        error: e.message,
+                        tick_id: tickId,
+                      });
+                      events.push({
+                        kind: "tick",
+                        note: `backstop master-share pending: ${e.message.slice(0, 160)}`,
+                      });
+                    }
+                  }
                 }
                 backstopFired = true;
                 keeperLog(t, "info", "backstop_tp fired", {
                   pnl_now: pnlNow,
                   coll_after: collAfter,
                   pnl_ratio: backstopPnlRatio,
-                  slice: backstopSlice,
+                  desired_pnl_usd: backstopSlice,
+                  close_size_usd: closeSizeUsd,
+                  realized_pnl_usd: realizedPnlUsd,
                   tick_id: tickId,
                 });
                 events.push({
                   kind: "buyback",
-                  pnl_delta_usd: backstopSlice,
+                  pnl_delta_usd: realizedPnlUsd,
                   note:
-                    `${imperialFullTrade ? "[imperial] " : ""}BACKSTOP TP $${backstopSlice} ` +
+                    `${imperialFullTrade ? "[imperial] " : ""}BACKSTOP TP realize $${realizedPnlUsd.toFixed(2)} by closing $${closeSizeUsd.toFixed(2)} size ` +
                     `(pnl=$${pnlNow.toFixed(0)} / coll=$${collAfter.toFixed(0)} = ${(backstopPnlRatio * 100).toFixed(0)}%)` +
                     (res.simulated && !res.signature ? " [SIMULATED]" : ""),
                 });
@@ -2125,9 +2676,11 @@ export async function tick() {
           // Maximum collateral we can pull while keeping effective lev <= cap.
           const minCollAtCap = levCap > 0 ? sizeUsd / levCap : 0;
           const maxWithdrawByLev = Math.max(0, collAfter - minCollAtCap);
-          // Size the realize to drain the backlog: as much of gainAboveHigh as
-          // the lev cap and per-tick max allow, snapped to $5 to avoid dust.
-          const realizeRaw = Math.min(gainAboveHigh, maxWithdrawByLev, config.pnlRealizeMaxUsd);
+          // TP policy: realize at most 50% of current unrealized PnL per fire.
+          // The leverage/withdraw caps below further restrict, but we never
+          // exceed 50% even if the backlog (gainAboveHigh) is larger.
+          const halfPnl = Math.max(0, pnlNow * 0.5);
+          const realizeRaw = Math.min(gainAboveHigh, halfPnl, maxWithdrawByLev, config.pnlRealizeMaxUsd);
           let realizeUsd = Math.floor(realizeRaw / 5) * 5;
           // Floor at pnlTriggerUsd so the partial-close branch below still fires
           // when lev cap is already breached (realizeRaw < trigger via lev path).
@@ -2136,7 +2689,7 @@ export async function tick() {
           const wouldBeLev = wouldBeColl > 0 ? sizeUsd / wouldBeColl : Infinity;
 
           let realized = false;
-          if (wouldBeLev <= levCap && wouldBeColl > 0) {
+          if (!imperialFullTrade && wouldBeLev <= levCap && wouldBeColl > 0) {
             // (b) collateral withdrawal path — keeps size
             try {
               const res = imperialFullTrade
@@ -2151,7 +2704,7 @@ export async function tick() {
                   ? {
                       signature: null,
                       simulated: false,
-                      error: `imperial withdraw blocked: positionMode=${config.imperial.positionMode}`,
+                      error: `phoenix withdraw paused: positionMode=${config.imperial.positionMode}`,
                     }
                   : await withdrawCollateral({
                       symbol: underlying,
@@ -2159,8 +2712,9 @@ export async function tick() {
                       withdrawUsd: realizeUsd,
                       kp,
                     });
-              const accepted = !res.error && (config.hedgeMode !== "live" || !!res.signature);
-              if (res.signature) {
+              const realSignature = isRealSolanaSignature(res.signature);
+              const accepted = !res.error && (config.hedgeMode !== "live" || realSignature || res.verifiedVia === "positions");
+              if (realSignature) {
                 patch.pending_drift_sig = res.signature;
                 txLog.push(
                   buildTxLogEntry({
@@ -2193,6 +2747,12 @@ export async function tick() {
             }
           } else {
             // (a) partial-close path — leverage cap reached
+            const closeSizeUsd = closeSizeForRealizedPnl({
+              desiredPnlUsd: realizeUsd,
+              pnlUsd: pnlNow,
+              sizeUsd,
+            });
+            const realizedPnlUsd = sizeUsd > 0 ? pnlNow * (closeSizeUsd / sizeUsd) : 0;
             try {
               const res = imperialFullTrade
                 ? await imperialPartialClose({
@@ -2201,8 +2761,9 @@ export async function tick() {
                     profileIndex: t.imperial_profile_index,
                     symbol: underlying,
                     side,
-                    reduceSizeUsd: realizeUsd,
+                    reduceSizeUsd: closeSizeUsd,
                     currentSizeUsd: sizeUsd, // needed so full-close snaps notional exactly
+                    positionId: pos?.positionPda || t.imperial_profile_pda || undefined,
                   })
                 : imperialTradeEnabled
                   ? {
@@ -2210,9 +2771,10 @@ export async function tick() {
                       simulated: false,
                       error: `imperial partial-close blocked: positionMode=${config.imperial.positionMode}`,
                     }
-                  : await partialClose({ symbol: underlying, side, reduceSizeUsd: realizeUsd, kp });
-              const accepted = !res.error && (config.hedgeMode !== "live" || !!res.signature);
-              if (res.signature) {
+                  : await partialClose({ symbol: underlying, side, reduceSizeUsd: closeSizeUsd, kp });
+              const realSignature = isRealSolanaSignature(res.signature);
+              const accepted = !res.error && (config.hedgeMode !== "live" || realSignature || res.verifiedVia === "positions");
+              if (realSignature) {
                 patch.pending_drift_sig = res.signature;
                 txLog.push(
                   buildTxLogEntry({
@@ -2220,17 +2782,25 @@ export async function tick() {
                     intent: intentHash([t.id, "pnl_partial_close", bucket, realizeUsd.toFixed(2)]),
                     status: "pending",
                     signature: res.signature,
-                    amountUsd: realizeUsd,
+                    amountUsd: realizedPnlUsd,
                   }),
                 );
               }
               if (accepted) {
-                patch.position_size_usd = Math.max(0, sizeUsd - realizeUsd);
+                const actualCloseSizeUsd = Number(res.appliedReduceSizeUsd ?? closeSizeUsd);
+                patch.position_size_usd = Math.max(0, sizeUsd - actualCloseSizeUsd);
+                // Imperial reduces collateral proportionally on partial close.
+                // Mirror that in the patch so effective leverage stays at target
+                // and next tick's repair check doesn't see a fake low-lev gap
+                // before the venue read reconciles.
+                const frac = sizeUsd > 0 ? actualCloseSizeUsd / sizeUsd : 0;
+                patch.position_collateral_usd = collAfter * (1 - frac);
+                realizeUsd = realizedPnlUsd;
                 realized = true;
                 events.push({
                   kind: "tick",
                   note:
-                    `${imperialFullTrade ? "[imperial] " : ""}partial-close $${realizeUsd} of size (lev guard: would be ${wouldBeLev.toFixed(1)}x > cap ${levCap.toFixed(1)}x)` +
+                    `${imperialFullTrade ? "[imperial] " : ""}partial-close $${closeSizeUsd.toFixed(2)} size to realize $${realizedPnlUsd.toFixed(2)} (lev guard: would be ${wouldBeLev.toFixed(1)}x > cap ${levCap.toFixed(1)}x)` +
                     (res.simulated && !res.signature ? " [SIMULATED]" : ""),
                 });
               } else {
@@ -2245,18 +2815,74 @@ export async function tick() {
             }
           }
 
-          // Queue the realized slice for buyback+burn. The decrease request
-          // settles asynchronously, so the reserve drain retries on later
-          // ticks until the SOL/USDC payout is actually spendable.
+          // Profit split (TP path only): 75% to buyback+burn reserve,
+          // 25% routed to the master treasury wallet as SOL.
+          // Master share flow: ensure USDC is in sub-wallet (withdraw if
+          // partial-close path settled inside imperial profile), swap
+          // USDC -> SOL via Jupiter, transfer SOL to master.
           if (realized && buybackMint) {
             if (config.hedgeMode === "live") {
-              reserveDelta += realizeUsd;
+              const masterShareUsd = Math.max(0, realizeUsd * 0.25);
+              const buybackShareUsd = Math.max(0, realizeUsd - masterShareUsd);
+              reserveDelta += buybackShareUsd;
               newHighWater = pnlNow;
               events.push({
                 kind: "buyback",
                 pnl_delta_usd: gainAboveHigh,
-                note: `queued realized +$${realizeUsd} for buyback+burn on next spendable tick`,
+                note: `queued realized $${buybackShareUsd.toFixed(2)} (75%) for buyback+burn, $${masterShareUsd.toFixed(2)} (25%) -> master treasury`,
               });
+
+              if (masterShareUsd >= 1) {
+                try {
+                  // Partial-close path settles USDC inside imperial profile,
+                  // so withdraw the master share to the sub-wallet first.
+                  // (Withdraw path already deposited the full realizeUsd into
+                  // the sub-wallet, so no extra withdraw is needed there.)
+                  const realizedInSubWallet = !imperialFullTrade && wouldBeLev <= levCap && wouldBeColl > 0;
+                  if (!realizedInSubWallet) {
+                    await imperialWithdrawCollateral({
+                      authToken: await ensureImperialAuth(),
+                      kp,
+                      profileIndex: t.imperial_profile_index,
+                      withdrawUsd: masterShareUsd,
+                      rpcUrl: config.rpcUrl,
+                    });
+                  }
+                  const sw = await swapUsdcToSol({ wantUsd: masterShareUsd, solUsd, kp });
+                  if (sw && sw.solReceived > 0) {
+                    const lamports = Math.floor(sw.solReceived * 1e9) - 5_000; // leave gas
+                    if (lamports > 0) {
+                      const tx = new Transaction().add(
+                        SystemProgram.transfer({
+                          fromPubkey: kp.publicKey,
+                          toPubkey: tre().publicKey,
+                          lamports,
+                        }),
+                      );
+                      const sig = await sendAndConfirmTransaction(conn(), tx, [kp], {
+                        commitment: "confirmed",
+                      });
+                      const sentSol = lamports / 1e9;
+                      events.push({
+                        kind: "skim",
+                        sol_amount: sentSol,
+                        tx_sig: sig,
+                        pnl_delta_usd: masterShareUsd,
+                        note: `tp profit split: ${sentSol.toFixed(6)} SOL ($${masterShareUsd.toFixed(2)}) -> master treasury`,
+                      });
+                    }
+                  }
+                } catch (e) {
+                  keeperLog(t, "warn", "tp master-share route", {
+                    error: e.message,
+                    tick_id: tickId,
+                  });
+                  events.push({
+                    kind: "tick",
+                    note: `tp master-share pending: ${e.message.slice(0, 160)}`,
+                  });
+                }
+              }
             } else {
               events.push({
                 kind: "tick",

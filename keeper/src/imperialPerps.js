@@ -49,6 +49,8 @@ import {
   getPositions,
   placeOrder,
   resolveMarket,
+  getMarkPrice,
+  marketSymbol,
   isSupportedMarket,
   MIN_COLLATERAL_USD,
   SUPPORTED_MARKETS,
@@ -94,15 +96,49 @@ function normalizePositionSide(value) {
 function assertTradeMode(action) {
   const mode = config.imperial.positionMode;
   if (mode === 'off') {
-    throw new Error(`imperial trade blocked: positionMode=off (action=${action})`);
+    throw new Error(`phoenix trade blocked: positionMode=off (action=${action})`);
   }
   if (mode === 'open-only' && (action === 'withdraw' || action === 'partial_close')) {
-    throw new Error(`imperial trade blocked: positionMode=open-only forbids ${action}`);
+    throw new Error(`phoenix trade blocked: positionMode=open-only forbids ${action}`);
   }
   if (!['open-only', 'full'].includes(mode)) {
-    throw new Error(`imperial trade blocked: positionMode=${mode}`);
+    throw new Error(`phoenix trade blocked: positionMode=${mode}`);
   }
 }
+
+// --- Leverage clamp ---
+//
+// Imperial/Phoenix rejects orders with desiredLeverage at or above each
+// market's hard cap (e.g. ZEC ~9.96x). The keeper's configured leverage
+// (often 10x) is just a target; we MUST shave it under the venue cap or
+// /mobile/orders fails with "Leverage 10x exceeds Phoenix cap of 9.96x".
+//
+// Default ceiling is 9.5. Phoenix accepts "10x" markets only below the hard
+// cap, and keeping every 10x Imperial order at 9.5x prevents leverage drift.
+// Override with env IMPERIAL_MAX_LEVERAGE if a venue allows more.
+// Global fallback for unknown markets. Per-market caps come from
+// SUPPORTED_MARKETS at call sites that pass `symbol`.
+const IMPERIAL_MAX_LEVERAGE = Number(process.env.IMPERIAL_MAX_LEVERAGE ?? 9.5);
+// Always stay this far below the venue cap. Phoenix returns floats like
+// 9.96x for a nominal "10x" market and rejects orders at-or-above the cap,
+// so we shave a fixed margin off the per-market max to guarantee fills
+// (and equally important, guarantee that close/partial-close passes the
+// same cap check later).
+const IMPERIAL_LEVERAGE_SAFETY_MARGIN = Number(process.env.IMPERIAL_LEVERAGE_SAFETY_MARGIN ?? 0.5);
+export function clampLeverage(label, requested, symbol) {
+  const req = Number(requested);
+  if (!Number.isFinite(req) || req <= 0) return req;
+  const sym = String(symbol || '').toUpperCase();
+  const marketCap = sym && SUPPORTED_MARKETS[sym]?.maxLeverage;
+  const ceiling = Number.isFinite(marketCap) && marketCap > 0
+    ? Math.max(1, marketCap - IMPERIAL_LEVERAGE_SAFETY_MARGIN)
+    : IMPERIAL_MAX_LEVERAGE;
+  if (req <= ceiling) return req;
+  console.log(`[${label}] leverage clamped ${req}x -> ${ceiling}x (cap=${marketCap ?? 'global'}, margin=${IMPERIAL_LEVERAGE_SAFETY_MARGIN})`);
+  return ceiling;
+}
+
+
 
 // Canonical /mobile/orders response shape (per Imperial dev, mobile.rs:436-453):
 //   { success: bool, signature: Option<String>, order_pda: Option<String>, error: Option<String> }
@@ -114,7 +150,13 @@ function assertTradeMode(action) {
 //   { success: false, error: "..." } responses. This helper makes that impossible.
 function readPlaceOrderResult(label, res) {
   const success = res?.success === true;
-  const signature = typeof res?.signature === 'string' && res.signature.length > 0 ? res.signature : null;
+  const signature = typeof res?.signature === 'string' && res.signature.length > 0
+    ? res.signature
+    : typeof res?.txSignature === 'string' && res.txSignature.length > 0
+      ? res.txSignature
+      : typeof res?.tx_sig === 'string' && res.tx_sig.length > 0
+        ? res.tx_sig
+        : null;
   const orderPda = typeof res?.order_pda === 'string' && res.order_pda.length > 0 ? res.order_pda : null;
   const errorMsg = typeof res?.error === 'string' && res.error.length > 0 ? res.error : null;
 
@@ -129,6 +171,92 @@ function readPlaceOrderResult(label, res) {
     return { signature: null, orderPda: null, error: msg, raw: res };
   }
   return { signature, orderPda, error: null, raw: res };
+}
+
+function listImperialPositions(raw) {
+  return Array.isArray(raw?.dataList)
+    ? raw.dataList
+    : Array.isArray(raw)
+      ? raw
+      : (raw?.positions || raw?.data || []);
+}
+
+function findImperialPosition(raw, { profileIndex, sym, sd }) {
+  return listImperialPositions(raw).find((p) => {
+    const pi = Number(pick(p, ['profileIndex', 'profileIdx', 'profile_id', 'profile']));
+    if (Number.isFinite(pi) && pi !== Number(profileIndex)) return false;
+    const psym = String(pick(p, ['symbol', 'asset', 'marketSymbol', 'baseSymbol', 'underlying', 'market']) || '').toUpperCase();
+    if (psym && psym !== sym) return false;
+    const pside = normalizePositionSide(pick(p, ['side', 'direction', 'positionSide']));
+    if (pside && pside !== sd) return false;
+    return true;
+  }) || null;
+}
+
+async function pollVerifiedSizeIncrease({ authToken, wallet, profileIndex, sym, sd, sizeBefore, label }) {
+  if (!(Number(sizeBefore) > 0)) return null;
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    let raw;
+    try { raw = await getPositions(wallet, { token: authToken }); }
+    catch (e) { console.warn(`[${label}] poll ${i + 1}/4 getPositions failed: ${e.message}`); continue; }
+    const hit = findImperialPosition(raw, { profileIndex, sym, sd });
+    const liveSize = num(pick(hit, ['sizeUsd', 'positionSizeUsd', 'notionalUsd', 'notional', 'size', 'size_usd']), 0);
+    if (liveSize > Number(sizeBefore) + 0.01) {
+      return { position: hit, liveSize, appliedAddSizeUsd: liveSize - Number(sizeBefore) };
+    }
+  }
+  return null;
+}
+
+async function pollVerifiedSizeDecrease({ authToken, wallet, profileIndex, sym, sd, sizeBefore, reduceSizeUsd, label }) {
+  const before = Number(sizeBefore);
+  if (!(before > 0)) return null;
+  const requestedReduce = Number(reduceSizeUsd);
+  const expectsFullClose = Number.isFinite(requestedReduce) && requestedReduce >= before - 0.01;
+  for (let i = 0; i < 8; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    let raw;
+    try { raw = await getPositions(wallet, { token: authToken }); }
+    catch (e) { console.warn(`[${label}] poll ${i + 1}/8 getPositions failed: ${e.message}`); continue; }
+    const hit = findImperialPosition(raw, { profileIndex, sym, sd });
+    if (!hit && expectsFullClose) {
+      return { closed: true, liveSize: 0, appliedReduceSizeUsd: before };
+    }
+    const liveSize = num(pick(hit, ['sizeUsd', 'positionSizeUsd', 'notionalUsd', 'notional', 'size', 'size_usd']), NaN);
+    if (Number.isFinite(liveSize) && liveSize < before - 0.01) {
+      return { closed: liveSize <= 0.01, liveSize, appliedReduceSizeUsd: before - liveSize };
+    }
+  }
+  return null;
+}
+
+function isPhoenixMarginCapacityError(error) {
+  const msg = String(error ?? '').toLowerCase();
+  return (
+    msg.includes('failed to place order') ||
+    msg.includes('reduce size') ||
+    msg.includes('add collateral') ||
+    msg.includes('insufficient collateral') ||
+    msg.includes('margin') ||
+    msg.includes('maintenance')
+  );
+}
+
+function extractTransactionBase64(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  for (const key of ['transaction', 'tx', 'signedTransaction', 'serializedTransaction']) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.length > 100) return value;
+  }
+  for (const key of ['data', 'result']) {
+    const nested = raw[key];
+    if (nested && typeof nested === 'object') {
+      const value = extractTransactionBase64(nested);
+      if (value) return value;
+    }
+  }
+  return null;
 }
 
 // --- Read position ---
@@ -146,30 +274,20 @@ export async function imperialReadPosition({
   if (!wallet) throw new Error('imperialReadPosition: wallet required');
   if (!symbol) throw new Error('imperialReadPosition: symbol required');
   if (profileIndex == null) throw new Error('imperialReadPosition: profileIndex required');
-  const sym = String(symbol).toUpperCase();
+  const sym = marketSymbol(symbol);
   const sd = String(side || 'long').toLowerCase();
 
   let raw;
   try {
     raw = await getPositions(wallet, { token });
   } catch (e) {
-    console.warn(`[imperial:readPos] ${sym} ${sd} getPositions failed:`, e.message);
+    console.warn(`[phoenix] ${sym} ${sd} position read: ${e.message}`);
     return null;
   }
-  const list = Array.isArray(raw?.dataList) ? raw.dataList : Array.isArray(raw) ? raw : [];
-
   // Filter to this profile + market + side. Be liberal in matching: Imperial
   // entries may key symbol as `symbol`, `asset`, `marketSymbol`, or
   // `baseSymbol`. profileIndex may be a number or string.
-  const matched = list.find((p) => {
-    const pi = Number(pick(p, ['profileIndex', 'profileIdx', 'profile_id', 'profile']));
-    if (Number.isFinite(pi) && Number(pi) !== Number(profileIndex)) return false;
-    const psym = String(pick(p, ['symbol', 'asset', 'marketSymbol', 'baseSymbol', 'underlying', 'market']) || '').toUpperCase();
-    if (psym && psym !== sym) return false;
-    const pside = normalizePositionSide(pick(p, ['side', 'direction', 'positionSide']));
-    if (pside && pside !== sd) return false;
-    return true;
-  });
+  const matched = findImperialPosition(raw, { profileIndex, sym, sd });
   if (!matched) return null;
 
   const sizeUsd = num(pick(matched, ['sizeUsd', 'positionSizeUsd', 'notionalUsd', 'notional', 'size', 'size_usd']));
@@ -199,6 +317,10 @@ export async function imperialReadPosition({
     if (Number.isFinite(computed) && apiLooksBroken) unrealizedPnlUsd = computed;
   }
 
+  // Position identifier required by Imperial close on flash_trade venue
+  // (silently rejected otherwise). Surface whichever key the API uses.
+  const positionPda = pick(matched, ['positionPda', 'positionId', 'position_pda', 'position_id', 'pda']);
+
   return {
     sizeUsd,
     collateralUsd: Number.isFinite(collateralUsd) ? collateralUsd : 0,
@@ -206,6 +328,7 @@ export async function imperialReadPosition({
     entryPriceUsd: Number.isFinite(entryPriceUsd) ? entryPriceUsd : undefined,
     markPriceUsd: Number.isFinite(markPriceUsd) ? markPriceUsd : undefined,
     unrealizedPnlUsd,
+    positionPda: positionPda || undefined,
     raw: matched,
   };
 }
@@ -242,7 +365,7 @@ export async function imperialOpenPosition({
   if (collateralUsd < MIN_COLLATERAL_USD) {
     return { signature: null, simulated: false, error: `coll $${collateralUsd} < min $${MIN_COLLATERAL_USD}` };
   }
-  const sym = String(symbol).toUpperCase();
+  const sym = marketSymbol(symbol);
   if (!isSupportedMarket(sym)) {
     return { signature: null, simulated: false, error: `unsupported imperial market ${sym}` };
   }
@@ -255,7 +378,11 @@ export async function imperialOpenPosition({
   //
   // Operator can flip back with IMPERIAL_SUPPORTED_OPEN_VENUES=phoenix,flash_trade,jupiter
   // if Phoenix has an outage and recovery requires another venue.
-  const resolvedVenue = venue || SUPPORTED_MARKETS[sym]?.venue;
+  // Catalog wins over the upstream /route hint: Imperial's router may suggest
+  // gmtrade/jupiter for markets we've explicitly Phoenix-locked (see
+  // KEEPER_PHOENIX_LOCK.md). Only fall back to the quote's venue when the
+  // catalog has no entry for this symbol.
+  const resolvedVenue = SUPPORTED_MARKETS[sym]?.venue || venue;
   const SUPPORTED_OPEN_VENUES = new Set(
     (process.env.IMPERIAL_SUPPORTED_OPEN_VENUES ?? 'phoenix')
       .split(',')
@@ -271,7 +398,9 @@ export async function imperialOpenPosition({
     return { signature: null, simulated: false, error: `venue ${resolvedVenue} not in supported list` };
   }
   const sd = String(side).toLowerCase() === 'short' ? 'short' : 'long';
-  const notionalUsd = Number(collateralUsd) * Number(leverage);
+  const lev = clampLeverage(`imperial:open ${sym} ${sd}`, leverage, sym);
+  const notionalUsd = Number(collateralUsd) * Number(lev);
+
   const wallet = kp.publicKey.toBase58();
 
   // Phase C: pre-activate phoenix profile (idempotent, cached). Best-effort —
@@ -284,13 +413,13 @@ export async function imperialOpenPosition({
   const order = {
     symbol: sym,
     side: sd,
-    venue,
+    venue: resolvedVenue,
     profileIndex,
     wallet,
     collateralAsset: USDC_MINT,
     collateralAmount: usdToBase(collateralUsd),
     notional: notionalUsd.toFixed(6),
-    desiredLeverage: String(leverage),
+    desiredLeverage: String(lev),
     slippageBps: Number(slippageBps ?? config.slippageBps ?? 100),
     reduceOnly: false,
   };
@@ -352,6 +481,8 @@ export async function imperialIncreasePosition({
   side,
   addSizeUsd = 0,
   addCollateralUsd = 0,
+  orderCollateralUsd = addCollateralUsd,
+  attachCollateralBeforeSize = true,
   leverage,
   slippageBps,
   solUsd,
@@ -359,6 +490,12 @@ export async function imperialIncreasePosition({
   venue,
 }) {
   assertTradeMode('increase');
+  const sym = marketSymbol(symbol);
+  const sd = String(side).toLowerCase() === 'short' ? 'short' : 'long';
+  const wallet = kp.publicKey.toBase58();
+  const resolvedVenue = SUPPORTED_MARKETS[sym]?.venue || venue;
+
+  // Leg 0 (optional): deposit fresh USDC into the profile.
   let depositPrep = null;
   if (addCollateralUsd > 0) {
     const depRes = await depositToImperialProfile({
@@ -368,40 +505,195 @@ export async function imperialIncreasePosition({
     });
     depositPrep = depRes;
   }
+
+  // Leg 1: attach parked USDC to the existing position via
+  // /mobile/orders/collateral BEFORE the size-add. Phoenix evaluates the
+  // same-side increase order against the position's *currently-attached*
+  // margin — a deposit alone doesn't count. Without this, an unrealized
+  // loss makes Phoenix return 400 "reduce size or add collateral first"
+  // AND strands the deposited USDC as ghost free margin (DEGEN/ZCRASH).
+  // By binding the collateral first we (a) satisfy the margin check and
+  // (b) guarantee no USDC gets stranded even if leg 2 still fails.
+  let collateralAttachRes = null;
+  const collToAttach = Math.max(0, Number(orderCollateralUsd ?? 0));
+  if (collToAttach > 0 && attachCollateralBeforeSize) {
+    try {
+      collateralAttachRes = await imperialAddCollateralToPosition({
+        authToken, kp, profileIndex,
+        symbol: sym, side: sd,
+        addCollateralUsd: collToAttach,
+        slippageBps, venue: resolvedVenue,
+      });
+      if (collateralAttachRes?.error) {
+        console.warn(
+          `[phoenix] ${sym} ${sd} margin boost failed: ${String(collateralAttachRes.error).slice(0, 200)}`,
+        );
+        return {
+          signature: depositPrep?.signature ?? null,
+          simulated: false,
+          depositPrep,
+          collateralAttachRes,
+          error: collateralAttachRes.error,
+          appliedAddSizeUsd: 0,
+          appliedAddCollateralUsd: 0,
+        };
+      }
+    } catch (e) {
+      console.warn(`[phoenix] ${sym} ${sd} margin boost issue: ${e.message}`);
+      collateralAttachRes = { signature: null, error: e.message };
+      return {
+        signature: depositPrep?.signature ?? null,
+        simulated: false,
+        depositPrep,
+        collateralAttachRes,
+        error: e.message,
+        appliedAddSizeUsd: 0,
+        appliedAddCollateralUsd: 0,
+      };
+    }
+  }
+
   if (!(addSizeUsd > 0)) {
     return {
-      signature: depositPrep?.signature ?? null,
+      signature: collateralAttachRes?.signature ?? depositPrep?.signature ?? null,
       simulated: false,
       depositPrep,
+      collateralAttachRes,
+      appliedAddSizeUsd: 0,
+      appliedAddCollateralUsd: collToAttach,
     };
   }
-  // Place an additional same-side order for the size delta.
-  const sym = String(symbol).toUpperCase();
-  const sd = String(side).toLowerCase() === 'short' ? 'short' : 'long';
-  const wallet = kp.publicKey.toBase58();
-  // Use base leverage so the order size matches what the loop expects.
-  const collForOrder = addSizeUsd / Math.max(1, Number(leverage || 1));
+
+  // Leg 2: size-only same-side order. Collateral is already bound to the
+  // position (leg 1), so we send collateralAmount=0. Phoenix accepts a
+  // pure size increase as long as the existing margin supports the new
+  // notional at the requested leverage.
+  if (resolvedVenue === 'phoenix') {
+    await ensurePhoenixRegistered({ wallet, profileIndex });
+  }
+  const lev = clampLeverage(`imperial:increase ${sym} ${sd}`, leverage || 1, sym);
+  const posBeforeRaw = await getPositions(wallet, { token: authToken }).catch(() => null);
+  const posBefore = findImperialPosition(posBeforeRaw, { profileIndex, sym, sd });
+  const sizeBefore = num(pick(posBefore, ['sizeUsd', 'positionSizeUsd', 'notionalUsd', 'notional', 'size', 'size_usd']), 0);
   const order = {
     symbol: sym,
     side: sd,
-    venue,
+    venue: resolvedVenue,
     profileIndex,
     wallet,
     collateralAsset: USDC_MINT,
-    collateralAmount: usdToBase(collForOrder),
+    collateralAmount: attachCollateralBeforeSize ? 0 : usdToBase(collToAttach),
     notional: Number(addSizeUsd).toFixed(6),
-    desiredLeverage: String(leverage || 1),
+    desiredLeverage: String(lev || 1),
     slippageBps: Number(slippageBps ?? config.slippageBps ?? 100),
     reduceOnly: false,
+    ...(posBefore ? { positionId: pick(posBefore, ['positionPda', 'positionId', 'position_pda', 'position_id', 'pda']) } : {}),
   };
-  try {
-    const res = await placeOrder(authToken, order);
-    const parsed = readPlaceOrderResult(`imperial:increase ${sym} ${sd}`, res);
-    return { signature: parsed.signature, simulated: false, depositPrep, error: parsed.error || undefined, raw: res };
-  } catch (e) {
-    return { signature: null, simulated: false, depositPrep, error: e.message };
+  const requestedAddSizeUsd = Number(addSizeUsd);
+  const fractions = [1, 0.85, 0.7, 0.55, 0.4, 0.25, 0.15, 0.08, 0.05, 0.02];
+  let lastError = null;
+  let lastRaw = null;
+  const tried = new Set();
+
+  for (const frac of fractions) {
+    const trialAddSizeUsd = Math.floor(requestedAddSizeUsd * frac * 100) / 100;
+    if (!(trialAddSizeUsd > 0.01) || tried.has(trialAddSizeUsd)) continue;
+    tried.add(trialAddSizeUsd);
+    order.notional = trialAddSizeUsd.toFixed(6);
+    try {
+      const res = await placeOrder(authToken, order);
+      const parsed = readPlaceOrderResult(`imperial:increase ${sym} ${sd} $${trialAddSizeUsd.toFixed(2)}`, res);
+      lastRaw = res;
+      const verified = await pollVerifiedSizeIncrease({
+        authToken,
+        wallet,
+        profileIndex,
+        sym,
+        sd,
+        sizeBefore,
+        label: `imperial:increase ${sym} ${sd} $${trialAddSizeUsd.toFixed(2)}`,
+      });
+      if (parsed.signature || verified) {
+        if (trialAddSizeUsd < requestedAddSizeUsd - 0.01) {
+          console.log(
+            `[phoenix] ${sym} ${sd} sizing down $${requestedAddSizeUsd.toFixed(2)} → $${trialAddSizeUsd.toFixed(2)} to fit available margin`,
+          );
+        }
+        return {
+          signature: parsed.signature || 'verified-via-positions',
+          simulated: false,
+          depositPrep,
+          collateralAttachRes,
+          error: undefined,
+          raw: res,
+          requestedAddSizeUsd,
+          appliedAddSizeUsd: verified?.appliedAddSizeUsd ?? trialAddSizeUsd,
+          appliedAddCollateralUsd: collToAttach,
+        };
+      }
+      lastError = parsed.error || 'placeOrder rejected without error';
+      if (!isPhoenixMarginCapacityError(lastError)) {
+        return {
+          signature: collateralAttachRes?.signature || null,
+          simulated: false,
+          depositPrep,
+          collateralAttachRes,
+          error: lastError,
+          raw: res,
+          requestedAddSizeUsd,
+          appliedAddSizeUsd: 0,
+          appliedAddCollateralUsd: collateralAttachRes?.signature ? collToAttach : 0,
+        };
+      }
+    } catch (e) {
+      lastError = e.message;
+      if (!isPhoenixMarginCapacityError(lastError)) {
+        return {
+          signature: collateralAttachRes?.signature || null,
+          simulated: false,
+          depositPrep,
+          collateralAttachRes,
+          error: e.message,
+          requestedAddSizeUsd,
+          appliedAddSizeUsd: 0,
+          appliedAddCollateralUsd: collateralAttachRes?.signature ? collToAttach : 0,
+        };
+      }
+    }
   }
+
+  if (collateralAttachRes?.signature) {
+    console.warn(
+      `[phoenix] ${sym} ${sd} margin added but size failed. Marking top-up failed so DB/reconcile will not treat this as healthy. last=${String(lastError ?? 'unknown').slice(0, 160)}`,
+    );
+    return {
+      signature: collateralAttachRes.signature,
+      simulated: false,
+      depositPrep,
+      collateralAttachRes,
+      raw: lastRaw,
+      requestedAddSizeUsd,
+      appliedAddSizeUsd: 0,
+      appliedAddCollateralUsd: collToAttach,
+      sizeDeferred: true,
+      error: lastError || 'size increase failed after collateral attach',
+      lastSizeError: lastError,
+    };
+  }
+
+  return {
+    signature: null,
+    simulated: false,
+    depositPrep,
+    collateralAttachRes,
+    error: lastError || 'size increase failed',
+    raw: lastRaw,
+    requestedAddSizeUsd,
+    appliedAddSizeUsd: 0,
+    appliedAddCollateralUsd: collateralAttachRes?.signature ? collToAttach : 0,
+  };
 }
+
 
 // --- Top up margin only (no size change) ---
 //
@@ -430,6 +722,89 @@ export async function imperialTopUpMargin({
     return { signature: null, simulated: false, error: e.message };
   }
 }
+
+// --- Add collateral to an existing position (NO size change) ---
+//
+// Correct Imperial path is POST /mobile/orders/collateral with action=0.
+// Do NOT use /mobile/orders with notional=0: that is a decrease-style shape
+// and can remove collateral. This endpoint attaches profile free USDC to the
+// open position without changing position size.
+export async function imperialAddCollateralToPosition({
+  authToken,
+  kp,
+  profileIndex,
+  symbol,
+  side,
+  addCollateralUsd,
+  slippageBps,
+  venue,
+}) {
+  assertTradeMode('topup');
+  if (!authToken) throw new Error('imperialAddCollateralToPosition: authToken required');
+  if (!kp) throw new Error('imperialAddCollateralToPosition: kp required');
+  if (profileIndex == null) throw new Error('imperialAddCollateralToPosition: profileIndex required');
+  if (!(addCollateralUsd > 0)) return { signature: null, simulated: false, error: 'addCollateralUsd must be > 0' };
+
+  const sym = marketSymbol(symbol);
+  const sd = String(side).toLowerCase() === 'short' ? 'short' : 'long';
+  const wallet = kp.publicKey.toBase58();
+  const resolvedVenue = SUPPORTED_MARKETS[sym]?.venue || venue || 'phoenix';
+  if (resolvedVenue === 'phoenix') await ensurePhoenixRegistered({ wallet, profileIndex });
+
+  try {
+    const market = await resolveMarket(sym, sd, resolvedVenue);
+    const price = await getMarkPrice(sym, resolvedVenue);
+    if (!market?.marketMint) throw new Error(`no marketMint for ${sym}/${sd}/${resolvedVenue}`);
+    if (!price) throw new Error(`no mark price for ${sym}/${resolvedVenue}`);
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json',
+    };
+    if (config.imperial.apiKey) headers['x-api-key'] = config.imperial.apiKey;
+    const body = {
+      wallet,
+      marketMint: market.marketMint,
+      side: sd === 'short' ? 1 : 0,
+      action: 0,
+      collateralAmount: usdToBase(addCollateralUsd),
+      slippageBps: Number(slippageBps ?? config.slippageBps ?? 100),
+      profileIndex,
+      underwriter: market.underwriter,
+      price,
+    };
+    const res = await fetch(`${config.imperial.baseUrl}/mobile/orders/collateral`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    let raw;
+    try { raw = text ? JSON.parse(text) : {}; } catch { raw = { raw: text }; }
+    if (!res.ok) return { signature: null, simulated: false, error: `/mobile/orders/collateral ${res.status}: ${text}`, raw };
+    const parsed = readPlaceOrderResult(`phoenix:addCollateral ${sym} ${sd}`, raw);
+    if (parsed.signature) {
+      return { signature: parsed.signature, simulated: false, error: undefined, raw, body };
+    }
+
+    const txBase64 = extractTransactionBase64(raw);
+    if (txBase64) {
+      const conn = new Connection(config.rpcUrl, 'confirmed');
+      const tx = VersionedTransaction.deserialize(Buffer.from(txBase64, 'base64'));
+      tx.sign([kp]);
+      const signature = await conn.sendTransaction(tx, { skipPreflight: false, maxRetries: 3 });
+      const conf = await conn.confirmTransaction(signature, 'confirmed');
+      if (conf.value.err) {
+        return { signature, simulated: false, error: `collateral tx on-chain err: ${JSON.stringify(conf.value.err)}`, raw, body };
+      }
+      return { signature, simulated: false, error: undefined, raw, body };
+    }
+
+    return { signature: null, simulated: false, error: parsed.error || 'collateral order returned no signature or transaction', raw, body };
+  } catch (e) {
+    return { signature: null, simulated: false, error: e.message };
+  }
+}
+
 
 // --- Close (full or partial) ---
 //
@@ -471,6 +846,13 @@ export async function imperialPartialClose({
   const sd = String(side).toLowerCase() === 'short' ? 'short' : 'long';
   const wallet = kp.publicKey.toBase58();
 
+  // Resolve venue the SAME way open does (SUPPORTED_MARKETS catalog wins over
+  // caller-supplied venue). Sending venue=undefined makes Imperial route the
+  // close through a default venue that doesn't match the on-chain position,
+  // which triggers a "Custom: 6015 :: Check permissions" failure on every
+  // external (pump.fun-routed) close.
+  const resolvedVenue = SUPPORTED_MARKETS[sym]?.venue || venue;
+
   // Decide notional: snap to exact position size on full close.
   const isFullClose = Number.isFinite(currentSizeUsd) && reduceSizeUsd >= currentSizeUsd;
   const notionalUsd = isFullClose ? Number(currentSizeUsd) : Number(reduceSizeUsd);
@@ -478,7 +860,7 @@ export async function imperialPartialClose({
   const order = {
     symbol: sym,
     side: sd,                    // SAME side as the position being closed
-    venue,
+    venue: resolvedVenue,
     profileIndex,
     wallet,
     action: 1,                   // close action per Imperial spec
@@ -491,9 +873,30 @@ export async function imperialPartialClose({
   };
   try {
     const res = await placeOrder(authToken, order);
-    const label = isFullClose ? 'imperial:fullClose' : 'imperial:partialClose';
+    const label = isFullClose ? 'phoenix:fullClose' : 'phoenix:partialClose';
     const parsed = readPlaceOrderResult(`${label} ${sym} ${sd}`, res);
-    return { signature: parsed.signature, simulated: false, error: parsed.error || undefined, raw: res };
+    const verified = await pollVerifiedSizeDecrease({
+      authToken,
+      wallet,
+      profileIndex,
+      sym,
+      sd,
+      sizeBefore: currentSizeUsd,
+      reduceSizeUsd: notionalUsd,
+      label: `${label} ${sym} ${sd}`,
+    });
+    if (parsed.signature || verified) {
+      return {
+        signature: parsed.signature || 'verified-via-positions',
+        simulated: false,
+        error: undefined,
+        raw: res,
+        verifiedVia: verified ? 'positions' : undefined,
+        appliedReduceSizeUsd: verified?.appliedReduceSizeUsd ?? notionalUsd,
+        liveSizeUsd: verified?.liveSize,
+      };
+    }
+    return { signature: null, simulated: false, error: parsed.error || 'close order returned no signature and no size decrease was observed', raw: res };
   } catch (e) {
     return { signature: null, simulated: false, error: e.message };
   }
