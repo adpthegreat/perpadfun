@@ -509,6 +509,10 @@ export async function sweepExternalRouters() {
       // wallet waiting for the user to come back and bind their fresh mint).
       let beforeClaimLamports = prefetchedLamports.get(subAddr) ?? 0;
       let claimedLamports = 0;
+      // Creator-vault balance observed during the claim probe, even when it's
+      // below the $100 claim gate. Used as a visibility signal so a routed token
+      // shows on the site as soon as fees accrue. See plan/EXTERNAL_ROUTER_VISIBILITY.md.
+      let vaultClaimableSol = 0;
       if (r.external_platform === 'pump_fun' && r.external_mint && !r.mint_pending) {
         // Make sure the sub-wallet has enough SOL to pay tx fees + WSOL ATA
         // rent for the claim. Master fronts a small advance and gets it back
@@ -531,6 +535,7 @@ export async function sweepExternalRouters() {
             solUsd,
             routeWalletSol,
           });
+          if (claim && claim.vaultSol > 0) vaultClaimableSol = Math.max(vaultClaimableSol, claim.vaultSol);
           if (claim && claim.solClaimed > 0) {
             claimedLamports = Math.max(claimedLamports, Math.floor(claim.solClaimed * LAMPORTS_PER_SOL));
             events.push({
@@ -556,6 +561,7 @@ export async function sweepExternalRouters() {
             solUsd,
             routeWalletSol: (await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'))) / LAMPORTS_PER_SOL,
           });
+          if (ammClaim && ammClaim.vaultSol > 0) vaultClaimableSol = Math.max(vaultClaimableSol, ammClaim.vaultSol);
           if (ammClaim && ammClaim.solClaimed > 0) {
             claimedLamports += Math.floor(ammClaim.solClaimed * LAMPORTS_PER_SOL);
             events.push({
@@ -584,10 +590,12 @@ export async function sweepExternalRouters() {
       const solUi = lamports / LAMPORTS_PER_SOL;
       const walletUsd = solUsd > 0 ? solUi * solUsd : 0;
 
-      // Stamp first_fee_routed_at as soon as ANY SOL has arrived in the
-      // sub-wallet, so the token shows up in the public list without waiting
-      // for the $100 sweep gate.
-      if (lamports > 0) seenTokenIds.push(r.id);
+      // Stamp first_fee_routed_at as soon as fees are routing to this token —
+      // either SOL already in the sub-wallet OR a non-zero creator-vault balance
+      // observed during the claim probe (fees accrued but still below the $100
+      // claim gate). Keying off only the claimed sub-wallet balance left routed
+      // tokens hidden until $100 accrued. See plan/EXTERNAL_ROUTER_VISIBILITY.md.
+      if (lamports > 0 || vaultClaimableSol > 0) seenTokenIds.push(r.id);
 
 
       if (solUsd > 0) {

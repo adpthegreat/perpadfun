@@ -260,7 +260,11 @@ export async function claimPumpFunCreatorFees({ kp, mint, label = '', solUsd = 0
     if (totalVaultSol > 0) {
       console.log(`[pumpfun] ${label} skip: vault=${totalVaultSol.toFixed(6)} SOL pump=${vaultSol.toFixed(6)} amm=${ammVaultSol.toFixed(6)} ($${vaultUsd.toFixed(2)}) + route=${routeWalletSol.toFixed(6)} SOL ($${(combinedUsd - vaultUsd).toFixed(2)}) = $${combinedUsd.toFixed(2)} < min $${MIN_VAULT_USD}`);
     }
-    return null;
+    // Below the claim gate, but report the observed vault balance so the external
+    // sweep can mark the token fee-routed (visible on the site) before the $100
+    // claim fires. solClaimed:0 keeps `claim.solClaimed > 0` callers unaffected.
+    // See plan/EXTERNAL_ROUTER_VISIBILITY.md.
+    return { signature: null, solClaimed: 0, skipped: true, vaultSol: totalVaultSol, vaultUsd, routeWalletSol };
   }
   // Nothing in the vault to actually claim, but combined ≥ threshold means
   // the sweep leg below will fire on the already-routed SOL alone.
@@ -431,7 +435,10 @@ export async function claimPumpAmmCoinCreatorFees({ kp, label = '', solUsd = 0, 
   const combinedUsd = (vaultSol + routeWalletSol) * solUsd;
   if (combinedUsd < AMM_CLAIM_MIN_VAULT_USD) {
     console.log(`[pumpamm] ${label} skip: vault=${vaultSol.toFixed(6)} SOL ($${vaultUsd.toFixed(2)}) + route ($${(combinedUsd - vaultUsd).toFixed(2)}) = $${combinedUsd.toFixed(2)} < min $${AMM_CLAIM_MIN_VAULT_USD}`);
-    return null;
+    // Below the claim gate, but report the observed vault balance so the token
+    // can be marked fee-routed (visible) before the claim fires. See
+    // plan/EXTERNAL_ROUTER_VISIBILITY.md.
+    return { signature: null, solClaimed: 0, skipped: true, vaultSol, vaultUsd, routeWalletSol };
   }
 
   console.log(`[pumpamm] ${label} claiming creator-vault=${vaultSol.toFixed(6)} SOL ($${vaultUsd.toFixed(2)}) creator=${creatorB58.slice(0,6)}…`);
