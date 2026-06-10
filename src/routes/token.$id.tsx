@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getToken, getMyBalance } from "@/lib/tokens.functions";
 import { useOnChainTrade } from "@/hooks/useOnChain";
-import { getPerpCandles } from "@/lib/perps.functions";
+import { BirdeyeChart } from "@/components/BirdeyeChart";
 import { refreshPoolState } from "@/lib/meteora/dbc.functions";
 import { formatUsd } from "@/lib/tokens";
 
@@ -55,7 +55,6 @@ function TokenPage() {
 
   const getTokenFn = useServerFn(getToken);
   const { trade, status: tradeStatus } = useOnChainTrade();
-  const candlesFn = useServerFn(getPerpCandles);
   const balanceFn = useServerFn(getMyBalance);
   const refreshPoolFn = useServerFn(refreshPoolState);
 
@@ -79,13 +78,6 @@ function TokenPage() {
     const t = setInterval(run, 15_000);
     return () => { cancelled = true; clearInterval(t); };
   }, [initial.id, refreshPoolFn, qc]);
-
-  const candlesQuery = useQuery({
-    queryKey: ["candles", token.underlying],
-    queryFn: () => candlesFn({ data: { coin: token.underlying, interval: "15m", lookbackMs: 24 * 3600_000 } }),
-    refetchInterval: 30000,
-  });
-
 
   const balanceQuery = useQuery({
     queryKey: ["balance", token.id, wallet?.address],
@@ -280,18 +272,20 @@ function TokenPage() {
 
         <div className="mt-10">
           <div className="mx-auto w-full max-w-3xl space-y-6">
+            {/* The token's own market (Birdeye). */}
             <div className="border border-border bg-card p-6">
               <div className="mb-4 flex items-center justify-between">
                 <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                  {token.underlying} / 15m · live perp feed
+                  ${token.ticker} · token chart
                 </div>
-                <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em]">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /> live
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Birdeye
                 </span>
               </div>
-
-
-              <CandleChart data={candlesQuery.data?.candles ?? []} loading={candlesQuery.isLoading} />
+              <BirdeyeChart
+                mint={token.mintAddress ?? (token as any).externalMint ?? null}
+                height={420}
+              />
             </div>
 
             <div className="grid gap-px overflow-hidden border border-border bg-border sm:grid-cols-2">
@@ -350,38 +344,3 @@ function Label({ children }: { children: React.ReactNode }) {
   return <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{children}</div>;
 }
 
-function CandleChart({ data, loading }: { data: { t: number; o: number; h: number; l: number; c: number }[]; loading: boolean }) {
-  if (loading) return <div className="flex h-48 items-center justify-center font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">loading…</div>;
-  if (!data.length) return <div className="flex h-48 items-center justify-center font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">no chart data</div>;
-  const min = Math.min(...data.map((d) => d.l));
-  const max = Math.max(...data.map((d) => d.h));
-  const range = max - min || 1;
-  const w = 100;
-  const h = 60;
-  const cw = w / data.length;
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-48 w-full" preserveAspectRatio="none">
-      {data.map((d, i) => {
-        const x = i * cw + cw / 2;
-        const yH = h - ((d.h - min) / range) * h;
-        const yL = h - ((d.l - min) / range) * h;
-        const yO = h - ((d.o - min) / range) * h;
-        const yC = h - ((d.c - min) / range) * h;
-        const bull = d.c >= d.o;
-        const color = bull ? "oklch(0.72 0.18 158)" : "oklch(0.62 0.21 25)";
-        return (
-          <g key={i}>
-            <line x1={x} x2={x} y1={yH} y2={yL} stroke={color} strokeWidth="0.2" />
-            <rect
-              x={x - cw * 0.35}
-              y={Math.min(yO, yC)}
-              width={cw * 0.7}
-              height={Math.max(0.2, Math.abs(yO - yC))}
-              fill={color}
-            />
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
