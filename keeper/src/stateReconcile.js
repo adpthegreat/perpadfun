@@ -21,8 +21,7 @@ import { authenticate as imperialAuthenticate } from './imperial.js';
 import { imperialReadPosition } from './imperialPerps.js';
 import { readPerpPosition } from './jupiterPerps.js';
 import { loadKeypair, walletForToken } from './wallet.js';
-import { workflowStateFromToken, State, setWorkflowStateSync } from './workflow.js';
-import { logWarn } from './structuredLog.js';
+import { workflowStateFromToken, State, setWorkflowStateSync, keeperLog } from './workflow.js';
 
 // A pending workflow row older than this with no resolution is treated as
 // abandoned. Set FAR beyond venue indexing lag and positionReconcile's window
@@ -170,7 +169,7 @@ async function safeWrite(label, fn) {
     await fn();
     return true;
   } catch (e) {
-    console.warn(`[state-reconcile] ${label} write failed: ${e.message}`);
+    keeperLog(null, 'warn', `state-reconcile: ${label} write failed`, { error: e.message });
     return false;
   }
 }
@@ -187,7 +186,7 @@ export async function runStateReconcileTick() {
     try {
       tokens = await listStuckTokens(); // targeted, index-backed, uncapped (see KEEPER_RECONCILE.md)
     } catch (e) {
-      console.warn(`[state-reconcile] listStuckTokens failed: ${e.message}`);
+      keeperLog(null, 'warn', 'state-reconcile: listStuckTokens failed', { error: e.message });
       return { actions: 0, errors: 1 };
     }
 
@@ -210,7 +209,7 @@ export async function runStateReconcileTick() {
           if (await safeWrite('error-reset', () => setWorkflowStateSync(t.id, State.IDLE, { next_retry_at: null }))) {
             const n = (_errorResetCount.get(t.id) ?? 0) + 1;
             _errorResetCount.set(t.id, n);
-            console.log(`[state-reconcile] ${t.ticker}: error -> idle (reset ${n}/${ERROR_MAX_RESETS})`);
+            keeperLog(t, 'info', `state-reconcile: error -> idle (reset ${n}/${ERROR_MAX_RESETS})`, { reset: n, max: ERROR_MAX_RESETS });
             actions++;
           }
           break;
@@ -225,9 +224,7 @@ export async function runStateReconcileTick() {
               }),
             )
           ) {
-            logWarn('state-reconcile: error recovery exhausted', {
-              token_id: t.id,
-              ticker: t.ticker,
+            keeperLog(t, 'warn', 'state-reconcile: error recovery exhausted', {
               resets: _errorResetCount.get(t.id) ?? ERROR_MAX_RESETS,
             });
             actions++;
@@ -254,7 +251,7 @@ export async function runStateReconcileTick() {
                 ]),
               )
             ) {
-              console.log(note);
+              keeperLog(t, 'info', note);
               actions++;
             }
           } else if (r.action === 'clear-open') {
@@ -265,7 +262,7 @@ export async function runStateReconcileTick() {
               )
             ) {
               await safeWrite('pending-reset', () => setWorkflowStateSync(t.id, State.IDLE, { next_retry_at: null }));
-              console.log(note);
+              keeperLog(t, 'info', note);
               actions++;
             }
           }
@@ -281,7 +278,7 @@ export async function runStateReconcileTick() {
               sendReport([{ token_id: t.id, pending_drift_sig: null, events: [{ kind: 'tick', note }] }]),
             )
           ) {
-            console.log(note);
+            keeperLog(t, 'info', note);
             actions++;
           }
           break;
@@ -291,9 +288,7 @@ export async function runStateReconcileTick() {
           const last = _lastEscalateAt.get(t.id) ?? 0;
           if (Date.now() - last >= ESCALATE_REALERT_MS) {
             _lastEscalateAt.set(t.id, Date.now());
-            logWarn('state-reconcile: token blocked too long', {
-              token_id: t.id,
-              ticker: t.ticker,
+            keeperLog(t, 'warn', 'state-reconcile: token blocked too long', {
               blocked_reason: wf.blocked_reason ?? null,
               blocked_for_min: Math.round(age / 60000),
             });
@@ -310,7 +305,7 @@ export async function runStateReconcileTick() {
     _running = false;
     _lastRunAt = new Date().toISOString();
     _lastActions = actions;
-    if (actions > 0) console.log(`[state-reconcile] done actions=${actions} ms=${Date.now() - started}`);
+    if (actions > 0) keeperLog(null, 'info', 'state-reconcile: tick done', { actions, ms: Date.now() - started });
   }
   return { actions };
 }

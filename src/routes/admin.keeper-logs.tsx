@@ -257,7 +257,14 @@ function AdminKeeperLogsPage() {
                   </Fragment>
                 );
               })}
-              {rows.length === 0 && !logsQ.isLoading && (
+              {logsQ.isError && (
+                <tr>
+                  <td className="px-2 py-6 text-center text-destructive" colSpan={8}>
+                    Failed to load keeper_logs: {(logsQ.error as Error)?.message ?? "unknown error"}
+                  </td>
+                </tr>
+              )}
+              {rows.length === 0 && !logsQ.isLoading && !logsQ.isError && (
                 <tr>
                   <td className="px-2 py-6 text-center text-muted-foreground" colSpan={8}>
                     no keeper_logs match these filters
@@ -285,13 +292,6 @@ function AdminKeeperLogsPage() {
           <span className="text-muted-foreground">
             cursor: <code className="font-mono">{cursor ? short(cursor) : "newest"}</code>
           </span>
-        </div>
-
-        <div className="mt-4 text-xs text-muted-foreground">
-          Heads up: <code>stateReconcile</code> activity still writes via stdout +{" "}
-          <code>treasury_events</code> notes, not <code>keeper_logs</code> — so reconcile actions
-          appear on <code>/admin/logs</code>, not here. See <code>plan/KEEPER_LOGS_PAGES.md</code>{" "}
-          §9.
         </div>
       </main>
     </div>

@@ -188,14 +188,29 @@ export async function buybackAndBurn({
   }
   if (!inputAmount || inputAmount <= 0) throw new Error('buyback input amount must be > 0');
 
+  // The output token's ATA (pump.fun mints are Token-2022, rent ~0.0021 SOL) is
+  // created by the swap tx and paid from THIS wallet's SOL — regardless of the
+  // input leg. So the SOL floor must be checked for BOTH the SOL-input and the
+  // payMint (token-input) paths; otherwise a token-input buyback fails in
+  // simulation creating the ATA and gets retried every tick (logdumps/FIXES.md
+  // Issue 2). RENT_RESERVE (ATA rent + slack) + FEE_BUFFER (2 txs + priority).
+  const walletLamports = await withNetworkDetail('solana getBalance', () =>
+    c.getBalance(kp.publicKey, 'confirmed'),
+  );
+  const RENT_FLOOR_LAMPORTS = RENT_RESERVE_LAMPORTS + FEE_BUFFER_LAMPORTS;
+  if (walletLamports < RENT_FLOOR_LAMPORTS) {
+    const err = new Error(
+      `buyback skip: wallet=${kp.publicKey.toBase58()} lamports=${walletLamports} below ATA-rent+fee floor=${RENT_FLOOR_LAMPORTS} (input=${inputMint === SOL_MINT ? 'sol' : 'token'})`,
+    );
+    err.code = 'INSUFFICIENT_FUNDS';
+    throw err;
+  }
+
   // Defensive clamp: when paying in SOL, cap inputAmount to the wallet's
   // actual spendable lamports (balance - rent reserve - fee buffer). This
   // prevents `insufficient lamports` / Meteora 0xbbf failures when the
   // caller's planned spend is stale vs the current wallet balance.
   if (inputMint === SOL_MINT) {
-    const walletLamports = await withNetworkDetail('solana getBalance', () =>
-      c.getBalance(kp.publicKey, 'confirmed'),
-    );
     const spendable = Math.max(0, walletLamports - RENT_RESERVE_LAMPORTS - FEE_BUFFER_LAMPORTS);
     if (spendable < MIN_SPEND_LAMPORTS) {
       const err = new Error(

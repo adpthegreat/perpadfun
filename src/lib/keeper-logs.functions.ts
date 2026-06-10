@@ -65,11 +65,13 @@ export const listKeeperLogs = createServerFn({ method: "GET" })
     // cursor or a raw +00:00 cursor both round-trip.
     const before = data.before ? data.before.replaceAll(" ", "+") : null;
 
+    // Plain select — mirrors the proven GET /api/public/keeper/logs query. We do
+    // NOT use a `tokens ( ... )` FK embed here: it makes the whole query fail
+    // (PostgREST relationship error) and the page then showed "no logs match"
+    // instead of any rows. Tickers are resolved in a cheap second query below.
     let q = supabaseAdmin
       .from("keeper_logs")
-      .select(
-        "id, token_id, tick_id, level, event, message, fields, created_at, tokens ( ticker, name )",
-      )
+      .select("id, token_id, tick_id, level, event, message, fields, created_at")
       .order("created_at", { ascending: false })
       .limit(data.limit);
     if (data.tokenId) q = q.eq("token_id", data.tokenId);
@@ -80,7 +82,29 @@ export const listKeeperLogs = createServerFn({ method: "GET" })
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
 
-    const logs = (rows ?? []) as KeeperLogRow[];
+    const base = (rows ?? []) as Omit<KeeperLogRow, "tokens">[];
+
+    // Resolve ticker/name for the token_ids present, without an FK embed.
+    const ids = [...new Set(base.map((r) => r.token_id).filter(Boolean))] as string[];
+    const tokenById = new Map<string, { ticker: string | null; name: string | null }>();
+    if (ids.length) {
+      const { data: toks, error: tErr } = await supabaseAdmin
+        .from("tokens")
+        .select("id, ticker, name")
+        .in("id", ids);
+      if (tErr) throw new Error(tErr.message);
+      for (const t of toks ?? []) {
+        tokenById.set(t.id as string, {
+          ticker: (t.ticker as string | null) ?? null,
+          name: (t.name as string | null) ?? null,
+        });
+      }
+    }
+
+    const logs: KeeperLogRow[] = base.map((r) => ({
+      ...r,
+      tokens: r.token_id ? tokenById.get(r.token_id) ?? null : null,
+    }));
     const lastTs = logs.length ? logs[logs.length - 1].created_at : null;
     // URL-safe cursor (no "+"): clients can pass nextBefore straight back as ?before=.
     const nextBefore =
