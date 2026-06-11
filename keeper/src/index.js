@@ -6,6 +6,7 @@ import { runBurnSweepTick, getBurnSweepStatus } from './buybackQueue.js';
 import { runReconcileTick, getReconcileStatus } from './positionReconcile.js';
 import { runStateReconcileTick, getStateReconcileStatus } from './stateReconcile.js';
 import { sweepExternalRouters, getExternalSweepStatus } from './externalRouters.js';
+import { runMarketSyncTick, getMarketSyncStatus } from './marketSync.js';
 import { flushWorkflow, listWorkflows } from './workflow.js';
 
 const app = Fastify({ logger: true });
@@ -81,6 +82,16 @@ async function runReconcileForever() {
   setTimeout(runReconcileForever, config.reconcileTickMs);
 }
 
+// Phoenix market catalog sync (every 36h). Refreshes SUPPORTED_MARKETS from
+// Imperial's /phoenix/markets so new markets appear without a hand-edit.
+async function runMarketSyncForever() {
+  try {
+    const r = await runMarketSyncTick();
+    if (r?.changed) app.log.warn({ added: r.added, updated: r.updated }, 'phoenix catalog changed');
+  } catch (e) { app.log.error({ err: e.message }, 'market sync tick failed'); }
+  setTimeout(runMarketSyncForever, config.marketSyncTickMs);
+}
+
 function requireKeeperSecret(req) {
   const got = (req.headers['x-keeper-secret'] || '').toString().trim();
   return got && got === config.keeperSecret.trim();
@@ -104,6 +115,7 @@ app.get('/health', async () => ({
   reconcile: getReconcileStatus(),
   stateReconcile: getStateReconcileStatus(),
     externalSweep: getExternalSweepStatus(),
+  marketSync: getMarketSyncStatus(),
   lastRun, lastResult, lastError,
 }));
 
@@ -122,6 +134,7 @@ app.get('/status', async () => {
     reconcile: getReconcileStatus(),
     stateReconcile: getStateReconcileStatus(),
       externalSweep: getExternalSweepStatus(),
+    marketSync: getMarketSyncStatus(),
     freeCollateralUsd: free,
     lastRun, lastResult, lastError,
   };
@@ -220,6 +233,11 @@ const start = async () => {
   }
   if (config.reconcileEnabled) {
     setTimeout(runReconcileForever, 20_000); // stagger from burn sweep
+  }
+  // Refresh the Phoenix market catalog from Imperial shortly after boot, then
+  // every 36h. In-memory only; gated by marketSyncEnabled.
+  if (config.marketSyncEnabled) {
+    setTimeout(runMarketSyncForever, 30_000); // stagger from reconcile
   }
 };
 

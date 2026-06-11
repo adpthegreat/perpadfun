@@ -267,7 +267,10 @@ export async function getRoute({
 // CAVEAT: maxLeverage is the venue ceiling. Token creators pick anything
 // up to this number; the keeper clamps if a creator-chosen leverage exceeds it.
 // ============================================================================
-export const SUPPORTED_MARKETS = Object.freeze({
+// Frozen seed: the last hand-pinned snapshot. SUPPORTED_MARKETS (below) is
+// seeded from this and then kept fresh at runtime by marketSync.js (every 36h)
+// so a new Phoenix market like NVDA/TSLA appears without a hand-edit + redeploy.
+const SUPPORTED_MARKETS_SNAPSHOT = Object.freeze({
   // ─── Primary 8 (UI-prominent) ───
   BTC:      { venue: 'phoenix', maxLeverage: 20 },
   ETH:      { venue: 'phoenix', maxLeverage: 20 },
@@ -277,7 +280,10 @@ export const SUPPORTED_MARKETS = Object.freeze({
   SILVER:   { venue: 'phoenix', maxLeverage: 25 },
   GOLD:     { venue: 'phoenix', maxLeverage: 25 },
   OIL:      { venue: 'phoenix', maxLeverage: 20, alias: 'WTIOIL' }, // Phoenix calls it WTIOIL
-  WTIOIL:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
+  WTIOIL:   { venue: 'phoenix', maxLeverage: 20 },  
+  NVDA:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
+  AAPL:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
+  // direct passthrough
 
   // ─── Other crypto majors ───
   XRP:      { venue: 'phoenix', maxLeverage: 15 },
@@ -320,6 +326,46 @@ export const SUPPORTED_MARKETS = Object.freeze({
   COPPER:   { venue: 'phoenix', maxLeverage: 20 },
 });
 
+// Live, mutable catalog seeded from the snapshot. marketSync.js mutates this
+// object IN PLACE (never reassigns) so every consumer reading
+// SUPPORTED_MARKETS[sym] at call time picks up new markets without a redeploy.
+export const SUPPORTED_MARKETS = { ...SUPPORTED_MARKETS_SNAPSHOT };
+
+// Upsert the live catalog from a freshly fetched/loaded map
+// { SYM: { venue, maxLeverage, alias? } }. Upsert-only by default (safe):
+// removals are handled as soft (DB active=false) so a market briefly missing
+// from the feed never breaks venue resolution for already-open positions.
+// Returns { changed, added: [...], updated: [...] }.
+export function applyMarketCatalog(next, { prune = false } = {}) {
+  const added = [];
+  const updated = [];
+  if (!next || typeof next !== 'object') return { changed: false, added, updated };
+  for (const [rawSym, v] of Object.entries(next)) {
+    if (!v || !Number.isFinite(Number(v.maxLeverage))) continue;
+    const sym = String(rawSym).toUpperCase();
+    const entry = {
+      venue: v.venue ?? 'phoenix',
+      maxLeverage: Number(v.maxLeverage),
+      ...(v.alias ? { alias: v.alias } : {}),
+    };
+    const cur = SUPPORTED_MARKETS[sym];
+    if (!cur) {
+      added.push(sym);
+      SUPPORTED_MARKETS[sym] = entry;
+    } else if (cur.maxLeverage !== entry.maxLeverage || cur.venue !== entry.venue) {
+      updated.push(sym);
+      SUPPORTED_MARKETS[sym] = entry;
+    }
+    // identical entry -> leave it untouched (no write)
+  }
+  if (prune) {
+    const keep = new Set(Object.keys(next).map((s) => s.toUpperCase()));
+    for (const sym of Object.keys(SUPPORTED_MARKETS)) {
+      if (!keep.has(sym)) delete SUPPORTED_MARKETS[sym];
+    }
+  }
+  return { changed: added.length > 0 || updated.length > 0, added, updated };
+}
 
 export function isSupportedMarket(symbol) {
   return Boolean(symbol && SUPPORTED_MARKETS[String(symbol).toUpperCase()]);
