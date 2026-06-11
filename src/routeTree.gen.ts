@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TokensRouteImport } from './routes/tokens'
+import { Route as StatsRouteImport } from './routes/stats'
 import { Route as RouteFeesRouteImport } from './routes/route-fees'
 import { Route as PaperRouteImport } from './routes/paper'
 import { Route as LaunchRouteImport } from './routes/launch'
@@ -38,6 +39,11 @@ import { Route as ApiPublicKeeperExternalRouterSeenRouteImport } from './routes/
 const TokensRoute = TokensRouteImport.update({
   id: '/tokens',
   path: '/tokens',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatsRoute = StatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RouteFeesRoute = RouteFeesRouteImport.update({
@@ -176,6 +182,7 @@ export interface FileRoutesByFullPath {
   '/launch': typeof LaunchRoute
   '/paper': typeof PaperRoute
   '/route-fees': typeof RouteFeesRouteWithChildren
+  '/stats': typeof StatsRoute
   '/tokens': typeof TokensRoute
   '/admin/keeper-logs': typeof AdminKeeperLogsRoute
   '/admin/logs': typeof AdminLogsRoute
@@ -203,6 +210,7 @@ export interface FileRoutesByTo {
   '/launch': typeof LaunchRoute
   '/paper': typeof PaperRoute
   '/route-fees': typeof RouteFeesRouteWithChildren
+  '/stats': typeof StatsRoute
   '/tokens': typeof TokensRoute
   '/admin/keeper-logs': typeof AdminKeeperLogsRoute
   '/admin/logs': typeof AdminLogsRoute
@@ -231,6 +239,7 @@ export interface FileRoutesById {
   '/launch': typeof LaunchRoute
   '/paper': typeof PaperRoute
   '/route-fees': typeof RouteFeesRouteWithChildren
+  '/stats': typeof StatsRoute
   '/tokens': typeof TokensRoute
   '/admin/keeper-logs': typeof AdminKeeperLogsRoute
   '/admin/logs': typeof AdminLogsRoute
@@ -260,6 +269,7 @@ export interface FileRouteTypes {
     | '/launch'
     | '/paper'
     | '/route-fees'
+    | '/stats'
     | '/tokens'
     | '/admin/keeper-logs'
     | '/admin/logs'
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/launch'
     | '/paper'
     | '/route-fees'
+    | '/stats'
     | '/tokens'
     | '/admin/keeper-logs'
     | '/admin/logs'
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/launch'
     | '/paper'
     | '/route-fees'
+    | '/stats'
     | '/tokens'
     | '/admin/keeper-logs'
     | '/admin/logs'
@@ -342,6 +354,7 @@ export interface RootRouteChildren {
   LaunchRoute: typeof LaunchRoute
   PaperRoute: typeof PaperRoute
   RouteFeesRoute: typeof RouteFeesRouteWithChildren
+  StatsRoute: typeof StatsRoute
   TokensRoute: typeof TokensRoute
   AdminKeeperLogsRoute: typeof AdminKeeperLogsRoute
   AdminLogsRoute: typeof AdminLogsRoute
@@ -369,6 +382,13 @@ declare module '@tanstack/react-router' {
       path: '/tokens'
       fullPath: '/tokens'
       preLoaderRoute: typeof TokensRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stats': {
+      id: '/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof StatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/route-fees': {
@@ -561,6 +581,7 @@ const rootRouteChildren: RootRouteChildren = {
   LaunchRoute: LaunchRoute,
   PaperRoute: PaperRoute,
   RouteFeesRoute: RouteFeesRouteWithChildren,
+  StatsRoute: StatsRoute,
   TokensRoute: TokensRoute,
   AdminKeeperLogsRoute: AdminKeeperLogsRoute,
   AdminLogsRoute: AdminLogsRoute,
