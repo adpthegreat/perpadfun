@@ -126,5 +126,14 @@ export const config = {
   stateReconcileEnabled: String(process.env.STATE_RECONCILE_ENABLED ?? 'true').toLowerCase() === 'true',
   // Quiet the per-call Imperial handshake fallback log unless set.
   logVerbose: String(process.env.LOG_VERBOSE ?? 'false').toLowerCase() === 'true',
+
+  // Phoenix market catalog auto-sync (plan/PHOENIX_MARKET_SYNC.md).
+  // Fetches Imperial /phoenix/markets every marketSyncTickMs; when the catalog
+  // changes (new/removed market or changed max-leverage) it updates the shared
+  // catalog. DEFAULT OFF — run a prod dry-run against live Imperial first, then
+  // enable. When off, marketSync still loads the DB catalog on boot but never
+  // fetches/mutates.
+  marketSyncEnabled: String(process.env.IMPERIAL_MARKET_SYNC_ENABLED ?? 'false').toLowerCase() === 'true',
+  marketSyncTickMs: Number(process.env.MARKET_SYNC_TICK_MS ?? 129_600_000), // 36h
 };
 
