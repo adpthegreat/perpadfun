@@ -275,6 +275,7 @@ const SUPPORTED_MARKETS_SNAPSHOT = Object.freeze({
   BTC:      { venue: 'phoenix', maxLeverage: 20 },
   ETH:      { venue: 'phoenix', maxLeverage: 20 },
   SOL:      { venue: 'phoenix', maxLeverage: 15 },
+  SPCX:   { venue: 'phoenix', maxLeverage: 15 },                  // direct passthrough
   ZEC:      { venue: 'phoenix', maxLeverage: 10 },
   HYPE:     { venue: 'phoenix', maxLeverage: 10 },
   SILVER:   { venue: 'phoenix', maxLeverage: 25 },
