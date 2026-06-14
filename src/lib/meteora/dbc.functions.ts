@@ -71,6 +71,10 @@ const launchInput = z.object({
   leverage: z.number().int().positive(),
   direction: z.enum(["long", "short"]),
   creatorAddress: z.string().min(32).max(44),
+  // Quote token the bonding curve is denominated in. Default SOL (legacy).
+  // USDC pairs the curve + graduated DAMM pool against USDC. See
+  // plan/USDC_PAIRING.md.
+  quote: z.enum(["SOL", "USDC"]).default("SOL"),
 }).superRefine((d, ctx) => {
   // Leverage must be an allowed tier AND at or below the market's venue cap.
   // The picker enforces this client-side; re-check here so a stale/crafted
@@ -116,7 +120,7 @@ export const createDraftToken = createServerFn({ method: "POST" })
           launch_mid: mid,
           curve_preset: preset,
           status: "launching",
-          quote_token: "SOL",
+          quote_token: data.quote,
           migration_status: "pending",
         })
         .select()
@@ -152,6 +156,7 @@ export const createDraftToken = createServerFn({ method: "POST" })
                 launch_mid: mid,
                 curve_preset: preset,
                 status: "launching",
+                quote_token: data.quote,
                 migration_status: "pending",
                 mint_address: null,
                 dbc_pool_address: null,
@@ -276,7 +281,7 @@ export const refreshPoolState = createServerFn({ method: "POST" })
       const { data: t, error } = await supabaseAdmin
         .from("tokens")
         .select(
-          "dbc_pool_address, pool_state_refreshed_at, migration_status, sol_raised, graduated_pool_address, current_price_sol, total_supply",
+          "dbc_pool_address, pool_state_refreshed_at, migration_status, sol_raised, graduated_pool_address, current_price_sol, total_supply, quote_token",
         )
         .eq("id", data.tokenId)
         .single();
@@ -311,20 +316,26 @@ export const refreshPoolState = createServerFn({ method: "POST" })
       const poolPk = new PublicKey(t.dbc_pool_address);
       const pool = await client.state.getPool(poolPk);
 
-      // pool.quoteReserve is in lamports for SOL pools. If the read doesn't
+      // Quote decimals: SOL = 9, USDC = 6. sol_raised is reused as the
+      // quote-denominated raised amount (see plan/USDC_PAIRING.md, decision 3).
+      const isUsdcQuote = t.quote_token === "USDC";
+      const quoteDecimals = isUsdcQuote ? 6 : 9;
+      const quoteDivisor = 10 ** quoteDecimals;
+
+      // pool.quoteReserve is in the quote token's base units. If the read doesn't
       // expose it (e.g. a graduated DBC pool whose reserve migrated to DAMM v2),
       // keep the last known value instead of overwriting sol_raised with 0.
-      const freshSol = pool?.quoteReserve ? Number(BigInt(pool.quoteReserve.toString())) / 1e9 : null;
+      const freshSol = pool?.quoteReserve ? Number(BigInt(pool.quoteReserve.toString())) / quoteDivisor : null;
       const solRaised = nextSolRaised(freshSol, Number(t.sol_raised ?? 0));
 
-      // Current spot price in SOL per base token, derived from sqrtPrice.
-      // DBC defaults: base decimals 6, quote (SOL) decimals 9.
+      // Current spot price in quote per base token, derived from sqrtPrice.
+      // DBC base decimals 6; quote decimals 9 (SOL) or 6 (USDC).
       let currentPriceSol = Number(t.current_price_sol ?? 0);
       try {
         const sp = (pool as unknown as { sqrtPrice?: { toString(): string } })?.sqrtPrice;
         if (sp) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const priceDec = getPriceFromSqrtPrice(sp as any, 6 as any, 9 as any);
+          const priceDec = getPriceFromSqrtPrice(sp as any, 6 as any, quoteDecimals as any);
           const decoded = Number(priceDec?.toString?.() ?? priceDec ?? 0);
           if (decoded > 0) currentPriceSol = decoded;
         }
@@ -496,6 +507,7 @@ export const recoverLaunch = createServerFn({ method: "POST" })
 // USER as token receiver (so the creator wallet shows as the dev holder), and
 // is set as poolCreator + feeClaimer for later creator-fee claims.
 const NATIVE_SOL_MINT_STR = "So11111111111111111111111111111111111111112";
+const USDC_MINT_STR = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 export const launchAsTreasury = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
@@ -506,8 +518,10 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
         name: z.string().min(1).max(64),
         imageUrl: z.string().url().max(500).optional(),
         creatorAddress: z.string().min(32).max(44),
-        // Dev-buy amount in lamports. Validated server-side against bounds.
-        buyLamports: z.number().int().min(100_000_000).max(5_000_000_000),
+        // Dev-buy amount in the QUOTE token's base units (lamports for SOL,
+        // 6-dp base units for USDC). Quote-specific bounds are enforced in the
+        // handler once we read the token's quote_token.
+        buyAmount: z.number().int().positive().max(10_000_000_000),
         // Signature of the user's prefund transfer. Optional on retries when
         // the token sub-wallet is already funded from a previous attempt.
         prefundSignature: z.string().min(32).max(120).nullable().optional(),
@@ -530,6 +544,30 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
       // is no re-assignment here.
       const { deriveSubWalletKeypair } = await import("@/lib/solana/subWallet.server");
       const subWallet = deriveSubWalletKeypair(data.tokenId);
+
+      // Quote token the curve is denominated in (set at createDraftToken).
+      const { data: quoteRow } = await supabaseAdmin
+        .from("tokens")
+        .select("quote_token")
+        .eq("id", data.tokenId)
+        .single();
+      const quote = quoteRow?.quote_token === "USDC" ? "USDC" : "SOL";
+      const quoteMintStr = quote === "USDC" ? USDC_MINT_STR : NATIVE_SOL_MINT_STR;
+
+      // Quote-specific dev-buy bounds (in the quote token's base units). SOL:
+      // 0.1–5 SOL. USDC: 5–5000 USDC. Re-checked here so a crafted request
+      // can't bypass the client bounds.
+      const QUOTE_BUY_BOUNDS = {
+        SOL: { min: 100_000_000, max: 5_000_000_000 },
+        USDC: { min: 5_000_000, max: 5_000_000_000 },
+      } as const;
+      const bounds = QUOTE_BUY_BOUNDS[quote];
+      if (data.buyAmount < bounds.min || data.buyAmount > bounds.max) {
+        return {
+          ok: false as const,
+          error: `Initial buy ${data.buyAmount} out of bounds for ${quote} (min ${bounds.min}, max ${bounds.max} base units)`,
+        };
+      }
 
       // 1. Verify the prefund landed when this call includes a fresh transfer.
       // Retries can omit the signature because we re-check the sub-wallet's
@@ -576,15 +614,47 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
       // passes this balance check. Config rent alone is ~0.008 SOL.
       const SUB_WALLET_OPS_SEED_LAMPORTS = 10_000_000; // 0.01 SOL keep-alive after launch
       const LAUNCH_RENT_AND_FEES_LAMPORTS = 100_000_000; // 0.10 SOL: covers rent + 2 tx fees + ~0.04 SOL retry buffer
-      const subWalletFundingLamports =
-        data.buyLamports + LAUNCH_RENT_AND_FEES_LAMPORTS + SUB_WALLET_OPS_SEED_LAMPORTS;
 
       const subWalletBal = await conn.getBalance(subWallet.publicKey, "confirmed");
-      if (subWalletBal < subWalletFundingLamports) {
-        return {
-          ok: false as const,
-          error: `Token sub-wallet balance too low (${subWalletBal} < ${subWalletFundingLamports} lamports). Prefund may not have credited yet.`,
-        };
+      if (quote === "USDC") {
+        // USDC pools: SOL only covers rent + 2 tx fees + the USDC ATA the SDK
+        // uses + keeper seed. The dev-buy itself is pulled from the sub-wallet's
+        // USDC ATA (funded by the user in the prefund step).
+        const solNeeded = LAUNCH_RENT_AND_FEES_LAMPORTS + SUB_WALLET_OPS_SEED_LAMPORTS;
+        if (subWalletBal < solNeeded) {
+          return {
+            ok: false as const,
+            error: `Token sub-wallet SOL too low for rent/fees (${subWalletBal} < ${solNeeded} lamports). Prefund may not have credited yet.`,
+          };
+        }
+        const { getAssociatedTokenAddressSync } = await import("@solana/spl-token");
+        const subUsdcAta = getAssociatedTokenAddressSync(
+          new PublicKey(USDC_MINT_STR),
+          subWallet.publicKey,
+          true,
+        );
+        let usdcBal = 0;
+        try {
+          const b = await conn.getTokenAccountBalance(subUsdcAta, "confirmed");
+          usdcBal = Number(b.value.amount ?? 0);
+        } catch {
+          usdcBal = 0;
+        }
+        if (usdcBal < data.buyAmount) {
+          return {
+            ok: false as const,
+            error: `Token sub-wallet USDC too low (${usdcBal} < ${data.buyAmount} base units). USDC prefund may not have credited yet.`,
+          };
+        }
+      } else {
+        const subWalletFundingLamports =
+          data.buyAmount + LAUNCH_RENT_AND_FEES_LAMPORTS + SUB_WALLET_OPS_SEED_LAMPORTS;
+        if (subWalletBal < subWalletFundingLamports) {
+          return {
+            ok: false as const,
+            error: `Token sub-wallet balance too low (${subWalletBal} < ${subWalletFundingLamports} lamports). Prefund may not have credited yet.`,
+          };
+        }
       }
 
       // 2. Build config + pool-with-first-buy with SUB-WALLET as
@@ -609,15 +679,24 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
       const config = Keypair.generate();
       const baseMint = Keypair.generate();
       const userPk = new PublicKey(data.creatorAddress);
-      const quoteMint = new PublicKey(NATIVE_SOL_MINT_STR);
+      const quoteMint = new PublicKey(quoteMintStr);
 
-
-      const presets = {
-        gentle: { initialMarketCap: 34, migrationMarketCap: 400 },
-        standard: { initialMarketCap: 34, migrationMarketCap: 460 },
-        parabolic: { initialMarketCap: 34, migrationMarketCap: 550 },
+      // Market-cap presets are denominated in the QUOTE token. SOL presets are
+      // in SOL (~$3k→$40–50k at launch-era prices); the USDC presets target the
+      // same USD market caps directly (USDC ≈ $1). Tune these as needed.
+      const PRESETS = {
+        SOL: {
+          gentle: { initialMarketCap: 34, migrationMarketCap: 400 },
+          standard: { initialMarketCap: 34, migrationMarketCap: 460 },
+          parabolic: { initialMarketCap: 34, migrationMarketCap: 550 },
+        },
+        USDC: {
+          gentle: { initialMarketCap: 3000, migrationMarketCap: 36000 },
+          standard: { initialMarketCap: 3000, migrationMarketCap: 41000 },
+          parabolic: { initialMarketCap: 3000, migrationMarketCap: 49000 },
+        },
       } as const;
-      const preset = presets[data.curvePreset];
+      const preset = PRESETS[quote][data.curvePreset];
 
       const configParams = buildCurveWithMarketCap({
         initialMarketCap: preset.initialMarketCap,
@@ -626,7 +705,7 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
         token: {
           tokenType: TokenType.SPL,
           tokenBaseDecimal: TokenDecimal.SIX,
-          tokenQuoteDecimal: TokenDecimal.NINE,
+          tokenQuoteDecimal: quote === "USDC" ? TokenDecimal.SIX : TokenDecimal.NINE,
           tokenUpdateAuthority: TokenUpdateAuthorityOption.CreatorUpdateAuthority,
           totalTokenSupply: 1_000_000_000,
           leftover: 0,
@@ -728,12 +807,13 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
           },
 
           firstBuyParam: {
-            // Sub-wallet pays for the dev-buy SOL too -> on-chain shows
-            // the sub-wallet as the true dev-buyer / pool creator.
+            // Sub-wallet pays for the dev-buy (SOL lamports for SOL pools, or
+            // USDC base units pulled from its USDC ATA for USDC pools) -> on-chain
+            // shows the sub-wallet as the true dev-buyer / pool creator.
             buyer: subWallet.publicKey,
             // Tokens land in the user's wallet -> they show as the dev holder.
             receiver: userPk,
-            buyAmount: new BN(data.buyLamports),
+            buyAmount: new BN(data.buyAmount),
             minimumAmountOut: new BN(0),
             referralTokenAccount: null,
           },

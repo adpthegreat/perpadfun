@@ -866,7 +866,9 @@ export async function tick() {
             dbcPoolAddress: t.dbc_pool_address,
             dbcConfigAddress: t.dbc_config_address,
             baseMintAddress: t.mint_address,
-            quoteMintAddress: null, // defaults to SOL
+            // USDC-quoted pools graduate to a token/USDC DAMM v2 pool; the
+            // derived pool address keys off the quote mint. Defaults to SOL.
+            quoteMintAddress: t.quote_token === "USDC" ? USDC_MINT : null,
           });
           if (det?.graduated && det.graduatedPoolAddress) {
             console.log(
@@ -964,7 +966,13 @@ export async function tick() {
           // and the SDK no-ops cleanly when there's nothing to claim.
           if (t.dbc_pool_address) {
             const intent = intentHash([t.id, "fee_claim_dbc", bucket, t.dbc_pool_address]);
-            const claim = await claimDbcFees({ dbcPoolAddress: t.dbc_pool_address, solUsd, kp });
+            const claim = await claimDbcFees({
+              dbcPoolAddress: t.dbc_pool_address,
+              solUsd,
+              kp,
+              // USDC pools accrue fees in USDC; the claim helper converts to SOL.
+              quoteMint: t.quote_token === "USDC" ? USDC_MINT : undefined,
+            });
             if (claim) {
               const usd = claim.solClaimed * solUsd;
               totalClaimedSol += claim.solClaimed;
@@ -991,6 +999,7 @@ export async function tick() {
               lpPositionAddress: t.lp_position_address,
               solUsd,
               kp,
+              quoteMint: t.quote_token === "USDC" ? USDC_MINT : undefined,
             });
 
             if (claim) {

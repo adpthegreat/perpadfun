@@ -25,10 +25,14 @@ import { ComputeBudgetProgram, Connection, PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, deriveDammV2PoolAddress } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, getUnClaimLpFee } from '@meteora-ag/cp-amm-sdk';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { config } from './config.js';
 import { loadKeypair } from './wallet.js';
 import { WSOL_MINT as SOL_MINT, TOKEN_PROGRAM } from './constants.js';
 import { withRetry } from './rateLimiter.js';
+import { swapUsdcToSol } from './swap.js';
+
+const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
 const U64_MAX = new BN('18446744073709551615');
 const MIN_CLAIM_USD = Number(process.env.MIN_CLAIM_USD ?? '0.02');
@@ -204,29 +208,75 @@ async function solBalance(pubkey) {
   return lamports / 1e9;
 }
 
+// Raw USDC ATA balance (6dp base units) for a wallet, or 0 if the ATA is absent.
+async function readUsdcRaw(owner) {
+  try {
+    const ata = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), owner);
+    const bal = await withRetry(() => conn().getTokenAccountBalance(ata, 'confirmed'));
+    return Number(bal?.value?.amount ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+// USDC-quoted pools accrue fees in USDC, not SOL. After claiming, the USDC lands
+// in the signer's USDC ATA. We swap it to SOL so the rest of the keeper's
+// SOL-denominated economics (split/skim/perp-margin/buyback) run unchanged.
+// Returns SOL received, or 0 if nothing was claimed/converted (USDC then stays
+// in the wallet and is picked up by the buyback USDC-probe path on a later tick).
+async function convertClaimedUsdcToSol({ kp, beforeUsdcRaw, expectedUsdcUi, label }) {
+  const afterUsdcRaw = await readUsdcRaw(kp.publicKey);
+  const measuredUi = Math.max(0, (afterUsdcRaw - beforeUsdcRaw) / 1e6);
+  const usdcClaimed = Math.max(measuredUi, expectedUsdcUi);
+  if (!(usdcClaimed > 0)) return 0;
+  let sw = null;
+  try {
+    sw = await swapUsdcToSol({ wantUsd: usdcClaimed, kp });
+  } catch (e) {
+    console.error(`[${label}] USDC->SOL convert failed: ${e?.message ?? e}`);
+  }
+  const solClaimed = sw?.solReceived ?? 0;
+  if (!(solClaimed > 0)) {
+    console.warn(
+      `[${label}] claimed ~$${usdcClaimed.toFixed(4)} USDC but USDC->SOL yielded 0; USDC stays in wallet for the buyback path`,
+    );
+    return 0;
+  }
+  console.log(`[${label}] converted ${usdcClaimed.toFixed(6)} USDC -> ${solClaimed.toFixed(9)} SOL sig=${sw.swapSig}`);
+  return solClaimed;
+}
+
 // ---- DBC: claim trading fees on a virtual pool ----
 // Most configs route 100% of trading fees to the PARTNER side (feeClaimer),
 // not the creator side. We attempt both: partner first, then creator. If the
 // treasury isn't the partner/creator for a side, the SDK throws and we skip it.
 // Returns { signature, solClaimed } combined across both sides, or null.
-export async function claimDbcFees({ dbcPoolAddress, solUsd = 0, kp: kpArg = null }) {
+export async function claimDbcFees({ dbcPoolAddress, solUsd = 0, kp: kpArg = null, quoteMint = SOL_MINT }) {
   const kp = pickSigner(kpArg);
+  // USDC-quoted pools accrue fees in USDC (6dp); SOL pools in lamports (9dp).
+  const isUsdc = quoteMint === USDC_MINT;
+  const quoteDecimals = isUsdc ? 6 : 9;
+  const quoteDivisor = 10 ** quoteDecimals;
 
   const pool = new PublicKey(dbcPoolAddress);
   const poolStateBefore = await dbc().state.getPool(pool);
-  const partnerQuoteFeeLamports = bnNumber(poolStateBefore?.partnerQuoteFee);
-  const creatorQuoteFeeLamports = bnNumber(poolStateBefore?.creatorQuoteFee);
+  const partnerQuoteFeeRaw = bnNumber(poolStateBefore?.partnerQuoteFee);
+  const creatorQuoteFeeRaw = bnNumber(poolStateBefore?.creatorQuoteFee);
   const partnerBaseFeeRaw = bnNumber(poolStateBefore?.partnerBaseFee);
   const creatorBaseFeeRaw = bnNumber(poolStateBefore?.creatorBaseFee);
-  const partnerQuoteFeeSol = partnerQuoteFeeLamports / 1e9;
-  const creatorQuoteFeeSol = creatorQuoteFeeLamports / 1e9;
+  // UI units of the QUOTE token (SOL or USDC).
+  const partnerQuoteUi = partnerQuoteFeeRaw / quoteDivisor;
+  const creatorQuoteUi = creatorQuoteFeeRaw / quoteDivisor;
 
   console.log(
-    `[claimDbcFees] pool=${pool.toBase58()} partnerQuoteSol=${partnerQuoteFeeSol} creatorQuoteSol=${creatorQuoteFeeSol}`,
+    `[claimDbcFees] pool=${pool.toBase58()} quote=${isUsdc ? 'USDC' : 'SOL'} partnerQuote=${partnerQuoteUi} creatorQuote=${creatorQuoteUi}`,
   );
 
-  // Gate by USD threshold so we don't waste tx fees on dust claims.
-  const pendingSol = partnerQuoteFeeSol + creatorQuoteFeeSol;
+  // Gate by USD threshold so we don't waste tx fees on dust claims. For USDC,
+  // the quote UI amount IS the USD amount; convert to a SOL-equivalent so the
+  // shared SOL+USD floors in claimGate apply identically.
+  const pendingQuoteUi = partnerQuoteUi + creatorQuoteUi;
+  const pendingSol = isUsdc ? (solUsd > 0 ? pendingQuoteUi / solUsd : 0) : pendingQuoteUi;
   const gate = claimGate(pendingSol, solUsd);
   if (!gate.pass) {
     console.log(`[claimDbcFees] skip: pendingSol=${pendingSol.toFixed(9)} pendingUsd=${gate.pendingUsd.toFixed(4)} < minSol=${MIN_CLAIM_SOL} or minUsd=${MIN_CLAIM_USD}`);
@@ -235,12 +285,13 @@ export async function claimDbcFees({ dbcPoolAddress, solUsd = 0, kp: kpArg = nul
 
 
   const before = await solBalance(kp.publicKey);
+  const beforeUsdcRaw = isUsdc ? await readUsdcRaw(kp.publicKey) : 0;
   const sigs = [];
   let claimedSide = null;
-  let expectedSolClaimed = 0;
+  let expectedQuoteUi = 0;
 
   // 1) PARTNER side (where fees actually live when creatorTradingFeePercentage = 0)
-  if (partnerQuoteFeeLamports > 0 || partnerBaseFeeRaw > 0) {
+  if (partnerQuoteFeeRaw > 0 || partnerBaseFeeRaw > 0) {
     // Diagnostic: dump on-chain config.feeClaimer vs the signer we're about
     // to submit. If these differ we know the master key / sub-wallet
     // derivation drifted from what was burned in at launch.
@@ -289,8 +340,8 @@ export async function claimDbcFees({ dbcPoolAddress, solUsd = 0, kp: kpArg = nul
       try {
         sigs.push(await sendAndConfirm(tx, 'dbc-partner-claim', kp));
         claimedSide = 'partner';
-        expectedSolClaimed += partnerQuoteFeeSol;
-        console.log(`[claimDbcFees] partner claimed expectedSol=${partnerQuoteFeeSol}`);
+        expectedQuoteUi += partnerQuoteUi;
+        console.log(`[claimDbcFees] partner claimed expectedQuote=${partnerQuoteUi}`);
       } catch (e) {
         console.error("[fees] partner claim SEND failed:", e?.message ?? e);
       }
@@ -298,7 +349,7 @@ export async function claimDbcFees({ dbcPoolAddress, solUsd = 0, kp: kpArg = nul
   }
 
   // 2) CREATOR side (in case the config splits fees and creator share > 0)
-  if (creatorQuoteFeeLamports > 0 || creatorBaseFeeRaw > 0) {
+  if (creatorQuoteFeeRaw > 0 || creatorBaseFeeRaw > 0) {
     let tx;
     try {
       tx = await dbc().creator.claimCreatorTradingFee2({
@@ -317,8 +368,8 @@ export async function claimDbcFees({ dbcPoolAddress, solUsd = 0, kp: kpArg = nul
       try {
         sigs.push(await sendAndConfirm(tx, 'dbc-creator-claim', kp));
         claimedSide = claimedSide ? `${claimedSide}+creator` : 'creator';
-        expectedSolClaimed += creatorQuoteFeeSol;
-        console.log(`[claimDbcFees] creator claimed expectedSol=${creatorQuoteFeeSol}`);
+        expectedQuoteUi += creatorQuoteUi;
+        console.log(`[claimDbcFees] creator claimed expectedQuote=${creatorQuoteUi}`);
       } catch (e) {
         console.error("[fees] creator claim SEND failed:", e?.message ?? e);
       }
@@ -327,10 +378,23 @@ export async function claimDbcFees({ dbcPoolAddress, solUsd = 0, kp: kpArg = nul
 
   if (sigs.length === 0) return null;
 
+  // USDC pools: the claimed fee landed as USDC. Convert to SOL so callers get
+  // the same SOL-denominated solClaimed they expect for SOL pools.
+  if (isUsdc) {
+    const solClaimed = await convertClaimedUsdcToSol({
+      kp,
+      beforeUsdcRaw,
+      expectedUsdcUi: expectedQuoteUi,
+      label: 'claimDbcFees',
+    });
+    if (!(solClaimed > 0)) return null;
+    return { signature: sigs[sigs.length - 1], solClaimed, claimedSide };
+  }
+
   const after = await solBalance(kp.publicKey);
   // Add back ~5000 lamports per signature for tx fees so claimed amount isn't undercounted
   const balanceDeltaSol = Math.max(0, after - before + 0.000005 * sigs.length);
-  const solClaimed = Math.max(balanceDeltaSol, expectedSolClaimed);
+  const solClaimed = Math.max(balanceDeltaSol, expectedQuoteUi);
   return { signature: sigs[sigs.length - 1], solClaimed, claimedSide };
 }
 
@@ -338,7 +402,7 @@ export async function claimDbcFees({ dbcPoolAddress, solUsd = 0, kp: kpArg = nul
 // ---- DAMM v2: claim fees on the treasury's LP position ----
 // If lpPositionAddress is unknown, we discover it via getUserPositionByPool.
 // Returns { signature, solClaimed, tokensClaimed, lpPositionAddress } or null.
-export async function claimAmmFees({ graduatedPoolAddress, mintAddress, lpPositionAddress, solUsd = 0, kp: kpArg = null }) {
+export async function claimAmmFees({ graduatedPoolAddress, mintAddress, lpPositionAddress, solUsd = 0, kp: kpArg = null, quoteMint = SOL_MINT }) {
   if (!ENABLE_AMM_FEE_CLAIMS) {
     console.log('[claimAmmFees] skip: AMM fee claims disabled (ENABLE_AMM_FEE_CLAIMS=false)');
     return null;
@@ -349,7 +413,7 @@ export async function claimAmmFees({ graduatedPoolAddress, mintAddress, lpPositi
   }
 
   try {
-    return await _claimAmmFeesInner({ graduatedPoolAddress, mintAddress, lpPositionAddress, solUsd, kp: kpArg });
+    return await _claimAmmFeesInner({ graduatedPoolAddress, mintAddress, lpPositionAddress, solUsd, kp: kpArg, quoteMint });
   } catch (e) {
     setPoolCooldown(graduatedPoolAddress);
     console.error(`[fees] claimAmmFees failed (non-fatal, cooldown ${POOL_COOLDOWN_MS}ms):`, e?.message ?? e);
@@ -373,8 +437,9 @@ async function mintDecimals(mintPk) {
   return supply?.value?.decimals ?? 0;
 }
 
-async function _claimAmmFeesInner({ graduatedPoolAddress, mintAddress, lpPositionAddress, solUsd = 0, kp: kpArg = null }) {
+async function _claimAmmFeesInner({ graduatedPoolAddress, mintAddress, lpPositionAddress, solUsd = 0, kp: kpArg = null, quoteMint = SOL_MINT }) {
   const kp = pickSigner(kpArg);
+  const isUsdc = quoteMint === USDC_MINT;
 
   const pool = new PublicKey(graduatedPoolAddress);
 
@@ -398,12 +463,13 @@ async function _claimAmmFeesInner({ graduatedPoolAddress, mintAddress, lpPositio
   const tokenBProgram = await resolveTokenProgram(tokenBMint);
 
   // Gate AMM claims from account state before constructing/submitting anything.
-  // Pick the treasury LP position with the largest unclaimed SOL side. The saved
+  // Pick the treasury LP position with the largest unclaimed QUOTE side. The
+  // quote side is SOL for SOL pools, USDC for USDC pools. The saved
   // lp_position_address can point at an empty position, causing 0-fee tx dust.
-  const solMint = new PublicKey(SOL_MINT);
-  const solSide = tokenAMint.equals(solMint) ? 'A' : tokenBMint.equals(solMint) ? 'B' : null;
-  if (!solSide) {
-    console.log('[claimAmmFees] skip: pool has no SOL side for USD gate');
+  const quoteMintPk = new PublicKey(quoteMint);
+  const quoteSide = tokenAMint.equals(quoteMintPk) ? 'A' : tokenBMint.equals(quoteMintPk) ? 'B' : null;
+  if (!quoteSide) {
+    console.log(`[claimAmmFees] skip: pool has no ${isUsdc ? 'USDC' : 'SOL'} side for USD gate`);
     return null;
   }
 
@@ -411,15 +477,20 @@ async function _claimAmmFeesInner({ graduatedPoolAddress, mintAddress, lpPositio
     mintDecimals(tokenAMint),
     mintDecimals(tokenBMint),
   ]);
-  const solDecimals = solSide === 'A' ? tokenADecimals : tokenBDecimals;
+  const quoteDecimals = quoteSide === 'A' ? tokenADecimals : tokenBDecimals;
+  // pendingSol is a SOL-equivalent used only for the shared claimGate/log. For
+  // USDC pools, the on-chain pending is USDC; convert via solUsd. pendingQuote
+  // is the actual quote-token amount we'll claim and (for USDC) convert.
   const scoredPositions = positions
     .map((p) => {
       const fees = getUnClaimLpFee(poolState, p.positionState);
-      const solRaw = solSide === 'A' ? fees.feeTokenA : fees.feeTokenB;
-      const pendingSol = rawTokenToUi(solRaw, solDecimals);
+      const quoteRaw = quoteSide === 'A' ? fees.feeTokenA : fees.feeTokenB;
+      const pendingQuote = rawTokenToUi(quoteRaw, quoteDecimals);
+      const pendingSol = isUsdc ? (solUsd > 0 ? pendingQuote / solUsd : 0) : pendingQuote;
       return {
         position: p.position,
         positionNftAccount: p.positionNftAccount,
+        pendingQuote,
         pendingSol,
         pendingUsd: pendingSol * solUsd,
       };
@@ -475,9 +546,24 @@ async function _claimAmmFeesInner({ graduatedPoolAddress, mintAddress, lpPositio
   if (!tx || (tx.instructions && tx.instructions.length === 0)) return null;
 
   const before = await solBalance(kp.publicKey);
+  const beforeUsdcRaw = isUsdc ? await readUsdcRaw(kp.publicKey) : 0;
   const sig = await sendAndConfirm(buildClaimTx, 'amm-position-fee-claim', kp);
-  const after = await solBalance(kp.publicKey);
-  const solClaimed = Math.max(0, after - before, match.pendingSol);
+
+  // USDC pools: claimed quote fee landed as USDC -> convert to SOL so callers
+  // get a SOL-denominated solClaimed exactly like SOL pools.
+  let solClaimed;
+  if (isUsdc) {
+    solClaimed = await convertClaimedUsdcToSol({
+      kp,
+      beforeUsdcRaw,
+      expectedUsdcUi: match.pendingQuote,
+      label: 'claimAmmFees',
+    });
+    if (!(solClaimed > 0)) return null;
+  } else {
+    const after = await solBalance(kp.publicKey);
+    solClaimed = Math.max(0, after - before, match.pendingSol);
+  }
 
   // Token-side fees land in treasury ATA; loop.js will sweep them into a
   // burn on the same tick. We don't try to measure exactly here — the

@@ -73,12 +73,24 @@ function LaunchPage() {
   const [twitterUrl, setTwitterUrl] = useState("");
   const [underlying, setUnderlying] = useState("BTC");
   const [direction, setDirection] = useState<"long" | "short">("long");
+  const [quote, setQuote] = useState<"SOL" | "USDC">("SOL");
   const [leverage, setLeverage] = useState<number>(3);
   const [degenMode, setDegenMode] = useState(false);
   const [initialBuySol, setInitialBuySol] = useState<string>("0.1");
   const [submitting, setSubmitting] = useState(false);
   const [showAllMarkets, setShowAllMarkets] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Dev-buy bounds + quick-pick presets per quote token.
+  const BUY_BOUNDS = {
+    SOL: { min: 0.1, max: 5, default: "0.1", presets: ["0.1", "0.5", "1", "2", "5"], step: 0.1 },
+    USDC: { min: 5, max: 5000, default: "20", presets: ["5", "20", "50", "100", "500"], step: 1 },
+  } as const;
+  // Switching the quote resets the dev-buy to a valid default for that token.
+  const selectQuote = (q: "SOL" | "USDC") => {
+    setQuote(q);
+    setInitialBuySol(BUY_BOUNDS[q].default);
+  };
 
   const currentMid = markets.find((m) => m.name === priceFeedSymbol(underlying))?.markPx ?? pythSnap[priceFeedSymbol(underlying)]?.markPx;
   const maxLev = maxLeverageFor(underlying);
@@ -111,9 +123,10 @@ function LaunchPage() {
       toast.error("Upload a coin image");
       return;
     }
-    const buySol = parseFloat(initialBuySol);
-    if (!Number.isFinite(buySol) || buySol < 0.1 || buySol > 5) {
-      toast.error("Initial buy must be between 0.1 and 5 SOL");
+    const buyNum = parseFloat(initialBuySol);
+    const buyBounds = BUY_BOUNDS[quote];
+    if (!Number.isFinite(buyNum) || buyNum < buyBounds.min || buyNum > buyBounds.max) {
+      toast.error(`Initial buy must be between ${buyBounds.min} and ${buyBounds.max} ${quote}`);
       return;
     }
     setSubmitting(true);
@@ -129,8 +142,9 @@ function LaunchPage() {
         underlying,
         leverage,
         direction,
+        quote,
         creatorAddress: wallet.address,
-        initialBuySol: buySol,
+        initialBuy: buyNum,
       });
       toast.success(`$${ticker} is live on Solana`);
       navigate({ to: "/token/$id", params: { id: res.tokenId } });
@@ -177,7 +191,7 @@ function LaunchPage() {
           <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">← Back</Link>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight">Create a coin</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Launches on Solana via Meteora's bonding curve, quoted in SOL. Your reserve powers a leveraged perp tied to the market you pick, so the coin price tracks it 24/7. Starts around $3k market cap and graduates to Meteora DAMM near $40k.
+            Launches on Solana via Meteora's bonding curve, quoted in {quote}. Your reserve powers a leveraged perp tied to the market you pick, so the coin price tracks it 24/7. Starts around $3k market cap and graduates to Meteora DAMM near $40k.
           </p>
         </div>
 
@@ -362,6 +376,27 @@ function LaunchPage() {
             )}
           </div>
 
+          <div>
+            <Label>Pair / quote token</Label>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {(["SOL", "USDC"] as const).map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => selectQuote(q)}
+                  className={`border py-2.5 text-sm font-medium transition-all ${
+                    quote === q ? "border-foreground bg-accent" : "border-border hover:border-foreground/40"
+                  }`}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+              The bonding curve and graduated pool are denominated in {quote}. Your initial buy is in {quote}.
+            </p>
+          </div>
+
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <Label>Direction</Label>
@@ -452,24 +487,24 @@ function LaunchPage() {
 
 
           <div>
-            <Label htmlFor="initialBuy">Initial buy (SOL)</Label>
+            <Label htmlFor="initialBuy">Initial buy ({quote})</Label>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your dev buy on launch. Min 0.1, max 5 SOL. Seeds the curve and gives you the first bag.
+              Your dev buy on launch. Min {BUY_BOUNDS[quote].min}, max {BUY_BOUNDS[quote].max} {quote}. Seeds the curve and gives you the first bag.
             </p>
             <div className="mt-3 flex items-center gap-2">
               <Input
                 id="initialBuy"
                 type="number"
-                min={0.1}
-                max={5}
-                step={0.1}
+                min={BUY_BOUNDS[quote].min}
+                max={BUY_BOUNDS[quote].max}
+                step={BUY_BOUNDS[quote].step}
                 required
                 value={initialBuySol}
                 onChange={(e) => setInitialBuySol(e.target.value)}
                 className="font-mono"
               />
               <div className="flex gap-1">
-                {["0.1", "0.5", "1", "2", "5"].map((v) => (
+                {BUY_BOUNDS[quote].presets.map((v) => (
                   <button
                     key={v}
                     type="button"
@@ -494,7 +529,7 @@ function LaunchPage() {
               {currentMid && ` @ ${formatUsdPrice(currentMid)}`}
             </div>
             <div className="mt-1 font-mono text-xs text-muted-foreground">
-              Dev buy: {initialBuySol || "0"} SOL
+              Dev buy: {initialBuySol || "0"} {quote}
             </div>
           </div>
 
