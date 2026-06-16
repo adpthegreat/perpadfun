@@ -29,7 +29,6 @@ import {
   unwrapWsol,
   readPerpPosition,
   closePerp,
-  SUPPORTED_SYMBOLS,
 } from "./jupiterPerps.js";
 import {
   Connection,
@@ -65,34 +64,19 @@ import {
   State,
 } from "./workflow.js";
 import { tokenLog, newTickId, tickSummary, tokenTickSummary, logInfo, logError } from "./structuredLog.js";
-import { pickEntryMid, captureMarkAsEntry, computePnlFromEntry } from "./pnl.js";
+import { captureMarkAsEntry, computePnlFromEntry } from "./pnl.js";
 import {
   gateImperialFunding,
   depositToImperialProfile,
   getWalletCapacityUsd,
 } from "./imperialDeposit.js";
 import {
-  authenticate as imperialAuthenticate,
-  isSupportedMarket as isImperialSupportedMarket,
+  getAuthToken,
   getProfile as imperialGetProfile,
-  getPositions as imperialGetPositions,
-  getMarkPriceUi as imperialGetMarkPriceUi,
+  getMarkPriceUiSafe as readImperialLiveMarkUsd,
   MIN_COLLATERAL_USD as IMPERIAL_MIN_COLLATERAL_USD,
-  SUPPORTED_MARKETS as IMPERIAL_SUPPORTED_MARKETS,
 } from "./imperial.js";
 
-// Router-aware underlying gate. Jupiter Perps only supports SOL/ETH/BTC,
-// but Imperial supports a much wider set (HYPE, SUI, AVAX, etc.).
-// Gating purely on Jupiter's whitelist incorrectly skips Imperial-routed
-// tokens. Always check support against the router the token actually uses.
-function isUnderlyingSupportedForToken(token, underlying) {
-  const sym = String(underlying ?? "").toUpperCase();
-  if (!sym) return false;
-  const routerId = String(token?.router ?? "imperial").toLowerCase();
-  if (routerId === "imperial") return isImperialSupportedMarket(sym);
-  // jupiter (or any unknown id) falls back to the Jupiter whitelist
-  return SUPPORTED_SYMBOLS.has(sym);
-}
 import {
   imperialReadPosition,
   imperialOpenPosition,
@@ -101,6 +85,11 @@ import {
   imperialTopUpMargin,
   imperialPartialClose,
   imperialWithdrawCollateral,
+  clampLeverage,
+  readVerifiedImperialPosition,
+  resolveImperialEntryPrice,
+  readImperialProfileUsdcUi,
+  isUnderlyingSupportedForToken,
 } from "./imperialPerps.js";
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -118,21 +107,6 @@ function isRealSolanaSignature(signature) {
   return typeof signature === "string" && /^[1-9A-HJ-NP-Za-km-z]{64,128}$/.test(signature);
 }
 
-const IMPERIAL_MAX_LEVERAGE = Number(process.env.IMPERIAL_MAX_LEVERAGE ?? 9.5);
-const IMPERIAL_LEVERAGE_SAFETY_MARGIN = Number(process.env.IMPERIAL_LEVERAGE_SAFETY_MARGIN ?? 0.5);
-function clampImperialLeverage(label, requested, symbol) {
-  const req = Number(requested);
-  if (!Number.isFinite(req) || req <= 0) return req;
-  const sym = String(symbol || "").toUpperCase();
-  const marketCap = sym && IMPERIAL_SUPPORTED_MARKETS[sym]?.maxLeverage;
-  const ceiling = Number.isFinite(marketCap) && marketCap > 0
-    ? Math.max(1, marketCap - IMPERIAL_LEVERAGE_SAFETY_MARGIN)
-    : IMPERIAL_MAX_LEVERAGE;
-  if (req <= ceiling) return req;
-  const clamped = ceiling;
-  console.log(`[${label}] leverage clamped ${req}x -> ${clamped}x (cap=${marketCap ?? "global"}, margin=${IMPERIAL_LEVERAGE_SAFETY_MARGIN})`);
-  return clamped;
-}
 
 // Fix 3a: how long a position_open_pending workflow row may block a re-open
 // before it's treated as stale (the open likely never landed) and a retry is
@@ -256,23 +230,9 @@ function tre() {
   return _treasury;
 }
 
-// Cache Imperial auth tokens per sub-wallet. Each token operates from its
-// own dedicated sub-wallet, which is its own Imperial account (with its own
-// "Main" profile at index 0). Keying the cache by pubkey lets us serve every
-// token's loop branch without re-authenticating each tick.
-const _imperialAuthByWallet = new Map(); // base58 pubkey -> { token, expiresAt }
-async function getImperialTokenFor(kp) {
-  if (!kp) throw new Error("getImperialTokenFor: kp required");
-  const key = kp.publicKey.toBase58();
-  const now = Date.now();
-  const cached = _imperialAuthByWallet.get(key);
-  if (cached && (!cached.expiresAt || cached.expiresAt - now > 30 * 60_000)) {
-    return cached.token;
-  }
-  const r = await imperialAuthenticate(kp);
-  _imperialAuthByWallet.set(key, { token: r.token, expiresAt: r.expiresAt ?? null });
-  return r.token;
-}
+// Imperial auth tokens are cached per sub-wallet inside imperial.js
+// (authenticate()'s own _authCache). getAuthToken() is the thin string-returning
+// wrapper; no second cache layer is needed here.
 
 async function treasuryUsdcUi() {
   try {
@@ -504,100 +464,9 @@ async function skimTreasuryShare({
 // fees_accrued_usd. Persists for the life of the keeper process.
 let _lastTreasurySol = null;
 
-// Read profile free USDC (UI units) from the on-chain profile ATA first, with
-// API as a fallback when the ATA is unavailable.
-// Used to verify that an Imperial open/topup actually drained collateral
-// instead of being refunded by the venue in the same tx.
-async function readImperialProfileUsdcUi({ profileIndex, authToken, profilePda }) {
-  let ui = 0;
-  let pda = profilePda || null;
-  try {
-    const prof = await imperialGetProfile({ profileIndex, token: authToken });
-    ui = Number(prof?.usdcUi || 0);
-    if (prof?.profilePda) pda = prof.profilePda;
-  } catch {
-    // Fall through to the cached profile PDA on-chain read below.
-  }
-  if (pda) {
-    try {
-      const pdaPk = new PublicKey(pda);
-      const ata = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), pdaPk, true);
-      const bal = await withRetry(() => conn().getTokenAccountBalance(ata, "confirmed"));
-      const onChain = Number(bal?.value?.uiAmount ?? 0);
-      if (Number.isFinite(onChain)) ui = onChain;
-    } catch {
-      /* ATA may not exist */
-    }
-  }
-  return ui;
-}
-
-async function readVerifiedImperialPosition({
-  profileIndex,
-  symbol,
-  side,
-  authToken,
-  wallet,
-  attempts = 13,
-  delayMs = 1500,
-}) {
-  for (let i = 0; i < attempts; i++) {
-    const pos = await imperialReadPosition({
-      profileIndex,
-      symbol,
-      side,
-      token: authToken,
-      wallet,
-    });
-    if (pos && Number(pos.sizeUsd) > 0) return pos;
-    await new Promise((r) => setTimeout(r, delayMs));
-  }
-  // Diagnostic: dump the raw /positions payload so we can see what Imperial
-  // is actually returning for this wallet. Helps confirm whether positions
-  // live under a different wallet namespace (e.g. API-key wallet vs sub).
-  try {
-    const raw = await imperialGetPositions(wallet, { token: authToken });
-    const list = Array.isArray(raw?.dataList) ? raw.dataList : Array.isArray(raw) ? raw : [];
-    const summary = list.slice(0, 8).map((p) => ({
-      profile: p?.profileIndex ?? p?.profileIdx ?? p?.profile,
-      symbol: p?.symbol ?? p?.asset ?? p?.marketSymbol ?? p?.baseSymbol,
-      side: p?.side ?? p?.direction ?? p?.positionSide,
-      sizeUsd: p?.sizeUsd ?? p?.notionalUsd ?? p?.size,
-    }));
-    console.warn(
-      `[imperial:readPos] DIAG no match for wallet=${wallet} profile=${profileIndex} ${String(symbol).toUpperCase()} ${String(side).toLowerCase()} after ${attempts} tries. /positions returned ${list.length} entries: ${JSON.stringify(summary)}`,
-    );
-  } catch (e) {
-    console.warn(`[imperial:readPos] DIAG getPositions dump failed: ${e.message}`);
-  }
-  return null;
-}
-
-async function resolveImperialEntryPrice({ verifiedPos, symbol, venue, token }) {
-  const picked = pickEntryMid({
-    venueEntry: verifiedPos?.entryPriceUsd,
-    venueMark: verifiedPos?.markPriceUsd,
-    existingMid: token?.launch_mid,
-  });
-  if (picked.price) return picked;
-  try {
-    const markPrice = await imperialGetMarkPriceUi(symbol, venue);
-    if (markPrice) return { price: Number(markPrice), source: "perpad_entry_mid" };
-  } catch (e) {
-    console.warn(`[imperial:entry] ${symbol} mark fallback failed:`, e.message);
-  }
-  return { price: null, source: null };
-}
-
-async function readImperialLiveMarkUsd(symbol, venue) {
-  try {
-    const mark = Number(await imperialGetMarkPriceUi(symbol, venue));
-    return Number.isFinite(mark) && mark > 0 ? mark : null;
-  } catch (e) {
-    console.warn(`[imperial:mark] ${symbol} live mark failed:`, e.message);
-    return null;
-  }
-}
+// readImperialProfileUsdcUi / readVerifiedImperialPosition /
+// resolveImperialEntryPrice moved to imperialPerps.js;
+// readImperialLiveMarkUsd -> imperial.js getMarkPriceUiSafe (imported above).
 
 async function checkSig(sig) {
   if (!sig) return null;
@@ -697,7 +566,7 @@ export async function tick() {
       if (t.pending_drift_sig) s += 1000;
       const live = !!t.position_opened_at;
       const funded = !!t.imperial_profile_pda;
-      const targetLev = clampImperialLeverage(
+      const targetLev = clampLeverage(
         `sort:${t.ticker ?? t.id} ${String(t.underlying ?? "").toUpperCase()}`,
         Math.max(1, Number(t.leverage ?? 2)),
       );
@@ -799,7 +668,7 @@ export async function tick() {
       const wasOpen = !!t.position_opened_at;
       const underlying = String(t.underlying ?? "").toUpperCase();
       const side = String(t.direction ?? "long").toLowerCase() === "short" ? "short" : "long";
-      const leverage = clampImperialLeverage(
+      const leverage = clampLeverage(
         `loop:${t.ticker ?? t.id} ${String(t.underlying ?? "").toUpperCase()}`,
         Math.max(1, Number(t.leverage ?? 2)),
         String(t.underlying ?? "").toUpperCase(),
@@ -818,7 +687,7 @@ export async function tick() {
       const imperialFullTrade = imperialTradeEnabled && config.imperial.positionMode === "full";
       let imperialAuthTokenCached = null;
       const ensureImperialAuth = async () => {
-        if (!imperialAuthTokenCached) imperialAuthTokenCached = await getImperialTokenFor(kp);
+        if (!imperialAuthTokenCached) imperialAuthTokenCached = await getAuthToken(kp);
         return imperialAuthTokenCached;
       };
       let imperialDepositedThisTickUsd = 0;
@@ -1973,7 +1842,7 @@ export async function tick() {
       const sizeUsdForTopupCheck = Number(patch.position_size_usd ?? t.position_size_usd ?? 0);
       const collateralUsdForTopupCheck = Number(patch.position_collateral_usd ?? t.position_collateral_usd ?? 0);
       const targetLeverageForTopupCheck = imperialTradeEnabled
-        ? clampImperialLeverage(`loop:${t.ticker} ${underlying}`, Math.max(1, leverage), underlying)
+        ? clampLeverage(`loop:${t.ticker} ${underlying}`, Math.max(1, leverage), underlying)
         : Math.max(1, leverage);
       const currentLeverageForTopupCheck = collateralUsdForTopupCheck > 0 && sizeUsdForTopupCheck > 0
         ? sizeUsdForTopupCheck / collateralUsdForTopupCheck
@@ -1999,7 +1868,7 @@ export async function tick() {
         // cap clamp inside imperialIncreasePosition still protects us from
         // exceeding Phoenix/Flash limits on assets like HYPE.
         const baseLeverage = imperialTradeEnabled
-          ? clampImperialLeverage(`loop:${t.ticker} ${underlying}`, targetLeverage, underlying)
+          ? clampLeverage(`loop:${t.ticker} ${underlying}`, targetLeverage, underlying)
           : targetLeverage;
         // For imperial topup we deploy the entire deposited/parked balance in
         // a single tick instead of metering by config.topUpCollateralUsd.

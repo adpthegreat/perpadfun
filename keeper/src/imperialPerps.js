@@ -44,12 +44,15 @@
 //   'full'      -> all actions allowed
 
 import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { config } from './config.js';
 import {
   getPositions,
+  getProfile,
   placeOrder,
   resolveMarket,
   getMarkPrice,
+  getMarkPriceUi,
   marketSymbol,
   isSupportedMarket,
   MIN_COLLATERAL_USD,
@@ -57,9 +60,18 @@ import {
   ensurePhoenixRegistered,
 } from './imperial.js';
 import { ensureUsdcForDeposit, depositToImperialProfile } from './imperialDeposit.js';
+import { SUPPORTED_SYMBOLS } from './jupiterPerps.js';
+import { pickEntryMid } from './pnl.js';
+import { withRetry } from './rateLimiter.js';
 
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const USDC_DECIMALS = 6;
+
+let _conn = null;
+function conn() {
+  if (!_conn) _conn = new Connection(config.rpcUrl, 'confirmed');
+  return _conn;
+}
 
 // _TODO_VERIFY_: confirm withdraw endpoint + mode token with Imperial team.
 // Current best guess parallels /deposit/build-tx { mode: 'deposit' }.
@@ -994,3 +1006,104 @@ export async function imperialClosePosition({
 
 // Re-export resolveMarket so callers can prefetch venue if needed.
 export { resolveMarket };
+
+// --- Keeper read helpers (moved here from loop.js) ---
+
+// Router-aware underlying gate. Imperial-routed tokens check the Imperial
+// market catalog; everything else falls back to the Jupiter whitelist.
+export function isUnderlyingSupportedForToken(token, underlying) {
+  const sym = String(underlying ?? '').toUpperCase();
+  if (!sym) return false;
+  const routerId = String(token?.router ?? 'imperial').toLowerCase();
+  if (routerId === 'imperial') return isSupportedMarket(sym);
+  // jupiter (or any unknown id) falls back to the Jupiter whitelist
+  return SUPPORTED_SYMBOLS.has(sym);
+}
+
+// Profile free USDC (UI units): read the API profile first, then prefer the
+// on-chain profile-PDA USDC ATA balance when available. Used to verify that an
+// open/topup actually drained collateral instead of being refunded same-tx.
+export async function readImperialProfileUsdcUi({ profileIndex, authToken, profilePda }) {
+  let ui = 0;
+  let pda = profilePda || null;
+  try {
+    const prof = await getProfile({ profileIndex, token: authToken });
+    ui = Number(prof?.usdcUi || 0);
+    if (prof?.profilePda) pda = prof.profilePda;
+  } catch {
+    // Fall through to the cached profile PDA on-chain read below.
+  }
+  if (pda) {
+    try {
+      const pdaPk = new PublicKey(pda);
+      const ata = await getAssociatedTokenAddress(new PublicKey(USDC_MINT), pdaPk, true);
+      const bal = await withRetry(() => conn().getTokenAccountBalance(ata, 'confirmed'));
+      const onChain = Number(bal?.value?.uiAmount ?? 0);
+      if (Number.isFinite(onChain)) ui = onChain;
+    } catch {
+      /* ATA may not exist */
+    }
+  }
+  return ui;
+}
+
+// Poll the venue until the position shows a positive size (open/topup landed),
+// or give up after `attempts` and dump a diagnostic of /positions.
+export async function readVerifiedImperialPosition({
+  profileIndex,
+  symbol,
+  side,
+  authToken,
+  wallet,
+  attempts = 13,
+  delayMs = 1500,
+}) {
+  for (let i = 0; i < attempts; i++) {
+    const pos = await imperialReadPosition({
+      profileIndex,
+      symbol,
+      side,
+      token: authToken,
+      wallet,
+    });
+    if (pos && Number(pos.sizeUsd) > 0) return pos;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  // Diagnostic: dump the raw /positions payload so we can see what Imperial
+  // is actually returning for this wallet. Helps confirm whether positions
+  // live under a different wallet namespace (e.g. API-key wallet vs sub).
+  try {
+    const raw = await getPositions(wallet, { token: authToken });
+    const list = Array.isArray(raw?.dataList) ? raw.dataList : Array.isArray(raw) ? raw : [];
+    const summary = list.slice(0, 8).map((p) => ({
+      profile: p?.profileIndex ?? p?.profileIdx ?? p?.profile,
+      symbol: p?.symbol ?? p?.asset ?? p?.marketSymbol ?? p?.baseSymbol,
+      side: p?.side ?? p?.direction ?? p?.positionSide,
+      sizeUsd: p?.sizeUsd ?? p?.notionalUsd ?? p?.size,
+    }));
+    console.warn(
+      `[imperial:readPos] DIAG no match for wallet=${wallet} profile=${profileIndex} ${String(symbol).toUpperCase()} ${String(side).toLowerCase()} after ${attempts} tries. /positions returned ${list.length} entries: ${JSON.stringify(summary)}`,
+    );
+  } catch (e) {
+    console.warn(`[imperial:readPos] DIAG getPositions dump failed: ${e.message}`);
+  }
+  return null;
+}
+
+// Pick the entry-price basis for PnL: prefer the venue's reported entry/mark or
+// the existing launch_mid (via pickEntryMid); fall back to the live mark price.
+export async function resolveImperialEntryPrice({ verifiedPos, symbol, venue, token }) {
+  const picked = pickEntryMid({
+    venueEntry: verifiedPos?.entryPriceUsd,
+    venueMark: verifiedPos?.markPriceUsd,
+    existingMid: token?.launch_mid,
+  });
+  if (picked.price) return picked;
+  try {
+    const markPrice = await getMarkPriceUi(symbol, venue);
+    if (markPrice) return { price: Number(markPrice), source: 'perpad_entry_mid' };
+  } catch (e) {
+    console.warn(`[imperial:entry] ${symbol} mark fallback failed:`, e.message);
+  }
+  return { price: null, source: null };
+}

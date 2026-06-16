@@ -220,6 +220,14 @@ export async function authenticate(keypair, opts = {}) {
   return { token, pubkey: wallet, expiresAt: exchangeRes.expiresAt, raw: exchangeRes };
 }
 
+// Thin string-returning wrapper over authenticate(). Auth is already cached
+// per-wallet inside authenticate (_authCache, 30-min refresh), so callers that
+// only need the JWT can use this without managing a second cache.
+export async function getAuthToken(keypair, opts = {}) {
+  const r = await authenticate(keypair, opts);
+  return r.token;
+}
+
 // --- Routing (quote only, no side effects) ---
 //
 // Imperial's /route endpoint is a GET with query params. It returns the best
@@ -370,6 +378,14 @@ export function applyMarketCatalog(next, { prune = false } = {}) {
 
 export function isSupportedMarket(symbol) {
   return Boolean(symbol && SUPPORTED_MARKETS[String(symbol).toUpperCase()]);
+}
+
+// Normalize an input symbol to the venue's canonical market symbol, resolving
+// aliases (e.g. OIL -> WTIOIL, which is what Phoenix calls it). Unknown symbols
+// pass through uppercased.
+export function marketSymbol(symbol) {
+  const sym = String(symbol ?? "").toUpperCase();
+  return SUPPORTED_MARKETS[sym]?.alias ?? sym;
 }
 
 
@@ -735,6 +751,18 @@ export const __FLASH_PRICE_EXPONENTS = FLASH_PRICE_EXPONENTS;
 
 export async function getMarkPriceUi(symbol, venue, opts = {}) {
   return readMarkPriceUi(symbol, venue, opts);
+}
+
+// Safe wrapper: live mark price in UI units, or null on any error / non-positive
+// value. Used by the keeper for PnL marks where a feed blip must not throw.
+export async function getMarkPriceUiSafe(symbol, venue, opts = {}) {
+  try {
+    const mark = Number(await getMarkPriceUi(symbol, venue, opts));
+    return Number.isFinite(mark) && mark > 0 ? mark : null;
+  } catch (e) {
+    console.warn(`[imperial:mark] ${symbol} live mark failed:`, e.message);
+    return null;
+  }
 }
 
 // Exposed for tests / shadow-mode logging.
