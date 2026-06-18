@@ -49,6 +49,7 @@ import {
 } from "./buyback.js";
 import { swapSolToUsdc, swapUsdcToSol, MIN_VIABLE_USDC } from "./swap.js";
 import { withRetry } from "./rateLimiter.js";
+import { backOff } from "./backoff.js";
 import { intentHash, tickBucket, buildTxLogEntry } from "./idempotency.js";
 import { loadKeypair, walletForToken } from "./wallet.js";
 import { quoteIfEnabled as imperialQuoteIfEnabled } from "./imperialRouter.js";
@@ -95,16 +96,112 @@ import {
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const MIN_BUYBACK_USD = 1;
 
-function closeSizeForRealizedPnl({ desiredPnlUsd, pnlUsd, sizeUsd }) {
-  const desired = Number(desiredPnlUsd);
-  const pnl = Number(pnlUsd);
-  const size = Number(sizeUsd);
-  if (!(desired > 0) || !(pnl > 0) || !(size > 0)) return 0;
-  return Math.min(size, (desired / pnl) * size);
+// Transient (pre-response) failure signature: a 429 / 503 / network blip /
+// dropped connection that means the request most likely never reached the venue,
+// so a retry is safe. Mirrors rateLimiter.withRetry's own predicate.
+const TP_TRANSIENT_RE = /\b429\b|rate.?limit|too many requests|\b503\b|ETIMEDOUT|ECONNRESET|EAI_AGAIN|fetch failed|socket hang up/i;
+
+// Retry a venue mutation (TP close / withdraw / swap) on TRANSIENT errors only,
+// with exponential backoff (via withRetry), before giving up and letting the
+// caller emit an error + carry to the next tick. Business rejections (blocked /
+// invalid / insufficient) are returned/raised immediately — they won't succeed
+// on retry. Some venue fns CATCH their own exceptions and return `{ error }`, so
+// we re-throw a transient one to trigger the backoff; non-transient errors pass
+// straight through. We only retry pre-response transient failures, so a retry
+// should not double-execute in the common case; the per-token pending_drift_sig
+// + next-tick reconciliation is the backstop for the rare "landed but response
+// lost" window.
+const TP_MAX_ATTEMPTS = 2;
+async function withVenueRetry(label, ctx, fn) {
+  return backOff(
+    async () => {
+      const res = await fn();
+      if (res && res.error && TP_TRANSIENT_RE.test(String(res.error))) {
+        throw new Error(String(res.error));
+      }
+      return res;
+    },
+    {
+      numOfAttempts: TP_MAX_ATTEMPTS,
+      startingDelay: 500,
+      timeMultiple: 2,
+      maxDelay: 4000,
+      jitter: "full",
+      // Called on each failed attempt. Only transient errors retry; on a retry
+      // that will actually happen, log + emit an event so retries are visible
+      // (keeper_logs + treasury_events). The final failure is logged by the
+      // caller's catch, so we don't double-log it here.
+      retry: (e, attempt) => {
+        const transient = TP_TRANSIENT_RE.test(String(e?.message ?? ""));
+        if (transient && attempt < TP_MAX_ATTEMPTS) {
+          const fullErr = String(e?.message ?? "");
+          // keeper_logs is unlimited (message text, fields jsonb) — keep the FULL
+          // error for debugging. Only the UI-facing treasury_events note is
+          // shortened (the full error is in keeper_logs).
+          keeperLog(ctx.t, "warn", `${label} retry ${attempt}/${TP_MAX_ATTEMPTS}`, {
+            attempt,
+            of: TP_MAX_ATTEMPTS,
+            error: fullErr,
+            tick_id: ctx.tickId,
+          });
+          ctx.events.push({
+            kind: "tick",
+            note: `${label} retry ${attempt}/${TP_MAX_ATTEMPTS} after transient err: ${fullErr.slice(0, 140)}`,
+          });
+        }
+        return transient;
+      },
+    },
+  );
 }
 
 function isRealSolanaSignature(signature) {
   return typeof signature === "string" && /^[1-9A-HJ-NP-Za-km-z]{64,128}$/.test(signature);
+}
+
+// F5: gate token written to pending_drift_sig after an accepted TP close that has
+// no real on-chain signature (Imperial verified-via-positions). It defers TP/
+// top-up/buyback for exactly one tick (confirmPendingSigStep clears it), so TP
+// can't re-fire on a lagging position read before the reduced size is observed.
+const TP_SETTLE_SENTINEL = "tp-settle";
+
+// ── Pure take-profit decision (no I/O) — unit-tested in test/keeper/tp.test.ts ──
+// Should TP fire, and how much to close? Trigger basis is the CURRENT collateral
+// (collAfter): fire when floating profit has grown by tpTriggerRatio × collAfter
+// above the last lock-in (highWater). Returns { fire, frac, closeSizeUsd,
+// realizedPnlUsd, trigger }.
+export function planTakeProfit({ pnlNow, highWater, collAfter, sizeUsd, cfg }) {
+  const trigger = collAfter > 0 ? cfg.tpTriggerRatio * collAfter : Infinity;
+  if (!(collAfter > 0 && pnlNow > 0 && pnlNow - highWater >= trigger)) {
+    return { fire: false, trigger };
+  }
+  const frac = Math.min(0.95, Math.max(0, cfg.tpCloseFraction));
+  const closeSizeUsd = sizeUsd * frac;
+  const realizedPnlUsd = pnlNow * frac;
+  if (closeSizeUsd < cfg.tpMinCloseUsd || realizedPnlUsd < cfg.tpMinRealizeUsd) {
+    return { fire: false, trigger };
+  }
+  return { fire: true, frac, closeSizeUsd, realizedPnlUsd, trigger };
+}
+
+// Pure post-close reducer. Given the actually-applied close size, returns the
+// next position state + the 75/25 profit split. F1: nextPnlNow is the RESIDUAL
+// unrealized PnL (not the stale pre-close value), so it can be persisted safely.
+export function applyTakeProfit({ pnlNow, sizeUsd, collAfter, actualCloseSizeUsd, cfg }) {
+  const appliedFrac = sizeUsd > 0 ? Math.min(1, actualCloseSizeUsd / sizeUsd) : 0;
+  const realizedActual = pnlNow * appliedFrac;
+  const masterShareUsd = Math.max(0, realizedActual * cfg.tpMasterShareRatio);
+  const buybackShareUsd = Math.max(0, realizedActual - masterShareUsd);
+  return {
+    appliedFrac,
+    realizedActual,
+    nextSize: Math.max(0, sizeUsd - actualCloseSizeUsd),
+    nextColl: collAfter * (1 - appliedFrac),
+    nextHighWater: pnlNow * (1 - appliedFrac),
+    nextPnlNow: pnlNow * (1 - appliedFrac),
+    masterShareUsd,
+    buybackShareUsd,
+  };
 }
 
 
@@ -696,9 +793,20 @@ function marketSupportGate(ctx) {
 }
 
 // ---- 1. confirm pending perp request from prior tick ----
-async function confirmPendingSigStep(ctx) {
+export async function confirmPendingSigStep(ctx) {
   const { t } = ctx;
   ctx.pendingSig = t.pending_drift_sig ?? null;
+  // F5: a TP close that was accepted without a real on-chain signature (Imperial
+  // verified-via-positions) parks this sentinel. It is NOT a real signature — do
+  // not poll checkSig (which returns "pending" forever for non-sigs and would gate
+  // the token permanently). Clear it from the DB now (so it lasts exactly one
+  // tick) but keep ctx.pendingSig truthy so this tick's TP/top-up still defer,
+  // giving the venue one cycle to settle the reduced size before we read it again.
+  if (ctx.pendingSig === TP_SETTLE_SENTINEL) {
+    ctx.patch.pending_drift_sig = null;
+    ctx.events.push({ kind: "tick", note: "tp settle: deferring one tick for venue to reflect reduced size" });
+    return;
+  }
   const wfBeforePendingCheck = workflowStateFromToken(t);
   if (ctx.pendingSig && ctx.wasOpen && wfBeforePendingCheck?.state === State.POSITION_OPEN) {
     ctx.patch.pending_drift_sig = null;
@@ -897,16 +1005,21 @@ async function buybackDrainStep(ctx) {
             authToken,
             profilePda: ctx.patch.imperial_profile_pda ?? t.imperial_profile_pda,
           });
-          const lockedColl = Math.max(0, Number(ctx.patch.position_collateral_usd ?? t.position_collateral_usd ?? 0));
-          const profileFreeUsd = Math.max(0, profileUsdc - lockedColl);
+          // F2.2: readImperialProfileUsdcUi already returns the FREE (withdrawable)
+          // profile USDC — locked collateral is NOT included — so it must not be
+          // netted against position_collateral_usd again (that double-counted the
+          // lock and starved buyback withdrawals).
+          const profileFreeUsd = Math.max(0, profileUsdc);
           if (profileFreeUsd >= spendUsd) {
-            const w = await imperialWithdrawCollateral({
-              authToken,
-              kp: ctx.kp,
-              profileIndex: t.imperial_profile_index,
-              withdrawUsd: spendUsd,
-              rpcUrl: config.rpcUrl,
-            });
+            // F6: withdraw can hit transient venue/RPC errors — retry like the TP path.
+            const w = await withVenueRetry("buyback withdraw", ctx, async () =>
+              imperialWithdrawCollateral({
+                authToken,
+                kp: ctx.kp,
+                profileIndex: t.imperial_profile_index,
+                withdrawUsd: spendUsd,
+                rpcUrl: config.rpcUrl,
+              }));
             if (!w.error && w.signature) {
               ctx.events.push({
                 kind: "tick",
@@ -1761,7 +1874,7 @@ async function openPositionStep(ctx) {
 // addSize = addColl * baseLeverage, so leverage stays flat and the
 // entire slice backs the position. Works for 1x, 2x, 3x — and either
 // direction (long/short) because we just pass `side` through.
-async function topUpAndRepairStep(ctx) {
+export async function topUpAndRepairStep(ctx) {
   const { t, solUsd } = ctx;
   const topupGate = config.topUpFeeGateUsd;
   // Topup fires when EITHER new fees clear the gate, there's parked
@@ -1827,7 +1940,12 @@ async function topUpAndRepairStep(ctx) {
         // PDA are parked free USDC until an order attaches them. Do not
         // subtract already-attached collateral here, or parked top-ups like
         // LIFE's $230 never get picked up after the deposit tick.
-        liveImperialFreeTopupUsd = Math.max(0, liveImperialProfileUsdcUsd);
+        // F2 (defense-in-depth, plan §11): realized profit earmarked for buyback
+        // must never be redeployed as collateral. Reserve the outstanding buyback
+        // balance (persisted buyback_reserve_usd + this tick's reserveDelta) out of
+        // the free profile USDC the top-up may attach.
+        const buybackReservedUsd = Math.max(0, Number(t.buyback_reserve_usd ?? 0) + Number(ctx.reserveDelta || 0));
+        liveImperialFreeTopupUsd = Math.max(0, liveImperialProfileUsdcUsd - buybackReservedUsd);
       } catch {
         liveImperialProfileUsdcUsd = 0;
         liveImperialFreeTopupUsd = 0;
@@ -2095,8 +2213,12 @@ async function topUpAndRepairStep(ctx) {
             // piling up in the profile PDA. The size leg will catch up
             // on subsequent ticks once leverage has cushion. Skip when
             // we already used the collateral-only path (isAboveTarget).
+            // F3: also skip during a size repair — attaching more collateral while
+            // the size leg is behind is exactly how LIFE got pinned at ~1x. Repair
+            // size against the existing margin first; parked USDC stays parked.
             if (
               !isAboveTarget &&
+              !needsImperialSizeRepair &&
               addColl >= IMPERIAL_MIN_COLLATERAL_USD &&
               liveImperialFreeTopupUsd >= IMPERIAL_MIN_COLLATERAL_USD &&
               config.hedgeMode !== "simulate"
@@ -2250,6 +2372,249 @@ async function topUpAndRepairStep(ctx) {
   }
 }
 
+// Step 5 — read live PnL and take profit (proportional, incremental).
+// See plan/KEEPER_TP_REWRITE.md. Sets ctx.pnlNow / ctx.newHighWater for the report.
+export async function pnlAndTakeProfitStep(ctx) {
+  const { t, bucket, tickId, solUsd } = ctx;
+  // ---- 5. PnL trigger + buyback+burn ----
+  ctx.pnlNow = Number(t.treasury_pnl_usd ?? 0);
+  ctx.newHighWater = Number(t.pnl_high_water_usd ?? 0);
+  let collAfter = ctx.patch.position_collateral_usd ?? ctx.currentColl;
+
+  if ((ctx.hasLivePosition || ctx.patch.position_opened) && !ctx.pendingSig) {
+    let pos = ctx.chainPos;
+    if (!pos && ctx.patch.position_opened) {
+      try {
+        if (ctx.isImperialRouted) {
+          pos = await imperialReadPosition({
+            profileIndex: t.imperial_profile_index,
+            symbol: ctx.underlying,
+            side: ctx.side,
+
+            token: await ctx.ensureAuth().catch(() => null),
+            wallet: ctx.kp.publicKey.toBase58(),
+          });
+        } else {
+          pos = await readPerpPosition({ symbol: ctx.underlying, side: ctx.side, kp: ctx.kp });
+        }
+      } catch (e) {
+        keeperLog(t, "warn", "readPos failed", { error: e.message, tick_id: tickId });
+      }
+    }
+
+    if (pos) {
+      if (ctx.isImperialRouted) {
+        const liveMark = await readImperialLiveMarkUsd(ctx.underlying);
+        if (liveMark) pos.markPriceUsd = liveMark;
+      }
+      const cAfter = Number(pos.collateralUsd);
+      if (Number.isFinite(cAfter) && !ctx.optimisticImperialPositionState) {
+        collAfter = cAfter;
+        ctx.patch.position_collateral_usd = collAfter;
+      }
+      const sUsd = Number(pos.sizeUsd);
+      if (Number.isFinite(sUsd) && !ctx.optimisticImperialPositionState)
+        ctx.patch.position_size_usd = sUsd;
+
+      // Imperial blends avgEntryPrice on every add-margin/add-size which collapses
+      // their reported unrealizedPnlUsd toward zero. We preserve the ORIGINAL entry
+      // in launch_mid (never overwrite after open) and compute PnL ourselves from
+      // mark vs original entry. This matches what Imperial's UI actually displays.
+      const origEntry = Number(t.launch_mid ?? 0);
+      const markPx = Number(pos.markPriceUsd);
+      const sizeForPnl = Number.isFinite(sUsd) && sUsd > 0 ? sUsd : Number(t.position_size_usd ?? 0);
+      if (ctx.isImperialRouted && origEntry > 0 && Number.isFinite(markPx) && markPx > 0 && sizeForPnl > 0) {
+        const dirSign = ctx.side === "short" ? -1 : 1;
+        ctx.pnlNow = ((markPx - origEntry) / origEntry) * sizeForPnl * dirSign;
+      } else if (Number.isFinite(Number(pos.unrealizedPnlUsd))) {
+        ctx.pnlNow = Number(pos.unrealizedPnlUsd);
+      }
+
+      // Set launch_mid ONLY on first open (when we have no entry yet)
+      if (ctx.isImperialRouted && !(origEntry > 0) && Number.isFinite(Number(pos.entryPriceUsd)) && Number(pos.entryPriceUsd) > 0) {
+        ctx.patch.launch_mid = Number(pos.entryPriceUsd);
+      }
+    }
+    if (!Number.isFinite(ctx.pnlNow)) ctx.pnlNow = Number(t.treasury_pnl_usd ?? 0) || 0;
+    const prevPnl = Number(t.treasury_pnl_usd ?? 0) || 0;
+    const pnlDelta = Number.isFinite(ctx.pnlNow - prevPnl) ? ctx.pnlNow - prevPnl : 0;
+    ctx.events.push({
+      kind: "tick",
+      mid:
+        pos && Number.isFinite(Number(pos.markPriceUsd)) ? Number(pos.markPriceUsd) : undefined,
+      pnl_delta_usd: pnlDelta,
+      note: `pnl=$${ctx.pnlNow.toFixed(2)} hw=$${ctx.newHighWater.toFixed(2)} coll=$${collAfter.toFixed(2)} reserve=$${(ctx.currentReserve + ctx.reserveDelta).toFixed(2)}`,
+    });
+
+    // ─── TAKE PROFIT (proportional, incremental — see plan/KEEPER_TP_REWRITE.md) ───
+    // Each time floating profit grows by tpTriggerRatio × the CURRENT collateral
+    // above the last lock-in, close tpCloseFraction of the position. Size,
+    // collateral and realized profit scale by the same fraction, so nominal
+    // leverage (size/collateral) is preserved without a repair add. Realized
+    // profit: 75% -> buyback reserve, 25% -> master.
+    //
+    // Basis = collAfter (current, post-top-up collateral), so the gate scales
+    // with the position as it grows via fees and self-corrects if a redeposit
+    // fails: the transient post-close dip is already restored by
+    // topUpAndRepairStep (which runs before this step), and if it genuinely
+    // can't be restored, the smaller basis is correct for the smaller position.
+    const tp = planTakeProfit({
+      pnlNow: ctx.pnlNow,
+      highWater: ctx.newHighWater,
+      collAfter,
+      sizeUsd: ctx.patch.position_size_usd ?? Number(t.position_size_usd ?? 0),
+      cfg: config,
+    });
+    if (tp.fire) {
+      const sizeUsd = ctx.patch.position_size_usd ?? Number(t.position_size_usd ?? 0);
+      const { closeSizeUsd, realizedPnlUsd, trigger } = tp;
+      try {
+        const res = await withVenueRetry("tp close", ctx, async () =>
+          ctx.imperialFullTrade
+            ? await imperialPartialClose({
+                authToken: await ctx.ensureAuth(),
+                kp: ctx.kp,
+                profileIndex: t.imperial_profile_index,
+                symbol: ctx.underlying,
+                side: ctx.side,
+                reduceSizeUsd: closeSizeUsd,
+                currentSizeUsd: sizeUsd,
+                positionId: pos?.positionPda || t.imperial_profile_pda || undefined,
+              })
+            : ctx.imperialTradeEnabled
+              ? {
+                  signature: null,
+                  simulated: false,
+                  error: `imperial tp blocked: positionMode=${config.imperial.positionMode}`,
+                }
+              : await partialClose({ symbol: ctx.underlying, side: ctx.side, reduceSizeUsd: closeSizeUsd, kp: ctx.kp }));
+        const realSignature = isRealSolanaSignature(res.signature);
+        const accepted = !res.error && (config.hedgeMode !== "live" || realSignature || res.verifiedVia === "positions");
+        if (realSignature) {
+          ctx.patch.pending_drift_sig = res.signature;
+          ctx.txLog.push(
+            buildTxLogEntry({
+              kind: "drift_adjust",
+              intent: intentHash([t.id, "tp_close", bucket, realizedPnlUsd.toFixed(2)]),
+              status: "pending",
+              signature: res.signature,
+              amountUsd: realizedPnlUsd,
+            }),
+          );
+        }
+        if (accepted) {
+          const prePnl = ctx.pnlNow; // pnl at fire time (for logging)
+          const actualCloseSizeUsd = Number(res.appliedReduceSizeUsd ?? closeSizeUsd);
+          const applied = applyTakeProfit({ pnlNow: prePnl, sizeUsd, collAfter, actualCloseSizeUsd, cfg: config });
+          ctx.patch.position_size_usd = applied.nextSize;
+          // Proportional: collateral scales with size, so nominal leverage is preserved.
+          ctx.patch.position_collateral_usd = applied.nextColl;
+          ctx.newHighWater = applied.nextHighWater;
+          // F1: persist the RESIDUAL pnl (not the stale pre-close value) so a read
+          // miss next tick can't re-fire TP without fresh price movement.
+          ctx.pnlNow = applied.nextPnlNow;
+          // F5: an accepted close with no real signature (verified-via-positions)
+          // must still gate the next tick (one-tick settle) so TP can't re-fire on
+          // a lagging size read; confirmPendingSigStep clears this sentinel.
+          if (!realSignature) ctx.patch.pending_drift_sig = TP_SETTLE_SENTINEL;
+          keeperLog(t, "info", "tp fired", {
+            pnl_now: prePnl,
+            applied_frac: applied.appliedFrac,
+            realized_usd: applied.realizedActual,
+            close_size_usd: actualCloseSizeUsd,
+            trigger_usd: trigger,
+            tick_id: tickId,
+          });
+          ctx.events.push({
+            kind: "tick",
+            mid: pos && Number.isFinite(Number(pos.markPriceUsd)) ? Number(pos.markPriceUsd) : undefined,
+            pnl_delta_usd: applied.realizedActual,
+            note:
+              `${ctx.imperialFullTrade ? "[imperial] " : ""}TP: closed ${(applied.appliedFrac * 100).toFixed(0)}% ($${actualCloseSizeUsd.toFixed(2)} size) realizing $${applied.realizedActual.toFixed(2)} ` +
+              `(pnl=$${prePnl.toFixed(0)}/coll=$${collAfter.toFixed(0)}, fire>=$${trigger.toFixed(2)})` +
+              (res.simulated && !res.signature ? " [SIMULATED]" : ""),
+          });
+          // Profit split: 75% buyback reserve, 25% master treasury (USDC->SOL).
+          if (config.hedgeMode === "live" && ctx.buybackMint) {
+            const { masterShareUsd, buybackShareUsd } = applied;
+            try {
+              // Recycle guard (plan §11): withdraw the realized profit OUT of the
+              // imperial profile to the sub-wallet so the next tick's top-up can't
+              // redeploy it as collateral. Non-imperial partial-close already
+              // settles in the sub-wallet, so no withdraw is needed there.
+              if (ctx.imperialFullTrade) {
+                const withdrawUsd = masterShareUsd + buybackShareUsd;
+                if (withdrawUsd >= 1) {
+                  await withVenueRetry("tp withdraw", ctx, async () =>
+                    imperialWithdrawCollateral({
+                      authToken: await ctx.ensureAuth(),
+                      kp: ctx.kp,
+                      profileIndex: t.imperial_profile_index,
+                      withdrawUsd,
+                      rpcUrl: config.rpcUrl,
+                    }));
+                }
+              }
+              // F2: credit the buyback reserve ONLY after the profit is actually
+              // out of the profile (withdrawn above, or settled in the sub-wallet
+              // for non-imperial). A failed withdraw throws -> caught below -> the
+              // reserve is NOT credited and the profit is not double-counted.
+              ctx.reserveDelta += buybackShareUsd;
+              ctx.events.push({
+                kind: "buyback",
+                pnl_delta_usd: applied.realizedActual,
+                note: `tp split: $${buybackShareUsd.toFixed(2)} (75%) -> buyback reserve, $${masterShareUsd.toFixed(2)} (25%) -> master treasury`,
+              });
+              if (masterShareUsd >= 1) {
+                const sw = await withVenueRetry("tp swap", ctx, () => swapUsdcToSol({ wantUsd: masterShareUsd, solUsd, kp: ctx.kp }));
+                if (sw && sw.solReceived > 0) {
+                  const lamports = Math.floor(sw.solReceived * 1e9) - 5_000; // leave gas
+                  if (lamports > 0) {
+                    const tx = new Transaction().add(
+                      SystemProgram.transfer({
+                        fromPubkey: ctx.kp.publicKey,
+                        toPubkey: tre().publicKey,
+                        lamports,
+                      }),
+                    );
+                    const sig = await sendAndConfirmTransaction(conn(), tx, [ctx.kp], {
+                      commitment: "confirmed",
+                    });
+                    const sentSol = lamports / 1e9;
+                    ctx.events.push({
+                      kind: "skim",
+                      sol_amount: sentSol,
+                      tx_sig: sig,
+                      pnl_delta_usd: masterShareUsd,
+                      note: `tp profit split: ${sentSol.toFixed(6)} SOL ($${masterShareUsd.toFixed(2)}) -> master treasury`,
+                    });
+                  }
+                }
+              }
+            } catch (e) {
+              keeperLog(t, "warn", "tp profit-route", { error: e.message, tick_id: tickId });
+              ctx.events.push({ kind: "tick", note: `tp profit-route pending: ${e.message.slice(0, 160)}` });
+            }
+          } else if (config.hedgeMode !== "live") {
+            ctx.events.push({
+              kind: "tick",
+              note: `[${config.hedgeMode}] would TP+buyback $${applied.realizedActual.toFixed(2)} (skipped: hedge mode not live)`,
+            });
+          }
+        } else {
+          ctx.events.push({
+            kind: "tick",
+            note: `tp not accepted: ${res.error ? res.error.slice(0, 150) : "no signature returned"}`,
+          });
+        }
+      } catch (e) {
+        keeperLog(t, "warn", "tp failed", { error: e.message, tick_id: tickId });
+        ctx.events.push({ kind: "tick", note: `tp err: ${e.message.slice(0, 150)}` });
+      }
+    }
+  }
+}
+
 export async function tick() {
   const tickId = newTickId();
   const tickStartedAt = Date.now();
@@ -2385,475 +2750,7 @@ export async function tick() {
       await imperialDepositStep(ctx);
       await openPositionStep(ctx);
       await topUpAndRepairStep(ctx);
-
-      // ---- 5. PnL trigger + buyback+burn ----
-      let pnlNow = Number(t.treasury_pnl_usd ?? 0);
-      let newHighWater = Number(t.pnl_high_water_usd ?? 0);
-      let collAfter = ctx.patch.position_collateral_usd ?? ctx.currentColl;
-
-      if ((ctx.hasLivePosition || ctx.patch.position_opened) && !ctx.pendingSig) {
-        let pos = ctx.chainPos;
-        if (!pos && ctx.patch.position_opened) {
-          try {
-            if (ctx.isImperialRouted) {
-              pos = await imperialReadPosition({
-                profileIndex: t.imperial_profile_index,
-                symbol: ctx.underlying,
-                side: ctx.side,
-
-                token: await ctx.ensureAuth().catch(() => null),
-                wallet: ctx.kp.publicKey.toBase58(),
-              });
-            } else {
-              pos = await readPerpPosition({ symbol: ctx.underlying, side: ctx.side, kp: ctx.kp });
-            }
-          } catch (e) {
-            keeperLog(t, "warn", "readPos failed", { error: e.message, tick_id: tickId });
-          }
-        }
-
-        if (pos) {
-          if (ctx.isImperialRouted) {
-            const liveMark = await readImperialLiveMarkUsd(ctx.underlying);
-            if (liveMark) pos.markPriceUsd = liveMark;
-          }
-          const cAfter = Number(pos.collateralUsd);
-          if (Number.isFinite(cAfter) && !ctx.optimisticImperialPositionState) {
-            collAfter = cAfter;
-            ctx.patch.position_collateral_usd = collAfter;
-          }
-          const sUsd = Number(pos.sizeUsd);
-          if (Number.isFinite(sUsd) && !ctx.optimisticImperialPositionState)
-            ctx.patch.position_size_usd = sUsd;
-
-          // Imperial blends avgEntryPrice on every add-margin/add-size which collapses
-          // their reported unrealizedPnlUsd toward zero. We preserve the ORIGINAL entry
-          // in launch_mid (never overwrite after open) and compute PnL ourselves from
-          // mark vs original entry. This matches what Imperial's UI actually displays.
-          const origEntry = Number(t.launch_mid ?? 0);
-          const markPx = Number(pos.markPriceUsd);
-          const sizeForPnl = Number.isFinite(sUsd) && sUsd > 0 ? sUsd : Number(t.position_size_usd ?? 0);
-          if (ctx.isImperialRouted && origEntry > 0 && Number.isFinite(markPx) && markPx > 0 && sizeForPnl > 0) {
-            const dirSign = ctx.side === "short" ? -1 : 1;
-            pnlNow = ((markPx - origEntry) / origEntry) * sizeForPnl * dirSign;
-          } else if (Number.isFinite(Number(pos.unrealizedPnlUsd))) {
-            pnlNow = Number(pos.unrealizedPnlUsd);
-          }
-
-          // Set launch_mid ONLY on first open (when we have no entry yet)
-          if (ctx.isImperialRouted && !(origEntry > 0) && Number.isFinite(Number(pos.entryPriceUsd)) && Number(pos.entryPriceUsd) > 0) {
-            ctx.patch.launch_mid = Number(pos.entryPriceUsd);
-          }
-        }
-        if (!Number.isFinite(pnlNow)) pnlNow = Number(t.treasury_pnl_usd ?? 0) || 0;
-        const gainAboveHigh = pnlNow - newHighWater;
-        const prevPnl = Number(t.treasury_pnl_usd ?? 0) || 0;
-        const pnlDelta = Number.isFinite(pnlNow - prevPnl) ? pnlNow - prevPnl : 0;
-        ctx.events.push({
-          kind: "tick",
-          mid:
-            pos && Number.isFinite(Number(pos.markPriceUsd)) ? Number(pos.markPriceUsd) : undefined,
-          pnl_delta_usd: pnlDelta,
-          note: `pnl=$${pnlNow.toFixed(2)} hw=$${newHighWater.toFixed(2)} coll=$${collAfter.toFixed(2)} reserve=$${(ctx.currentReserve + ctx.reserveDelta).toFixed(2)}`,
-        });
-
-        // ─── BACKSTOP TP (safety ctx.patch — see plan/KEEPER_TP_SAFETY_PATCH.md) ───
-        // Fires when the regular TP path has fallen behind and PnL has grown
-        // past backstopRatio × collateral. Always uses partial-close (Mode A)
-        // because the regular path likely failed due to a withdraw bug —
-        // falling back to the same withdraw path here would also fail.
-        let backstopFired = false;
-        const backstopPnlRatio = collAfter > 0 ? pnlNow / collAfter : 0;
-        if (pnlNow > 0 && backstopPnlRatio >= config.backstopRatio) {
-          // TP policy: realize 50% of current unrealized PnL, snapped to $5.
-          // No per-tick cap here: a cap silently turns a real +$5k winner into
-          // a tiny $500 shave and fails the vault's stated 50% profit-slice rule.
-          let backstopSlice = pnlNow * 0.5;
-          backstopSlice = Math.floor(backstopSlice / 5) * 5; // snap to $5
-          if (backstopSlice >= config.pnlTriggerUsd) {
-            const sizeUsd = ctx.patch.position_size_usd ?? Number(t.position_size_usd ?? 0);
-            const closeSizeUsd = closeSizeForRealizedPnl({
-              desiredPnlUsd: backstopSlice,
-              pnlUsd: pnlNow,
-              sizeUsd,
-            });
-            const realizedPnlUsd = sizeUsd > 0 ? pnlNow * (closeSizeUsd / sizeUsd) : 0;
-            try {
-              const res = ctx.imperialFullTrade
-                ? await imperialPartialClose({
-                    authToken: await ctx.ensureAuth(),
-                    kp: ctx.kp,
-
-                    profileIndex: t.imperial_profile_index,
-                    symbol: ctx.underlying,
-                    side: ctx.side,
-
-                    reduceSizeUsd: closeSizeUsd,
-                    currentSizeUsd: sizeUsd,
-                    positionId: pos?.positionPda || t.imperial_profile_pda || undefined,
-                  })
-                : ctx.imperialTradeEnabled
-                  ? {
-                      signature: null,
-                      simulated: false,
-                      error: `imperial backstop blocked: positionMode=${config.imperial.positionMode}`,
-                    }
-                  : await partialClose({
-                      symbol: ctx.underlying,
-                      side: ctx.side,
-
-                      reduceSizeUsd: closeSizeUsd,
-                      kp: ctx.kp,
-
-                    });
-              const realSignature = isRealSolanaSignature(res.signature);
-              const accepted = !res.error && (config.hedgeMode !== "live" || realSignature || res.verifiedVia === "positions");
-              if (realSignature) {
-                ctx.patch.pending_drift_sig = res.signature;
-                ctx.txLog.push(
-                  buildTxLogEntry({
-                    kind: "drift_adjust",
-                    intent: intentHash([t.id, "backstop_tp", bucket, backstopSlice.toFixed(2)]),
-                    status: "pending",
-                    signature: res.signature,
-                    amountUsd: realizedPnlUsd,
-                  }),
-                );
-              }
-              if (accepted) {
-                const actualCloseSizeUsd = Number(res.appliedReduceSizeUsd ?? closeSizeUsd);
-                ctx.patch.position_size_usd = Math.max(0, sizeUsd - actualCloseSizeUsd);
-                const frac = sizeUsd > 0 ? actualCloseSizeUsd / sizeUsd : 0;
-                ctx.patch.position_collateral_usd = collAfter * (1 - frac);
-                // ratchet high-water forward to post-close PnL so regular TP
-                // doesn't immediately re-fire on the residual gain
-                newHighWater = pnlNow * (1 - frac);
-                // Profit split (mirror regular TP): 75% -> buyback reserve,
-                // 25% -> master treasury via USDC->SOL swap.
-                let backstopMasterShareUsd = 0;
-                if (config.hedgeMode === "live" && ctx.buybackMint) {
-                  backstopMasterShareUsd = Math.max(0, realizedPnlUsd * 0.25);
-                  const backstopBuybackShareUsd = Math.max(0, realizedPnlUsd - backstopMasterShareUsd);
-                  ctx.reserveDelta += backstopBuybackShareUsd;
-                  ctx.events.push({
-                    kind: "buyback",
-                    pnl_delta_usd: realizedPnlUsd,
-                    note: `backstop split: $${backstopBuybackShareUsd.toFixed(2)} (75%) -> buyback reserve, $${backstopMasterShareUsd.toFixed(2)} (25%) -> master treasury`,
-                  });
-                  if (backstopMasterShareUsd >= 1) {
-                    try {
-                      // imperial partial-close settles inside the profile; non-imperial
-                      // partial-close settles in the sub-wallet. Withdraw only for imperial.
-                      if (ctx.imperialFullTrade) {
-                        await imperialWithdrawCollateral({
-                          authToken: await ctx.ensureAuth(),
-                          kp: ctx.kp,
-
-                          profileIndex: t.imperial_profile_index,
-                          withdrawUsd: backstopMasterShareUsd,
-                          rpcUrl: config.rpcUrl,
-                        });
-                      }
-                      const sw = await swapUsdcToSol({ wantUsd: backstopMasterShareUsd, solUsd, kp: ctx.kp });
-                      if (sw && sw.solReceived > 0) {
-                        const lamports = Math.floor(sw.solReceived * 1e9) - 5_000;
-                        if (lamports > 0) {
-                          const tx = new Transaction().add(
-                            SystemProgram.transfer({
-                              fromPubkey: ctx.kp.publicKey,
-                              toPubkey: tre().publicKey,
-                              lamports,
-                            }),
-                          );
-                          const sig = await sendAndConfirmTransaction(conn(), tx, [ctx.kp], {
-                            commitment: "confirmed",
-                          });
-                          const sentSol = lamports / 1e9;
-                          ctx.events.push({
-                            kind: "skim",
-                            sol_amount: sentSol,
-                            tx_sig: sig,
-                            pnl_delta_usd: backstopMasterShareUsd,
-                            note: `backstop profit split: ${sentSol.toFixed(6)} SOL ($${backstopMasterShareUsd.toFixed(2)}) -> master treasury`,
-                          });
-                        }
-                      }
-                    } catch (e) {
-                      keeperLog(t, "warn", "backstop master-share route", {
-                        error: e.message,
-                        tick_id: tickId,
-                      });
-                      ctx.events.push({
-                        kind: "tick",
-                        note: `backstop master-share pending: ${e.message.slice(0, 160)}`,
-                      });
-                    }
-                  }
-                }
-                backstopFired = true;
-                keeperLog(t, "info", "backstop_tp fired", {
-                  pnl_now: pnlNow,
-                  coll_after: collAfter,
-                  pnl_ratio: backstopPnlRatio,
-                  desired_pnl_usd: backstopSlice,
-                  close_size_usd: closeSizeUsd,
-                  realized_pnl_usd: realizedPnlUsd,
-                  tick_id: tickId,
-                });
-                ctx.events.push({
-                  kind: "buyback",
-                  pnl_delta_usd: realizedPnlUsd,
-                  note:
-                    `${ctx.imperialFullTrade ? "[imperial] " : ""}BACKSTOP TP realize $${realizedPnlUsd.toFixed(2)} by closing $${closeSizeUsd.toFixed(2)} size ` +
-                    `(pnl=$${pnlNow.toFixed(0)} / coll=$${collAfter.toFixed(0)} = ${(backstopPnlRatio * 100).toFixed(0)}%)` +
-                    (res.simulated && !res.signature ? " [SIMULATED]" : ""),
-                });
-              } else {
-                ctx.events.push({
-                  kind: "tick",
-                  note: `backstop_tp not accepted: ${res.error ? res.error.slice(0, 150) : "no signature returned"}`,
-                });
-              }
-            } catch (e) {
-              keeperLog(t, "warn", "backstop_tp failed", { error: e.message, tick_id: tickId });
-              ctx.events.push({ kind: "tick", note: `backstop_tp err: ${e.message.slice(0, 150)}` });
-            }
-          }
-        }
-        // ─── end backstop TP ───
-
-        if (!backstopFired && gainAboveHigh >= config.pnlTriggerUsd) {
-          const sizeUsd = ctx.patch.position_size_usd ?? Number(t.position_size_usd ?? 0);
-          // Anchor cap to creator's chosen ctx.leverage (NOT sizeNow/openedColl,
-          // which compounds with every top-up and effectively disables the cap).
-          const baseLeverage = Math.max(1, ctx.leverage);
-          const levCap = baseLeverage * config.leverageCapMult;
-          // Maximum collateral we can pull while keeping effective lev <= cap.
-          const minCollAtCap = levCap > 0 ? sizeUsd / levCap : 0;
-          const maxWithdrawByLev = Math.max(0, collAfter - minCollAtCap);
-          // TP policy: realize at most 50% of current unrealized PnL per fire.
-          // The ctx.leverage/withdraw caps below further restrict, but we never
-          // exceed 50% even if the backlog (gainAboveHigh) is larger.
-          const halfPnl = Math.max(0, pnlNow * 0.5);
-          const realizeRaw = Math.min(gainAboveHigh, halfPnl, maxWithdrawByLev, config.pnlRealizeMaxUsd);
-          let realizeUsd = Math.floor(realizeRaw / 5) * 5;
-          // Floor at pnlTriggerUsd so the partial-close branch below still fires
-          // when lev cap is already breached (realizeRaw < trigger via lev path).
-          if (realizeUsd < config.pnlTriggerUsd) realizeUsd = config.pnlTriggerUsd;
-          const wouldBeColl = collAfter - realizeUsd;
-          const wouldBeLev = wouldBeColl > 0 ? sizeUsd / wouldBeColl : Infinity;
-
-          let realized = false;
-          if (!ctx.imperialFullTrade && wouldBeLev <= levCap && wouldBeColl > 0) {
-            // (b) collateral withdrawal path — keeps size
-            try {
-              const res = ctx.imperialFullTrade
-                ? await imperialWithdrawCollateral({
-                    authToken: await ctx.ensureAuth(),
-                    kp: ctx.kp,
-
-                    profileIndex: t.imperial_profile_index,
-                    withdrawUsd: realizeUsd,
-                    rpcUrl: config.rpcUrl,
-                  })
-                : ctx.imperialTradeEnabled
-                  ? {
-                      signature: null,
-                      simulated: false,
-                      error: `phoenix withdraw paused: positionMode=${config.imperial.positionMode}`,
-                    }
-                  : await withdrawCollateral({
-                      symbol: ctx.underlying,
-                      side: ctx.side,
-
-                      withdrawUsd: realizeUsd,
-                      kp: ctx.kp,
-
-                    });
-              const realSignature = isRealSolanaSignature(res.signature);
-              const accepted = !res.error && (config.hedgeMode !== "live" || realSignature || res.verifiedVia === "positions");
-              if (realSignature) {
-                ctx.patch.pending_drift_sig = res.signature;
-                ctx.txLog.push(
-                  buildTxLogEntry({
-                    kind: "drift_adjust",
-                    intent: intentHash([t.id, "pnl_withdraw", bucket, realizeUsd.toFixed(2)]),
-                    status: "pending",
-                    signature: res.signature,
-                    amountUsd: realizeUsd,
-                  }),
-                );
-              }
-              if (accepted) {
-                ctx.patch.position_collateral_usd = wouldBeColl;
-                realized = true;
-                ctx.events.push({
-                  kind: "tick",
-                  note:
-                    `${ctx.imperialFullTrade ? "[imperial] " : ""}withdraw $${realizeUsd} collateral (lev ${(sizeUsd / wouldBeColl).toFixed(1)}x within cap ${levCap.toFixed(1)}x)` +
-                    (res.simulated && !res.signature ? " [SIMULATED]" : ""),
-                });
-              } else {
-                ctx.events.push({
-                  kind: "tick",
-                  note: `withdraw not accepted: ${res.error ? res.error.slice(0, 150) : "no signature returned"}`,
-                });
-              }
-            } catch (e) {
-              keeperLog(t, "warn", "withdraw failed", { error: e.message, tick_id: tickId });
-              ctx.events.push({ kind: "tick", note: `withdraw err: ${e.message.slice(0, 150)}` });
-            }
-          } else {
-            // (a) partial-close path — ctx.leverage cap reached
-            const closeSizeUsd = closeSizeForRealizedPnl({
-              desiredPnlUsd: realizeUsd,
-              pnlUsd: pnlNow,
-              sizeUsd,
-            });
-            const realizedPnlUsd = sizeUsd > 0 ? pnlNow * (closeSizeUsd / sizeUsd) : 0;
-            try {
-              const res = ctx.imperialFullTrade
-                ? await imperialPartialClose({
-                    authToken: await ctx.ensureAuth(),
-                    kp: ctx.kp,
-
-                    profileIndex: t.imperial_profile_index,
-                    symbol: ctx.underlying,
-                    side: ctx.side,
-
-                    reduceSizeUsd: closeSizeUsd,
-                    currentSizeUsd: sizeUsd, // needed so full-close snaps notional exactly
-                    positionId: pos?.positionPda || t.imperial_profile_pda || undefined,
-                  })
-                : ctx.imperialTradeEnabled
-                  ? {
-                      signature: null,
-                      simulated: false,
-                      error: `imperial partial-close blocked: positionMode=${config.imperial.positionMode}`,
-                    }
-                  : await partialClose({ symbol: ctx.underlying, side: ctx.side, reduceSizeUsd: closeSizeUsd, kp: ctx.kp });
-              const realSignature = isRealSolanaSignature(res.signature);
-              const accepted = !res.error && (config.hedgeMode !== "live" || realSignature || res.verifiedVia === "positions");
-              if (realSignature) {
-                ctx.patch.pending_drift_sig = res.signature;
-                ctx.txLog.push(
-                  buildTxLogEntry({
-                    kind: "drift_adjust",
-                    intent: intentHash([t.id, "pnl_partial_close", bucket, realizeUsd.toFixed(2)]),
-                    status: "pending",
-                    signature: res.signature,
-                    amountUsd: realizedPnlUsd,
-                  }),
-                );
-              }
-              if (accepted) {
-                const actualCloseSizeUsd = Number(res.appliedReduceSizeUsd ?? closeSizeUsd);
-                ctx.patch.position_size_usd = Math.max(0, sizeUsd - actualCloseSizeUsd);
-                // Imperial reduces collateral proportionally on partial close.
-                // Mirror that in the ctx.patch so effective ctx.leverage stays at target
-                // and next tick's repair check doesn't see a fake low-lev gap
-                // before the venue read reconciles.
-                const frac = sizeUsd > 0 ? actualCloseSizeUsd / sizeUsd : 0;
-                ctx.patch.position_collateral_usd = collAfter * (1 - frac);
-                realizeUsd = realizedPnlUsd;
-                realized = true;
-                ctx.events.push({
-                  kind: "tick",
-                  note:
-                    `${ctx.imperialFullTrade ? "[imperial] " : ""}partial-close $${closeSizeUsd.toFixed(2)} size to realize $${realizedPnlUsd.toFixed(2)} (lev guard: would be ${wouldBeLev.toFixed(1)}x > cap ${levCap.toFixed(1)}x)` +
-                    (res.simulated && !res.signature ? " [SIMULATED]" : ""),
-                });
-              } else {
-                ctx.events.push({
-                  kind: "tick",
-                  note: `partial-close not accepted: ${res.error ? res.error.slice(0, 150) : "no signature returned"}`,
-                });
-              }
-            } catch (e) {
-              keeperLog(t, "warn", "partial close failed", { error: e.message, tick_id: tickId });
-              ctx.events.push({ kind: "tick", note: `partial close err: ${e.message.slice(0, 150)}` });
-            }
-          }
-
-          // Profit split (TP path only): 75% to buyback+burn reserve,
-          // 25% routed to the master treasury wallet as SOL.
-          // Master share flow: ensure USDC is in sub-wallet (withdraw if
-          // partial-close path settled inside imperial profile), swap
-          // USDC -> SOL via Jupiter, transfer SOL to master.
-          if (realized && ctx.buybackMint) {
-            if (config.hedgeMode === "live") {
-              const masterShareUsd = Math.max(0, realizeUsd * 0.25);
-              const buybackShareUsd = Math.max(0, realizeUsd - masterShareUsd);
-              ctx.reserveDelta += buybackShareUsd;
-              newHighWater = pnlNow;
-              ctx.events.push({
-                kind: "buyback",
-                pnl_delta_usd: gainAboveHigh,
-                note: `queued realized $${buybackShareUsd.toFixed(2)} (75%) for buyback+burn, $${masterShareUsd.toFixed(2)} (25%) -> master treasury`,
-              });
-
-              if (masterShareUsd >= 1) {
-                try {
-                  // Partial-close path settles USDC inside imperial profile,
-                  // so withdraw the master share to the sub-wallet first.
-                  // (Withdraw path already deposited the full realizeUsd into
-                  // the sub-wallet, so no extra withdraw is needed there.)
-                  const realizedInSubWallet = !ctx.imperialFullTrade && wouldBeLev <= levCap && wouldBeColl > 0;
-                  if (!realizedInSubWallet) {
-                    await imperialWithdrawCollateral({
-                      authToken: await ctx.ensureAuth(),
-                      kp: ctx.kp,
-
-                      profileIndex: t.imperial_profile_index,
-                      withdrawUsd: masterShareUsd,
-                      rpcUrl: config.rpcUrl,
-                    });
-                  }
-                  const sw = await swapUsdcToSol({ wantUsd: masterShareUsd, solUsd, kp: ctx.kp });
-                  if (sw && sw.solReceived > 0) {
-                    const lamports = Math.floor(sw.solReceived * 1e9) - 5_000; // leave gas
-                    if (lamports > 0) {
-                      const tx = new Transaction().add(
-                        SystemProgram.transfer({
-                          fromPubkey: ctx.kp.publicKey,
-                          toPubkey: tre().publicKey,
-                          lamports,
-                        }),
-                      );
-                      const sig = await sendAndConfirmTransaction(conn(), tx, [ctx.kp], {
-                        commitment: "confirmed",
-                      });
-                      const sentSol = lamports / 1e9;
-                      ctx.events.push({
-                        kind: "skim",
-                        sol_amount: sentSol,
-                        tx_sig: sig,
-                        pnl_delta_usd: masterShareUsd,
-                        note: `tp profit split: ${sentSol.toFixed(6)} SOL ($${masterShareUsd.toFixed(2)}) -> master treasury`,
-                      });
-                    }
-                  }
-                } catch (e) {
-                  keeperLog(t, "warn", "tp master-share route", {
-                    error: e.message,
-                    tick_id: tickId,
-                  });
-                  ctx.events.push({
-                    kind: "tick",
-                    note: `tp master-share pending: ${e.message.slice(0, 160)}`,
-                  });
-                }
-              }
-            } else {
-              ctx.events.push({
-                kind: "tick",
-                note: `[${config.hedgeMode}] would buyback+burn $${realizeUsd} (skipped: hedge mode not live)`,
-              });
-              newHighWater = pnlNow; // advance high-water to avoid retrigger loop in sim
-            }
-          }
-        }
-      }
+      await pnlAndTakeProfitStep(ctx);
 
       // ---- 6. (removed) graduation drain ----
       // Previously this drained buyback_reserve_usd via buyback+burn after
@@ -2871,8 +2768,8 @@ export async function tick() {
         });
       }
 
-      ctx.patch.treasury_pnl_usd = Number.isFinite(pnlNow) ? pnlNow : 0;
-      ctx.patch.pnl_high_water_usd = Number.isFinite(newHighWater) ? newHighWater : 0;
+      ctx.patch.treasury_pnl_usd = Number.isFinite(ctx.pnlNow) ? ctx.pnlNow : 0;
+      ctx.patch.pnl_high_water_usd = Number.isFinite(ctx.newHighWater) ? ctx.newHighWater : 0;
       ctx.patch.fees_accrued_usd_delta = ctx.feesAccruedDelta || undefined;
       ctx.patch.buyback_reserve_usd_delta = ctx.reserveDelta + reserveDrainDelta || undefined;
       ctx.patch.treasury_sol_delta = ctx.treasurySolDelta || undefined;

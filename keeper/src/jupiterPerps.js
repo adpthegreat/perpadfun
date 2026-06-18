@@ -295,7 +295,7 @@ export async function getJupPerps() {
   const rpc = describeRpcUrl(config.rpcUrl);
   console.log(`[jup] using ${rpc.redactedUrl} host=${rpc.host}`);
   console.log(`[jup] hedge mode = ${config.hedgeMode.toUpperCase()}`);
-  console.log(`[jup] gate $${config.feeGateUsd} / open $${config.openCollateralUsd} / pnl trig $${config.pnlTriggerUsd} / lev cap ${config.leverageCapMult}x`);
+  console.log(`[jup] gate $${config.feeGateUsd} / open $${config.openCollateralUsd} / tp ${config.tpCloseFraction * 100}% every +${config.tpTriggerRatio * 100}%-of-current-coll`);
   if (config.hedgeMode === 'off') {
     console.log('[jup] perp leg DISABLED. fees claimed + buyback+burn still run.');
   } else if (config.hedgeMode === 'simulate') {
