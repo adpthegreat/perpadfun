@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getServerConnection, getTreasuryKeypair } from "@/lib/solana/treasury.server";
 import { deriveSubWalletAddress } from "@/lib/solana/subWallet.server";
 import { fetchJupiterPerpPosition, fetchAllMids } from "@/lib/tokens.functions";
+import { maxLeverageFor } from "@/lib/imperial-markets";
 
 export const getTreasuryPubkey = createServerFn({ method: "GET" }).handler(async () => {
   return { pubkey: getTreasuryKeypair().publicKey.toBase58() };
@@ -295,6 +296,17 @@ export const getTreasury = createServerFn({ method: "GET" })
         : dbPnl;
     const positionOpen = !!jup || !!t.position_opened_at;
 
+    // Display the NOMINAL leverage the position opened at — the creator's chosen
+    // leverage clamped to the venue cap (minus the keeper's 0.5 safety margin),
+    // e.g. 9.5x. NOT the venue's *effective* leverage (size/equity), which
+    // collapses toward 1x as unrealized profit grows and made healthy positions
+    // look broken on the token page. Stable across PnL swings + TP fires.
+    // See plan/KEEPER_TP_REWRITE.md §12.
+    const requestedLeverage = Number(t.leverage ?? 2);
+    const venueCap = maxLeverageFor(String(t.underlying ?? ""));
+    const nominalLeverage =
+      venueCap > 0 ? Math.min(requestedLeverage, Math.max(1, venueCap - 0.5)) : requestedLeverage;
+
     return {
       treasuryPubkey,
       state: {
@@ -308,7 +320,7 @@ export const getTreasury = createServerFn({ method: "GET" })
         positionSizeUsd: sizeUsd,
         positionCollateralUsd: collUsd,
         positionOpen,
-        leverage: jup?.leverage && jup.leverage > 0 ? jup.leverage : Number(t.leverage ?? 2),
+        leverage: nominalLeverage,
         direction: (jup?.side ?? dir) as "long" | "short",
         underlying: String(t.underlying ?? "SOL").toUpperCase(),
         pnlUsd,

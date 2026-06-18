@@ -53,6 +53,24 @@ const RENT_RESERVE_LAMPORTS = 2_500_000;   // ~0.0025 SOL (ATA + slack)
 const FEE_BUFFER_LAMPORTS   = 1_500_000;   // ~0.0015 SOL (2 txs + priority)
 const MIN_SPEND_LAMPORTS    = 1_000_000;   // 0.001 SOL min, else skip
 
+// Base floor every buyback-signing wallet must retain so the swap+burn txs
+// (which create the output-token ATA and pay 2 tx fees) can't fail with
+// `insufficient lamports`. This is the same RENT_RESERVE + FEE_BUFFER floor
+// the swap path enforces internally below.
+export const BUYBACK_BASE_FLOOR_LAMPORTS = RENT_RESERVE_LAMPORTS + FEE_BUFFER_LAMPORTS; // 0.004 SOL
+// Extra keep-alive a SUB-wallet holds on top of the base floor so it stays
+// fundable for the next tick's ops (rent top-ups, fee claims) instead of being
+// drained to the bare tx floor by a single buyback.
+export const SUB_BUYBACK_OPERATING_RESERVE_LAMPORTS = 6_000_000; // 0.006 SOL
+
+// Lamports a wallet may spend on a buyback while keeping its required reserve.
+// Master keeps only the base tx floor; sub-wallets also keep the operating
+// reserve. Returns 0 (never negative) when below the floor.
+export function buybackSpendableLamports({ walletLamports, isMaster = false }) {
+  const reserve = BUYBACK_BASE_FLOOR_LAMPORTS + (isMaster ? 0 : SUB_BUYBACK_OPERATING_RESERVE_LAMPORTS);
+  return Math.max(0, Number(walletLamports || 0) - reserve);
+}
+
 function detailedFetchError(label, error) {
   const cause = error?.cause;
   const bits = [error?.message ?? String(error)];

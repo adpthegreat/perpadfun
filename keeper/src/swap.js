@@ -176,3 +176,61 @@ export async function swapSolToUsdc({ wantUsdc, solUsd, kp }) {
     solSpent: lamports / 1e9,
   };
 }
+
+/**
+ * Swap up to `wantUsd` worth of USDC into SOL from `kp`'s wallet. Capped at the
+ * wallet's actual USDC balance. Used both to (a) convert USDC-quoted DBC/AMM fee
+ * claims into SOL so the rest of the keeper's SOL-denominated economics work
+ * unchanged, and (b) settle USDC profit slices back to the master treasury.
+ *
+ * @param {object} args
+ * @param {number} args.wantUsd target USD of USDC to swap into SOL (UI units)
+ * @param {number} [args.solUsd] current SOL price in USD (optional; only for logs)
+ * @param {import('@solana/web3.js').Keypair} args.kp wallet to swap from
+ * @returns {Promise<null | { swapSig: string, solReceived: number, usdcSpent: number }>}
+ */
+export async function swapUsdcToSol({ wantUsd, kp }) {
+  if (!(wantUsd > 0)) return null;
+
+  const c = conn();
+  const balRaw = await readUsdcRaw(c, kp.publicKey);
+  if (balRaw <= 0) return null;
+
+  const wantRaw = Math.floor(wantUsd * 1_000_000);
+  const amountRaw = Math.min(balRaw, wantRaw);
+  // Dust floor: <$0.01 isn't worth the swap fee.
+  if (amountRaw < 10_000) return null;
+
+  const quote = await jupQuote({
+    inputMint: USDC_MINT,
+    outputMint: SOL_MINT,
+    amountLamports: amountRaw,
+  });
+  const solOutRaw = Number(quote.outAmount);
+  if (!solOutRaw) throw new Error('jupiter returned zero SOL outAmount');
+
+  const priceImpact = Number(quote.priceImpactPct ?? 0);
+  if (priceImpact > MAX_PRICE_IMPACT_PCT) {
+    throw new Error(
+      `USDC->SOL price impact ${(priceImpact * 100).toFixed(2)}% > max ${(MAX_PRICE_IMPACT_PCT * 100).toFixed(2)}%`,
+    );
+  }
+
+  const swapResp = await jupSwap(quote, kp.publicKey.toBase58());
+  const swapTx = VersionedTransaction.deserialize(
+    Buffer.from(swapResp.swapTransaction, 'base64'),
+  );
+  swapTx.sign([kp]);
+
+  const swapSig = await c.sendTransaction(swapTx, { skipPreflight: false, maxRetries: 3 });
+  const swapConfirm = await c.confirmTransaction(swapSig, 'confirmed');
+  if (swapConfirm.value.err) {
+    throw new Error(`USDC->SOL swap failed on-chain: ${JSON.stringify(swapConfirm.value.err)}`);
+  }
+
+  return {
+    swapSig,
+    solReceived: solOutRaw / 1e9, // quoted SOL out (wrapAndUnwrapSol unwraps to native)
+    usdcSpent: amountRaw / 1_000_000,
+  };
+}

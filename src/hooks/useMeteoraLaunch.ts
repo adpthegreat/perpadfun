@@ -18,6 +18,11 @@ import {
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
+import {
+  getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createTransferCheckedInstruction,
+} from "@solana/spl-token";
 import { useServerFn } from "@tanstack/react-start";
 import {
   createDraftToken,
@@ -47,13 +52,19 @@ type LaunchInput = {
   leverage: number;
   direction: "long" | "short";
   creatorAddress?: string;
-  // Creator dev-buy in SOL. Min 0.1, max 5.
-  initialBuySol: number;
+  // Quote token the bonding curve is denominated in (default SOL).
+  quote?: "SOL" | "USDC";
+  // Creator dev-buy, in the QUOTE token's UI units. SOL: 0.1–5. USDC: 5–5000.
+  initialBuy: number;
 };
 
-const MIN_DEV_BUY_SOL = 0.1;
-const MAX_DEV_BUY_SOL = 5;
+// Dev-buy bounds + base-unit scale per quote token.
+const DEV_BUY_BOUNDS = {
+  SOL: { min: 0.1, max: 5, decimals: 9 },
+  USDC: { min: 5, max: 5000, decimals: 6 },
+} as const;
 const LAMPORTS_PER_SOL = 1_000_000_000;
+const USDC_MINT_PK = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 // Extra SOL the user sends to treasury to cover rent + tx fees for the two
 // transactions treasury signs (config init + pool+buy), plus a retry buffer
 // so a partial failure (config landed, pool didn't) can be retried. Must
@@ -75,12 +86,14 @@ export function useMeteoraLaunch() {
         throw new Error("Connect a Solana wallet");
       }
 
-      const buySol = input.initialBuySol;
-      if (!Number.isFinite(buySol) || buySol < MIN_DEV_BUY_SOL || buySol > MAX_DEV_BUY_SOL) {
-        throw new Error(`Initial buy must be between ${MIN_DEV_BUY_SOL} and ${MAX_DEV_BUY_SOL} SOL`);
+      const quote = input.quote ?? "SOL";
+      const bounds = DEV_BUY_BOUNDS[quote];
+      const buy = input.initialBuy;
+      if (!Number.isFinite(buy) || buy < bounds.min || buy > bounds.max) {
+        throw new Error(`Initial buy must be between ${bounds.min} and ${bounds.max} ${quote}`);
       }
-      const buyLamports = Math.floor(buySol * LAMPORTS_PER_SOL);
-      const prefundLamports = buyLamports + TX_SLACK_LAMPORTS;
+      // Dev-buy in the quote token's base units (lamports for SOL, 6dp for USDC).
+      const buyAmount = Math.floor(buy * 10 ** bounds.decimals);
 
       setStatus("creating-draft");
       const draft = await draftFn({
@@ -96,28 +109,85 @@ export function useMeteoraLaunch() {
       try {
         ensureBufferPolyfill();
 
+        // Build the prefund instruction set. SOL pools: a single SOL transfer
+        // covering dev-buy + rent/fees. USDC pools: SOL for rent/fees only, plus
+        // a USDC transfer of the dev-buy into the sub-wallet's USDC ATA. Reading
+        // current balances first makes a retry idempotent (never double-charges).
+        const prefundIxs = [];
+
+        // SOL leg: SOL pools fund buy + slack; USDC pools fund only rent/fees.
+        const solRequiredLamports =
+          quote === "USDC" ? TX_SLACK_LAMPORTS : buyAmount + TX_SLACK_LAMPORTS;
         const fundingTarget = await fundingTargetFn({
-          data: { tokenId: draft.tokenId, requiredLamports: prefundLamports },
+          data: { tokenId: draft.tokenId, requiredLamports: solRequiredLamports },
         });
         const subWalletPubkey = new PublicKey(fundingTarget.pubkey);
-        const lamportsToFund = fundingTarget.lamportsNeeded;
+        if (fundingTarget.lamportsNeeded > 0) {
+          prefundIxs.push(
+            SystemProgram.transfer({
+              fromPubkey: publicKey,
+              toPubkey: subWalletPubkey,
+              lamports: fundingTarget.lamportsNeeded,
+            }),
+          );
+        }
+
+        // USDC leg: create the sub-wallet's USDC ATA (user pays its rent) and
+        // transfer the missing dev-buy amount into it.
+        if (quote === "USDC") {
+          const subUsdcAta = getAssociatedTokenAddressSync(USDC_MINT_PK, subWalletPubkey, true);
+          const userUsdcAta = getAssociatedTokenAddressSync(USDC_MINT_PK, publicKey, false);
+          let subUsdcRaw = 0;
+          try {
+            const b = await connection.getTokenAccountBalance(subUsdcAta, "confirmed");
+            subUsdcRaw = Number(b.value.amount ?? 0);
+          } catch {
+            subUsdcRaw = 0;
+          }
+          const usdcToSend = Math.max(0, buyAmount - subUsdcRaw);
+          if (usdcToSend > 0) {
+            let userUsdcRaw = 0;
+            try {
+              const b = await connection.getTokenAccountBalance(userUsdcAta, "confirmed");
+              userUsdcRaw = Number(b.value.amount ?? 0);
+            } catch {
+              userUsdcRaw = 0;
+            }
+            if (userUsdcRaw < usdcToSend) {
+              throw new Error(
+                `Insufficient USDC: need ${(usdcToSend / 1e6).toFixed(2)}, wallet has ${(userUsdcRaw / 1e6).toFixed(2)}`,
+              );
+            }
+            prefundIxs.push(
+              createAssociatedTokenAccountIdempotentInstruction(
+                publicKey,
+                subUsdcAta,
+                subWalletPubkey,
+                USDC_MINT_PK,
+              ),
+              createTransferCheckedInstruction(
+                userUsdcAta,
+                USDC_MINT_PK,
+                subUsdcAta,
+                publicKey,
+                usdcToSend,
+                6,
+              ),
+            );
+          }
+        }
+
         let prefundSig: string | null = null;
 
-        if (lamportsToFund > 0) {
-          // 1. Build + sign + send a simple SOL transfer directly to this
-          // token's sub-wallet. If a previous attempt already funded it, this
-          // is skipped so retrying cannot double-charge the user.
+        if (prefundIxs.length > 0) {
+          // Build + sign + send the prefund. If a previous attempt already
+          // funded the sub-wallet, prefundIxs is empty and this is skipped so
+          // retrying cannot double-charge the user.
           const bh = await connection.getLatestBlockhash("confirmed");
           const transferTx = new Transaction({
             recentBlockhash: bh.blockhash,
             feePayer: publicKey,
-          }).add(
-            SystemProgram.transfer({
-              fromPubkey: publicKey,
-              toPubkey: subWalletPubkey,
-              lamports: lamportsToFund,
-            }),
-          );
+          }).add(...prefundIxs);
 
           setStatus("awaiting-signature");
           const signed = await signTransaction(transferTx);
@@ -150,12 +220,12 @@ export function useMeteoraLaunch() {
           }
           if (!landed) {
             throw new Error(
-              "Your SOL transfer expired before landing on-chain. No funds were moved. Please try launching again.",
+              "Your prefund transfer expired before landing on-chain. No funds were moved. Please try launching again.",
             );
           }
         }
 
-        // Past this point the user's SOL is in the token sub-wallet. Don't wipe the draft
+        // Past this point the user's funds are in the token sub-wallet. Don't wipe the draft
         // even if launchAsTreasury fails — we want a recoverable row.
         cleanupOnFail = false;
 
@@ -168,7 +238,7 @@ export function useMeteoraLaunch() {
             name: input.name,
             imageUrl: input.imageUrl,
             creatorAddress: publicKey.toBase58(),
-            buyLamports,
+            buyAmount,
             prefundSignature: prefundSig,
             curvePreset: draft.curvePreset as "gentle" | "standard" | "parabolic",
           },

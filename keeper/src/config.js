@@ -77,17 +77,17 @@ export const config = {
   minDepositUsd: Number(process.env.MIN_DEPOSIT_USD ?? 2),
   walletSolReserve: Number(process.env.WALLET_SOL_RESERVE ?? 0.01),
   minTopUpUsd: Number(process.env.MIN_TOPUP_USD ?? 25),
-  pnlTriggerUsd: Number(process.env.PNL_TRIGGER_USD ?? 25),
-  pnlRealizeMaxUsd: Number(process.env.PNL_REALIZE_MAX_USD ?? 250),
-  leverageCapMult: Number(process.env.LEVERAGE_CAP_MULT ?? 2),
-  // --- backstop TP (safety patch — see plan/KEEPER_TP_SAFETY_PATCH.md) ---
-  // Fires when pnl_now / coll ≥ backstopRatio, partial-closes to
-  // backstopTargetRatio × coll buffer, capped at backstopMaxPerTick.
-  // Default 0.5 — fires when floating PnL reaches 50% of collateral.
-  // Set BACKSTOP_RATIO=999 to disable (for safe initial rollout if needed).
-  backstopRatio: Number(process.env.BACKSTOP_RATIO ?? 0.5),
-  backstopTargetRatio: Number(process.env.BACKSTOP_TARGET_RATIO ?? 0.1),
-  backstopMaxPerTick: Number(process.env.BACKSTOP_MAX_PER_TICK ?? 500),
+  // --- take profit (proportional, incremental — see plan/KEEPER_TP_REWRITE.md) ---
+  // Each time floating profit grows by tpTriggerRatio × current collateral above
+  // the last lock-in, close tpCloseFraction of the position proportionally
+  // (size + collateral + realized profit scale together, leverage preserved).
+  tpTriggerRatio: Number(process.env.TP_TRIGGER_RATIO ?? 0.25),
+  tpCloseFraction: Number(process.env.TP_CLOSE_FRACTION ?? 0.2),
+  // Master-treasury share of realized profit (rest → buyback reserve).
+  tpMasterShareRatio: Number(process.env.TP_MASTER_SHARE_RATIO ?? 0.25),
+  // Don't fire a close below these floors (not worth the tx / venue rejects it).
+  tpMinCloseUsd: Number(process.env.TP_MIN_CLOSE_USD ?? 5),
+  tpMinRealizeUsd: Number(process.env.TP_MIN_REALIZE_USD ?? 1),
   minLiqBufferPct: Number(process.env.MIN_LIQ_BUFFER_PCT ?? 0.25),
   slippageBps: Number(process.env.HEDGE_SLIPPAGE_BPS ?? 100),
   maxBuybackPerTickUsd: Number(process.env.MAX_BUYBACK_PER_TICK_USD ?? 25),
