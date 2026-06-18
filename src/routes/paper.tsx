@@ -71,7 +71,7 @@ function PaperPage() {
               <li><span className="text-foreground">Crypto majors and L1s.</span> BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, TON, NEAR, SUI, TRX, LTC, DOT, BCH, XLM, HYPE, LINK, APE, ZEC.</li>
               <li><span className="text-foreground">DeFi and Sol-eco.</span> JUP, PYTH, JTO, KMNO, AAVE, UNI, ARB, GMX, ENA.</li>
               <li><span className="text-foreground">Memes.</span> BONK, PEPE, SHIB, WIF, FARTCOIN, PUMP, PENGU, BOME, TRUMP, MELANIA.</li>
-              <li><span className="text-foreground">Stocks.</span> TSLA, NVDA, AAPL, AMD, AMZN, SPY.</li>
+              <li><span className="text-foreground">Stocks.</span> TSLA, GOOGL, NVDA, AAPL, AMD, MU, AMZN, SPY.</li>
               <li><span className="text-foreground">Commodities and FX.</span> XAU, XAG, WTI, NATGAS, COPPER, EUR, GBP, USDJPY, USDCHF, USDCAD, AUD, NZD.</li>
             </ul>
             <p className="mt-3 text-muted-foreground">

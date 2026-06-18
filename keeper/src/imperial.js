@@ -292,7 +292,9 @@ const SUPPORTED_MARKETS_SNAPSHOT = Object.freeze({
   WTIOIL:   { venue: 'phoenix', maxLeverage: 20 },  
   NVDA:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
   AAPL:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
-  // direct passthrough
+  GOOGL:  { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
+  TSLA:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
+  MU:     { venue: 'phoenix', maxLeverage: 15 },                  // direct passthrough
 
   // ─── Other crypto majors ───
   XRP:      { venue: 'phoenix', maxLeverage: 15 },

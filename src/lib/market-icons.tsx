@@ -45,6 +45,7 @@ const ICONS: Record<string, IconDef> = {
   META: textIcon("M", "#0668e1", "#fff", "system-ui", 11),
   MSFT: textIcon("MS", "#00a4ef", "#fff", "system-ui", 8),
   GOOGL: textIcon("G", "#4285f4", "#fff", "system-ui", 11),
+  MU: textIcon("MU", "#4e2a84", "#fff", "system-ui", 8),
   MSTR: textIcon("MS", "#f7931a", "#fff", "system-ui", 8),
   // Commodities
   XAU: textIcon("Au", "#d4af37", "#000", "system-ui", 9),
