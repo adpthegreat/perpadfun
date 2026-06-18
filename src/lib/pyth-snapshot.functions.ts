@@ -9,6 +9,8 @@ const BENCH = "https://benchmarks.pyth.network/v1/shims/tradingview/history";
 // display symbol -> { hermes feed id, benchmarks TradingView symbol }
 const FEEDS: Record<string, { id: string; tv: string }> = {
   TSLA: { id: "0x16dad506d7db8da01c87581c87ca897a012a153557d4d578c3b9c9e1bc0632f1", tv: "Equity.US.TSLA/USD" },
+  GOOGL: { id: "0x5a48c03e9b9cb337801073ed9d166817473697efff0d138874e0f6a33d6d5aa6", tv: "Equity.US.GOOGL/USD" },
+  MU:   { id: "0x152244dc24665ca7dd3f257b8f442dc449b6346f48235b7b229268cb770dda2d", tv: "Equity.US.MU/USD" },
   NVDA: { id: "0xb1073854ed24cbc755dc527418f52b7d271f6cc967bbf8d8129112b18860a593", tv: "Equity.US.NVDA/USD" },
   AAPL: { id: "0x49f6b65cb1de6b10eaf75e7c03ca029c306d0357e91b5311b175084a5ad55688", tv: "Equity.US.AAPL/USD" },
   AMD:  { id: "0x3622e381dbca2efd1859253763b1adc63f7f9abb8e76da1aa8e638a57ccde93e", tv: "Equity.US.AMD/USD" },
