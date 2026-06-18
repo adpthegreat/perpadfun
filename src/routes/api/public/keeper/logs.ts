@@ -47,6 +47,88 @@ export const Route = createFileRoute("/api/public/keeper/logs")({
 
         if (level && !LEVELS.has(level)) return jsonErr(400, "level must be info, warn, or error");
 
+        // ── stats mode (?stats=1): header strip for the admin UI. Exact counts
+        // by level + last activity; per-token also returns the tokens +
+        // token_workflows rows. Kept on this route so it shares the same auth.
+        if (url.searchParams.get("stats")) {
+          const countByLevel = async (lvl: "info" | "warn" | "error") => {
+            let q = supabaseAdmin
+              .from("keeper_logs")
+              .select("id", { count: "exact", head: true })
+              .eq("level", lvl);
+            if (tokenId) q = q.eq("token_id", tokenId);
+            const { count, error } = await q;
+            if (error) throw new Error(error.message);
+            return count ?? 0;
+          };
+          const globalNullCountP = (async () => {
+            if (tokenId) return 0;
+            const { count, error } = await supabaseAdmin
+              .from("keeper_logs")
+              .select("id", { count: "exact", head: true })
+              .is("token_id", null);
+            if (error) throw new Error(error.message);
+            return count ?? 0;
+          })();
+          const lastActivityP = (async () => {
+            let q = supabaseAdmin
+              .from("keeper_logs")
+              .select("created_at")
+              .order("created_at", { ascending: false })
+              .limit(1);
+            if (tokenId) q = q.eq("token_id", tokenId);
+            const { data: rows, error } = await q;
+            if (error) throw new Error(error.message);
+            const v = rows?.[0]?.created_at;
+            return typeof v === "string" ? v : null;
+          })();
+          const tokenP = (async () => {
+            if (!tokenId) return null;
+            const { data: t, error } = await supabaseAdmin
+              .from("tokens")
+              .select("*")
+              .eq("id", tokenId)
+              .maybeSingle();
+            if (error) throw new Error(error.message);
+            return t ?? null;
+          })();
+          const workflowP = (async () => {
+            if (!tokenId) return null;
+            const { data: w, error } = await supabaseAdmin
+              .from("token_workflows")
+              .select("*")
+              .eq("token_id", tokenId)
+              .maybeSingle();
+            if (error) throw new Error(error.message);
+            return w ?? null;
+          })();
+          try {
+            const [info, warn, err, globalNullCount, lastActivityAt, token, workflow] =
+              await Promise.all([
+                countByLevel("info"),
+                countByLevel("warn"),
+                countByLevel("error"),
+                globalNullCountP,
+                lastActivityP,
+                tokenP,
+                workflowP,
+              ]);
+            return Response.json({
+              ok: true,
+              total: info + warn + err,
+              info,
+              warn,
+              error: err,
+              globalNullCount,
+              lastActivityAt,
+              token,
+              workflow,
+            });
+          } catch (e) {
+            return jsonErr(500, (e as Error).message);
+          }
+        }
+
         let query = supabaseAdmin
           .from("keeper_logs")
           .select("id, token_id, tick_id, level, event, message, fields, created_at")
@@ -62,6 +144,27 @@ export const Route = createFileRoute("/api/public/keeper/logs")({
         if (error) return jsonErr(500, error.message);
 
         const logs = data ?? [];
+        // Resolve ticker/name per token_id (no FK embed — it makes PostgREST
+        // fail) so the UI can show tickers without a second client round-trip.
+        const ids = [...new Set(logs.map((r) => r.token_id).filter(Boolean))] as string[];
+        const tokensById: Record<string, { ticker: string | null; name: string | null }> = {};
+        if (ids.length) {
+          const { data: toks } = await supabaseAdmin
+            .from("tokens")
+            .select("id, ticker, name")
+            .in("id", ids);
+          for (const t of toks ?? []) {
+            tokensById[t.id as string] = {
+              ticker: (t.ticker as string | null) ?? null,
+              name: (t.name as string | null) ?? null,
+            };
+          }
+        }
+        const enriched = logs.map((r) => ({
+          ...r,
+          tokens: r.token_id ? tokensById[r.token_id] ?? null : null,
+        }));
+
         // URL-safe cursor (no "+"): clients can pass next_before straight back as ?before=.
         const lastTs = logs.length ? logs[logs.length - 1].created_at : null;
         const nextBefore =
@@ -70,8 +173,8 @@ export const Route = createFileRoute("/api/public/keeper/logs")({
         return Response.json({
           ok: true,
           token_id: tokenId ?? null,
-          count: logs.length,
-          logs,
+          count: enriched.length,
+          logs: enriched,
           next_before: nextBefore,
         });
       },

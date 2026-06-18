@@ -3,13 +3,15 @@
 // treasury_events / tx_log). Data via the listKeeperLogs server fn (supabaseAdmin),
 // so no KEEPER_SECRET in the browser and no RLS on keeper_logs.
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useMemo, useState } from "react";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { LevelBadge, RowDetail, Stat, relativeTime, short } from "@/components/admin-logs/cells";
-import { getKeeperLogStats, listKeeperLogs } from "@/lib/keeper-logs.functions";
+// Reads keeper_logs via the secret-gated /api/public/keeper/logs route using the
+// admin key (x-keeper-secret) from localStorage — keeper_logs stays non-public.
+import { getKeeperLogStats, listKeeperLogs, AdminKeyError } from "@/lib/keeper-logs.client";
+import { getAdminKey, setAdminKey } from "@/lib/admin-key";
 
 export const Route = createFileRoute("/admin/keeper-logs")({
   component: AdminKeeperLogsPage,
@@ -29,23 +31,22 @@ function AdminKeeperLogsPage() {
   const [search, setSearch] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
-
-  const listFn = useServerFn(listKeeperLogs);
-  const statsFn = useServerFn(getKeeperLogStats);
+  const [adminKey, setAdminKeyState] = useState<string>(() => getAdminKey());
 
   // header stats (global)
   const stats = useQuery({
-    queryKey: ["keeper-logs-stats"],
-    queryFn: () => statsFn({ data: {} }),
+    queryKey: ["keeper-logs-stats", adminKey],
+    queryFn: () => getKeeperLogStats({ data: {} }),
+    enabled: !!adminKey,
     refetchInterval: 30_000,
     staleTime: 15_000,
   });
 
   // logs list (filters + cursor)
   const logsQ = useQuery({
-    queryKey: ["keeper-logs-list", level, eventFilter, tokenFilter, cursor],
+    queryKey: ["keeper-logs-list", adminKey, level, eventFilter, tokenFilter, cursor],
     queryFn: () =>
-      listFn({
+      listKeeperLogs({
         data: {
           level: level || undefined,
           event: eventFilter || undefined,
@@ -54,8 +55,11 @@ function AdminKeeperLogsPage() {
           limit: PAGE_LIMIT,
         },
       }),
+    enabled: !!adminKey,
     refetchInterval: 10_000,
   });
+
+  const locked = !adminKey || logsQ.error instanceof AdminKeyError;
 
   const rawLogs = logsQ.data?.logs ?? [];
   const nextBefore = logsQ.data?.nextBefore ?? null;
@@ -93,6 +97,37 @@ function AdminKeeperLogsPage() {
           <span className="text-xs text-muted-foreground">
             all tokens · auto-refresh 10s · cursor pages older
           </span>
+        </div>
+
+        {/* Admin key (x-keeper-secret) — stored in this browser only, sent as a
+            header to the secret-gated logs route. keeper_logs is not public. */}
+        <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
+          <span className="text-muted-foreground">admin key:</span>
+          <input
+            type="password"
+            className="px-2 py-1 rounded border border-border bg-background w-[260px] font-mono"
+            placeholder="x-keeper-secret (enter once)"
+            defaultValue={adminKey}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const v = (e.target as HTMLInputElement).value.trim();
+                setAdminKey(v);
+                setAdminKeyState(v);
+              }
+            }}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v !== adminKey) {
+                setAdminKey(v);
+                setAdminKeyState(v);
+              }
+            }}
+          />
+          {locked ? (
+            <span className="text-amber-500">enter the keeper secret to load logs</span>
+          ) : (
+            <span className="text-emerald-500">unlocked</span>
+          )}
         </div>
 
         {/* Counts strip */}
