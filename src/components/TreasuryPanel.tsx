@@ -67,7 +67,6 @@ export function TreasuryPanel({
 
   const sizeUsd = state?.positionSizeUsd ?? 0;
   const collUsd = state?.positionCollateralUsd ?? 0;
-  const effLev = collUsd > 0 ? sizeUsd / collUsd : 0;
   const isLive = !!state?.positionOpen && sizeUsd > 0;
   const feeGate = state?.feeGateUsd ?? 100;
   const topupGate = state?.topUpFeeGateUsd ?? 100;
@@ -133,10 +132,10 @@ export function TreasuryPanel({
           </div>
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Eff. leverage
+              Leverage
             </div>
             <div className="mt-1 font-mono text-base tabular-nums">
-              {isLive && effLev > 0 ? `${effLev.toFixed(2)}x` : "."}
+              {isLive && state?.leverage ? `${state.leverage}x` : "."}
             </div>
           </div>
           <div>
