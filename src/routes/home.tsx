@@ -4,8 +4,8 @@ export const Route = createFileRoute("/home")({
   component: () => <Navigate to="/" />,
   head: () => ({
     meta: [
-      { title: "perpad" },
-      { name: "description", content: "perpad" },
+      { title: "perpspad" },
+      { name: "description", content: "perpspad" },
     ],
   }),
 });

@@ -3,7 +3,7 @@ import { createHmac, randomUUID } from "crypto";
 import bs58 from "bs58";
 import { getTreasuryKeypair } from "./treasury.server";
 
-// Every perpad token uses Imperial profile slot 1 under its OWN sub-wallet.
+// Every perpspad token uses Imperial profile slot 1 under its OWN sub-wallet.
 // Isolation comes from the per-token sub-wallet (the signer), not the index —
 // so the index is a constant. Single source of truth for both the native and
 // external creation paths.
@@ -12,7 +12,7 @@ export const TOKEN_IMPERIAL_PROFILE_INDEX = 1;
 /**
  * Derive a deterministic per-token sub-wallet from the master treasury secret.
  *
- * seed = HMAC_SHA256(masterSecretKey, "perpad-subwallet-v1:" + tokenId)
+ * seed = HMAC_SHA256(masterSecretKey, "perpspad-subwallet-v1:" + tokenId)
  *
  * The seed is 32 bytes, exactly what Keypair.fromSeed expects. Same tokenId
  * always returns the same keypair. No private keys ever hit the database.
@@ -23,7 +23,7 @@ export const TOKEN_IMPERIAL_PROFILE_INDEX = 1;
 export function deriveSubWalletKeypair(tokenId: string): Keypair {
   const master = getTreasuryKeypair();
   const seed = createHmac("sha256", Buffer.from(master.secretKey))
-    .update(`perpad-subwallet-v1:${tokenId}`)
+    .update(`perpspad-subwallet-v1:${tokenId}`)
     .digest();
   return Keypair.fromSeed(new Uint8Array(seed));
 }

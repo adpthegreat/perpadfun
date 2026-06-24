@@ -146,7 +146,7 @@ export const listTokens = createServerFn({ method: "GET" })
         .from("tokens")
         .select("*")
         .not("status", "in", HIDDEN_STATUS_PG_LIST)
-        // Native perpad tokens: must have an on-chain mint.
+        // Native perpspad tokens: must have an on-chain mint.
         // External routers (pump.fun, etc.): only show after the first fee has
         // actually been routed through our treasury. Without this gate, anyone
         // can create a claim_token row for an arbitrary pump.fun mint and have
@@ -159,7 +159,7 @@ export const listTokens = createServerFn({ method: "GET" })
         // External (pump.fun) tokens are always "graduated" in our model
         // (they only show up after fees have routed through our treasury,
         // which implies the bonding curve is past the relevant point).
-        // Include them alongside native perpad tokens whose migration has
+        // Include them alongside native perpspad tokens whose migration has
         // actually completed.
         q = q
           .or("migration_status.in.(graduated,completed),source.eq.external")
@@ -231,7 +231,7 @@ export const listTokens = createServerFn({ method: "GET" })
           createdAt: t.created_at,
           creatorAddress: t.creator_address,
           currentMid: mid,
-          source: (t.source ?? "perpad") as "perpad" | "external",
+          source: (t.source ?? "perpspad") as "perpspad" | "external",
           externalPlatform: t.external_platform as string | null,
           externalMint: t.external_mint as string | null,
           router: (String(t.router ?? "imperial").toLowerCase() === "imperial"
@@ -241,11 +241,11 @@ export const listTokens = createServerFn({ method: "GET" })
       });
 
       enriched.sort((a, b) => {
-        // Pin $PERPAD only on the trending tab. Elsewhere it sorts naturally.
+        // Pin $PERPSPAD only on the trending tab. Elsewhere it sorts naturally.
         if (data.tab === "trending") {
-          const aPerpad = a.ticker?.toUpperCase() === "PERPAD" ? 1 : 0;
-          const bPerpad = b.ticker?.toUpperCase() === "PERPAD" ? 1 : 0;
-          if (aPerpad !== bPerpad) return bPerpad - aPerpad;
+          const aPerpspad = a.ticker?.toUpperCase() === "PERPSPAD" ? 1 : 0;
+          const bPerpspad = b.ticker?.toUpperCase() === "PERPSPAD" ? 1 : 0;
+          if (aPerpspad !== bPerpspad) return bPerpspad - aPerpspad;
         }
         if (data.tab === "new") {
           const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -344,7 +344,7 @@ export const getToken = createServerFn({ method: "GET" })
         mintAddress: t.mint_address as string | null,
         externalMint: t.external_mint as string | null,
         externalPlatform: t.external_platform as string | null,
-        source: (t.source ?? "perpad") as "perpad" | "external",
+        source: (t.source ?? "perpspad") as "perpspad" | "external",
         router: (String(t.router ?? "imperial").toLowerCase() === "imperial"
           ? "imperial"
           : "jupiter") as "imperial" | "jupiter",
@@ -514,7 +514,7 @@ export const getOpenPerpPositions = createServerFn({ method: "GET" })
     }
   });
 
-// Protocol-wide stats: total bought back (SOL spent on buybacks across perpad
+// Protocol-wide stats: total bought back (SOL spent on buybacks across perpspad
 // + external/pump.fun routed tokens) and total volume (every SOL that moved
 // through any treasury event — claims, buybacks, sweeps, perp opens, etc.).
 export const getProtocolStats = createServerFn({ method: "GET" }).handler(async () => {

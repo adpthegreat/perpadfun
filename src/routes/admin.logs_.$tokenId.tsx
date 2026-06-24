@@ -23,7 +23,7 @@ import {
 export const Route = createFileRoute("/admin/logs_/$tokenId")({
   component: AdminTokenLogsPage,
   head: () => ({
-    meta: [{ title: "Token debug · perpad" }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [{ title: "Token debug · perpspad" }, { name: "robots", content: "noindex, nofollow" }],
   }),
 });
 

@@ -19,17 +19,17 @@ export const Route = createFileRoute("/route-fees")({
   component: RouteFeesPage,
   head: () => ({
     meta: [
-      { title: "Route fees · perpad" },
+      { title: "Route fees · perpspad" },
       {
         name: "description",
         content:
           "Generate a one-use sub-wallet and route any token's creator fees into a backing perp, buyback and burn, and treasury reserve.",
       },
-      { property: "og:title", content: "Route fees · perpad" },
+      { property: "og:title", content: "Route fees · perpspad" },
       {
         property: "og:description",
         content:
-          "Point your pump.fun creator fees at a perpad sub-wallet. We open a backing perp, buy and burn your token, and hold treasury runway.",
+          "Point your pump.fun creator fees at a perpspad sub-wallet. We open a backing perp, buy and burn your token, and hold treasury runway.",
       },
     ],
   }),
@@ -190,16 +190,16 @@ function RouteFeesPage() {
             <ShieldCheck className="h-3 w-3" /> No wallet connect required
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight">Route fees to a perpad sub-wallet</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">Route fees to a perpspad sub-wallet</h1>
             <HowItWorksButton />
           </div>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Generate a fresh, one-use sub-wallet. Set it as the creator-fee receiver on your pump.fun
             token. Every fee that lands is split 50% backing perp, 25% buyback and burn, 25% treasury
-            runway. Only perpad can move funds out.
+            runway. Only perpspad can move funds out.
           </p>
           <p className="mt-2 max-w-2xl text-sm font-medium text-amber-600 dark:text-amber-400">
-            Your token needs to generate at least $100 in fees (with perpad as the sole fee receiver) before automation kicks in.
+            Your token needs to generate at least $100 in fees (with perpspad as the sole fee receiver) before automation kicks in.
           </p>
         </div>
 

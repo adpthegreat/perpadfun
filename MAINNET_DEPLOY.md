@@ -7,7 +7,7 @@
 > 2. **Migration order.** `20260529160000_token_wallet_not_null.sql` (step 4) runs ONLY after the
 >    treasury-wallet backfill (step 3) reports zero nulls.
 
-**Stack:** Supabase migrations → Cloudflare Workers application → Fly.io keeper (`perpad-keeper`).
+**Stack:** Supabase migrations → Cloudflare Workers application → Fly.io keeper (`perpspad-keeper`).
 Configuration files: [keeper/fly.toml](keeper/fly.toml), [keeper/Dockerfile](keeper/Dockerfile).
 
 ---
@@ -103,7 +103,7 @@ npx wrangler secret put KEEPER_SECRET          # MUST match the keeper's KEEPER_
 Verify the application is reachable:
 
 ```bash
-curl -sI https://perpad.fun/ | head -1
+curl -sI https://perpspad.fun/ | head -1
 # expect: HTTP/2 200
 ```
 
@@ -113,14 +113,14 @@ curl -sI https://perpad.fun/ | head -1
 
 ```bash
 S=<PROD_KEEPER_SECRET>
-curl -s -X POST -H "x-keeper-secret: $S" https://perpad.fun/api/admin/backfill-treasury-wallets
+curl -s -X POST -H "x-keeper-secret: $S" https://perpspad.fun/api/admin/backfill-treasury-wallets
 ```
 
 Verify zero nulls remain:
 
 ```bash
 curl -s -X POST -H "x-keeper-secret: $S" \
-  "https://perpad.fun/api/admin/backfill-treasury-wallets?dryRun=1"
+  "https://perpspad.fun/api/admin/backfill-treasury-wallets?dryRun=1"
 # expect: "remaining": 0
 ```
 
@@ -153,12 +153,12 @@ $PSQL "select column_name, is_nullable from information_schema.columns
 cd keeper
 fly secrets set \
   KEEPER_SECRET="<must match app>" \
-  PERPAD_BASE_URL="https://perpad.fun" \
+  perpspad_BASE_URL="https://perpspad.fun" \
   SOLANA_RPC_URL="<mainnet rpc>" \
   TREASURY_SOLANA_PRIVATE_KEY="<treasury signer>" \
   IMPERIAL_API_KEY="<imperial>" \
   KEEPER_MINT_ALLOWLIST="<optional>" \
-  --app perpad-keeper
+  --app perpspad-keeper
 ```
 
 ### 5b. New Mechanism Knobs (This Deploy)
@@ -172,7 +172,7 @@ fly secrets set \
   BACKSTOP_TARGET_RATIO=0.10 \
   BACKSTOP_MAX_PER_TICK=500 \
   IMPERIAL_SUPPORTED_OPEN_VENUES=phoenix \
-  --app perpad-keeper
+  --app perpspad-keeper
 ```
 
 | Variable | Default | Effect |
@@ -184,7 +184,7 @@ fly secrets set \
 
 Rollout-safe alternative: ship inert, enable later.
 ```bash
-fly secrets set BACKSTOP_RATIO=999 --app perpad-keeper       # backstop disabled until lowered
+fly secrets set BACKSTOP_RATIO=999 --app perpspad-keeper       # backstop disabled until lowered
 ```
 
 ### 5c. Optional and Rollback Knobs
@@ -199,10 +199,10 @@ Rollback knobs:
 
 ```bash
 # Re-enable multi-venue dispatch:
-fly secrets set IMPERIAL_SUPPORTED_OPEN_VENUES=phoenix,flash_trade,jupiter --app perpad-keeper
+fly secrets set IMPERIAL_SUPPORTED_OPEN_VENUES=phoenix,flash_trade,jupiter --app perpspad-keeper
 
 # Restore the per-symbol SUPPORTED_MARKETS lookup:
-fly secrets set IMPERIAL_VENUE_OVERRIDE=auto --app perpad-keeper
+fly secrets set IMPERIAL_VENUE_OVERRIDE=auto --app perpspad-keeper
 ```
 
 | Variable | Default | Effect |
@@ -217,14 +217,14 @@ fly secrets set IMPERIAL_VENUE_OVERRIDE=auto --app perpad-keeper
 ### 5d. Ship
 
 ```bash
-fly deploy --app perpad-keeper
+fly deploy --app perpspad-keeper
 ```
 
 Verify the keeper is running:
 
 ```bash
-fly status --app perpad-keeper
-fly logs --app perpad-keeper | head -50
+fly status --app perpspad-keeper
+fly logs --app perpspad-keeper | head -50
 ```
 
 ---
@@ -235,8 +235,8 @@ Confirm the application is reachable and the keeper is ticking:
 
 ```bash
 S=<PROD_KEEPER_SECRET>
-curl -s -H "x-keeper-secret: $S" "https://perpad.fun/api/public/keeper/workflows?limit=3" | head
-fly logs --app perpad-keeper        # expect structured tick_summary lines; keeper_logs row count climbing
+curl -s -H "x-keeper-secret: $S" "https://perpspad.fun/api/public/keeper/workflows?limit=3" | head
+fly logs --app perpspad-keeper        # expect structured tick_summary lines; keeper_logs row count climbing
 ```
 
 ### 6a. Phoenix Lock Verification
@@ -245,10 +245,10 @@ fly logs --app perpad-keeper        # expect structured tick_summary lines; keep
 # Any "skip: venue=... not in SUPPORTED_OPEN_VENUES" lines indicate /route picked a non-Phoenix
 # venue and the keeper declined. Small count = healthy. Constant stream = /route cannot find a
 # Phoenix candidate for the asset; investigate (reference plan/KEEPER_PHOENIX_LOCK.md §3).
-fly logs --app perpad-keeper | grep "imperial:open.*skip.*not in SUPPORTED_OPEN_VENUES" | tail
+fly logs --app perpspad-keeper | grep "imperial:open.*skip.*not in SUPPORTED_OPEN_VENUES" | tail
 
 # First open per profile invokes /phoenix/register exactly once (idempotent and cached).
-fly logs --app perpad-keeper | grep "imperial:phoenix-register" | tail
+fly logs --app perpspad-keeper | grep "imperial:phoenix-register" | tail
 ```
 
 A successful Phoenix open produces the following sequence per token:
@@ -262,7 +262,7 @@ imperial:open <symbol> ... success=true
 ```bash
 # Expected on a new mainnet deploy: zero occurrences in the first 24 hours.
 # Non-zero occurrences indicate either real runaway PnL or a configuration error.
-fly logs --app perpad-keeper | grep "backstop_tp fired" | tail
+fly logs --app perpspad-keeper | grep "backstop_tp fired" | tail
 ```
 
 To verify the path is wired (staging only — production execution costs funds): force a position past
@@ -277,7 +277,7 @@ by 1000; the downstream order bot multiplies by ×1000 on the wire).
 ```bash
 # Sample several /mobile/orders requests; confirm marketPrice is in the 1e6 range
 # (10–500 million for assets priced $10–$500), NOT 1e9.
-fly logs --app perpad-keeper | grep "POST /mobile/orders" | tail
+fly logs --app perpspad-keeper | grep "POST /mobile/orders" | tail
 ```
 
 ---
@@ -287,17 +287,17 @@ fly logs --app perpad-keeper | grep "POST /mobile/orders" | tail
 | Layer | Command |
 |---|---|
 | Application | `npx wrangler deployments list` then `npx wrangler rollback [<id>]` |
-| Keeper | `fly releases --app perpad-keeper` then `fly deploy --image <previous>` (or `fly releases rollback`) |
-| Backstop TP | `fly secrets set BACKSTOP_RATIO=999 --app perpad-keeper` |
-| Phoenix lock | `fly secrets set IMPERIAL_SUPPORTED_OPEN_VENUES=phoenix,flash_trade,jupiter --app perpad-keeper` |
-| Venue resolution | `fly secrets set IMPERIAL_VENUE_OVERRIDE=auto --app perpad-keeper` |
+| Keeper | `fly releases --app perpspad-keeper` then `fly deploy --image <previous>` (or `fly releases rollback`) |
+| Backstop TP | `fly secrets set BACKSTOP_RATIO=999 --app perpspad-keeper` |
+| Phoenix lock | `fly secrets set IMPERIAL_SUPPORTED_OPEN_VENUES=phoenix,flash_trade,jupiter --app perpspad-keeper` |
+| Venue resolution | `fly secrets set IMPERIAL_VENUE_OVERRIDE=auto --app perpspad-keeper` |
 | Migrations | Additive tables are forward-safe; retain them. The two NOT NULL constraints require manual reversal: `ALTER TABLE public.tokens ALTER COLUMN <col> DROP NOT NULL` |
 
 ---
 
 ## 8. API Endpoints Reference
 
-Base URL: `https://perpad.fun`.
+Base URL: `https://perpspad.fun`.
 Authentication: every `keeper` and `admin` endpoint requires `x-keeper-secret: <PROD_KEEPER_SECRET>`
 (matches the Worker and the keeper). `/api/public/solana/rpc` is the only endpoint without a secret
 requirement.
@@ -305,38 +305,38 @@ requirement.
 ### GET Endpoints
 
 ```
-GET  https://perpad.fun/api/public/keeper/tokens
-GET  https://perpad.fun/api/public/keeper/workflows
-GET  https://perpad.fun/api/public/keeper/workflows?limit=50
-GET  https://perpad.fun/api/public/keeper/workflows?token_id=<uuid>
-GET  https://perpad.fun/api/public/keeper/stuck-tokens
-GET  https://perpad.fun/api/public/keeper/external-routers
-GET  https://perpad.fun/api/public/keeper/logs
-GET  https://perpad.fun/api/public/keeper/logs?token_id=<uuid>
-GET  https://perpad.fun/api/public/keeper/logs?level=error&limit=100
-GET  https://perpad.fun/api/public/keeper/logs?token_id=<uuid>&before=<iso-cursor>
+GET  https://perpspad.fun/api/public/keeper/tokens
+GET  https://perpspad.fun/api/public/keeper/workflows
+GET  https://perpspad.fun/api/public/keeper/workflows?limit=50
+GET  https://perpspad.fun/api/public/keeper/workflows?token_id=<uuid>
+GET  https://perpspad.fun/api/public/keeper/stuck-tokens
+GET  https://perpspad.fun/api/public/keeper/external-routers
+GET  https://perpspad.fun/api/public/keeper/logs
+GET  https://perpspad.fun/api/public/keeper/logs?token_id=<uuid>
+GET  https://perpspad.fun/api/public/keeper/logs?level=error&limit=100
+GET  https://perpspad.fun/api/public/keeper/logs?token_id=<uuid>&before=<iso-cursor>
 ```
 
 ### POST Endpoints (JSON body required)
 
 ```
-POST https://perpad.fun/api/public/keeper/report                 body: {token_id, router, ...}
-POST https://perpad.fun/api/public/keeper/workflow-report        body: {workflows:[], actions:[], logs:[]}
-POST https://perpad.fun/api/public/keeper/workflow-locks         body: {token_ids:[], owner, stale_after_seconds}
-POST https://perpad.fun/api/public/keeper/external-sweep-report  body: {token_id, sweeps:[]}
-POST https://perpad.fun/api/public/keeper/external-router-seen   body: {token_ids:[]}
-POST https://perpad.fun/api/admin/backfill-treasury-wallets      (add ?dryRun=1 for a no-write count)
-POST https://perpad.fun/api/public/solana/rpc                    body: JSON-RPC request (NO secret)
+POST https://perpspad.fun/api/public/keeper/report                 body: {token_id, router, ...}
+POST https://perpspad.fun/api/public/keeper/workflow-report        body: {workflows:[], actions:[], logs:[]}
+POST https://perpspad.fun/api/public/keeper/workflow-locks         body: {token_ids:[], owner, stale_after_seconds}
+POST https://perpspad.fun/api/public/keeper/external-sweep-report  body: {token_id, sweeps:[]}
+POST https://perpspad.fun/api/public/keeper/external-router-seen   body: {token_ids:[]}
+POST https://perpspad.fun/api/admin/backfill-treasury-wallets      (add ?dryRun=1 for a no-write count)
+POST https://perpspad.fun/api/public/solana/rpc                    body: JSON-RPC request (NO secret)
 ```
 
 ### Ready-to-execute curl commands
 
 ```bash
 S=<PROD_KEEPER_SECRET>
-curl -s -H "x-keeper-secret: $S" https://perpad.fun/api/public/keeper/tokens
-curl -s -H "x-keeper-secret: $S" "https://perpad.fun/api/public/keeper/workflows?limit=10"
-curl -s -H "x-keeper-secret: $S" https://perpad.fun/api/public/keeper/stuck-tokens
-curl -s -H "x-keeper-secret: $S" https://perpad.fun/api/public/keeper/external-routers
+curl -s -H "x-keeper-secret: $S" https://perpspad.fun/api/public/keeper/tokens
+curl -s -H "x-keeper-secret: $S" "https://perpspad.fun/api/public/keeper/workflows?limit=10"
+curl -s -H "x-keeper-secret: $S" https://perpspad.fun/api/public/keeper/stuck-tokens
+curl -s -H "x-keeper-secret: $S" https://perpspad.fun/api/public/keeper/external-routers
 ```
 
 ### Per-token Log Triage
@@ -349,28 +349,28 @@ curl -s -H "x-keeper-secret: $S" https://perpad.fun/api/public/keeper/external-r
 S=<PROD_KEEPER_SECRET>
 
 # 1) Discover token_ids (ticker → id):
-curl -s -H "x-keeper-secret: $S" "https://perpad.fun/api/public/keeper/workflows?limit=20" \
+curl -s -H "x-keeper-secret: $S" "https://perpspad.fun/api/public/keeper/workflows?limit=20" \
   | python3 -c "import sys,json; [print((w.get('tokens') or {}).get('ticker'), w['token_id']) for w in json.load(sys.stdin)['workflows']]"
 
 # 2) Triage by level — identify token_ids with errors / warns:
-curl -s -H "x-keeper-secret: $S" "https://perpad.fun/api/public/keeper/logs?level=error&limit=200" \
+curl -s -H "x-keeper-secret: $S" "https://perpspad.fun/api/public/keeper/logs?level=error&limit=200" \
   | python3 -c "import sys,json,collections
 rows=json.load(sys.stdin)['logs']
 c=collections.Counter(r.get('token_id') for r in rows)
 print('errors:',c.most_common(10))"
 
-curl -s -H "x-keeper-secret: $S" "https://perpad.fun/api/public/keeper/logs?level=warn&limit=200" \
+curl -s -H "x-keeper-secret: $S" "https://perpspad.fun/api/public/keeper/logs?level=warn&limit=200" \
   | python3 -c "import sys,json,collections
 rows=json.load(sys.stdin)['logs']
 c=collections.Counter(r.get('token_id') for r in rows)
 print('warns:',c.most_common(10))"
 
 # 3) Per-token timeline for an id from step 1 or 2:
-curl -s -H "x-keeper-secret: $S" "https://perpad.fun/api/public/keeper/logs?token_id=<uuid>"
+curl -s -H "x-keeper-secret: $S" "https://perpspad.fun/api/public/keeper/logs?token_id=<uuid>"
 
 # 4) All logs, including global (token_id=NULL) rows:
-curl -s -H "x-keeper-secret: $S" "https://perpad.fun/api/public/keeper/logs?limit=200"
+curl -s -H "x-keeper-secret: $S" "https://perpspad.fun/api/public/keeper/logs?limit=200"
 
 # 5) Page older (cursor): use next_before from a response as ?before= (URL-safe Z form):
-curl -s -H "x-keeper-secret: $S" "https://perpad.fun/api/public/keeper/logs?token_id=<uuid>&before=<next_before>"
+curl -s -H "x-keeper-secret: $S" "https://perpspad.fun/api/public/keeper/logs?token_id=<uuid>&before=<next_before>"
 ```

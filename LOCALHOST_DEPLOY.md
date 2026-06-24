@@ -1,6 +1,6 @@
 # Localhost Deploy — Serve Seeded Data from the Local Database
 
-Operate the perpad application against the local Supabase stack with representative seed data for
+Operate the perpspad application against the local Supabase stack with representative seed data for
 verification of the keeper-refactor changes prior to mainnet rollout. Two surfaces are exposed:
 - The existing UI (`/`, `/tokens`, `/token/$id`) reads from the `tokens` table and `treasury_events`.
 - The keeper JSON APIs (`/api/public/keeper/workflows`, `stuck-tokens`, `workflow-report`,

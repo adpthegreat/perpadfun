@@ -38,7 +38,7 @@ const WorkflowPatchSchema = z.object({
   imperial_deposited_usd: z.number().finite().min(0).optional(),
   position_entry_price: z.number().finite().min(0).nullable().optional(),
   position_entry_source: z
-    .enum(["imperial", "perpad_entry_mid", "reconciled"])
+    .enum(["imperial", "perpspad_entry_mid", "reconciled"])
     .nullable()
     .optional(),
   position_size_usd: z.number().finite().min(0).optional(),
@@ -114,6 +114,9 @@ export const Route = createFileRoute("/api/public/keeper/workflow-report")({
         if (parsed.data.workflows.length) {
           const rows = parsed.data.workflows.map((w) => ({
             ...w,
+            // jsonb column: Zod gives Record<string, unknown>, cast to the
+            // generated Json type (same as the logs `fields` cast below).
+            metadata: w.metadata as unknown as Json | undefined,
             updated_at: now,
           }));
           const { error } = await supabaseAdmin
@@ -131,8 +134,8 @@ export const Route = createFileRoute("/api/public/keeper/workflow-report")({
             amount_usd: a.amount_usd ?? null,
             amount_sol: a.amount_sol ?? null,
             amount_tokens: a.amount_tokens ?? null,
-            request_payload: a.request_payload ?? {},
-            response_payload: a.response_payload ?? {},
+            request_payload: (a.request_payload ?? {}) as unknown as Json,
+            response_payload: (a.response_payload ?? {}) as unknown as Json,
             error: a.error ?? null,
             confirmed_at: a.status === "confirmed" ? now : null,
             updated_at: now,

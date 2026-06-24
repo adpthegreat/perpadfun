@@ -1101,7 +1101,7 @@ export async function resolveImperialEntryPrice({ verifiedPos, symbol, venue, to
   if (picked.price) return picked;
   try {
     const markPrice = await getMarkPriceUi(symbol, venue);
-    if (markPrice) return { price: Number(markPrice), source: 'perpad_entry_mid' };
+    if (markPrice) return { price: Number(markPrice), source: 'perpspad_entry_mid' };
   } catch (e) {
     console.warn(`[imperial:entry] ${symbol} mark fallback failed:`, e.message);
   }

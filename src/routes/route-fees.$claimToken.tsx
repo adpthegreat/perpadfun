@@ -15,11 +15,11 @@ export const Route = createFileRoute("/route-fees/$claimToken")({
   component: RouterDashboard,
   head: () => ({
     meta: [
-      { title: "Router dashboard. perpad" },
+      { title: "Router dashboard. perpspad" },
       { name: "robots", content: "noindex,nofollow" },
       {
         name: "description",
-        content: "Live status for your perpad fee router: balance, sweeps, perp PnL, and burns.",
+        content: "Live status for your perpspad fee router: balance, sweeps, perp PnL, and burns.",
       },
     ],
   }),

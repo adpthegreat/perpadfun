@@ -1,4 +1,4 @@
-// Mock data for perpad coins. Wire to real data later.
+// Mock data for perpspad coins. Wire to real data later.
 export type AltToken = {
   id: string;
   ticker: string;

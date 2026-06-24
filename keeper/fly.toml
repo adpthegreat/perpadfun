@@ -1,8 +1,8 @@
-# Fly.io config for the perpad Drift keeper.
+# Fly.io config for the perpspad Drift keeper.
 # Run `fly launch --copy-config --no-deploy` from the keeper/ directory the
 # first time. Then `fly secrets set ...` and `fly deploy`.
 
-app = "perpad-keeper"
+app = "perpspad-keeper"
 primary_region = "iad"
 
 [build]

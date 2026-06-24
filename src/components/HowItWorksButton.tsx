@@ -27,12 +27,12 @@ export function HowItWorksButton() {
             How fee routing works
           </DialogTitle>
           <DialogDescription>
-            A step-by-step breakdown of what happens when creator fees land in your perpad sub-wallet.
+            A step-by-step breakdown of what happens when creator fees land in your perpspad sub-wallet.
           </DialogDescription>
         </DialogHeader>
 
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-          <strong>Important:</strong> Your token must generate at least <strong>$100</strong> in creator fees (with perpad set as the <em>sole</em> fee receiver) before the automation starts working.
+          <strong>Important:</strong> Your token must generate at least <strong>$100</strong> in creator fees (with perpspad set as the <em>sole</em> fee receiver) before the automation starts working.
         </div>
 
         <div className="mt-2 space-y-5">
@@ -75,7 +75,7 @@ export function HowItWorksButton() {
             n={6}
             icon={<Wallet className="h-4 w-4" />}
             title="~25% treasury runway"
-            body="The remainder is sent to the perpad master treasury. This becomes protocol runway and future development reserve."
+            body="The remainder is sent to the perpspad master treasury. This becomes protocol runway and future development reserve."
           />
 
           <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">

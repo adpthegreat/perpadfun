@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "perpad. solana coins with a perp treasury." },
+      { title: "perpspad. solana coins with a perp treasury." },
       {
         name: "description",
         content:
@@ -27,19 +27,25 @@ export const Route = createFileRoute("/")({
 });
 
 type Tab = "all" | "trending" | "new" | "graduated";
-type SourceFilter = "all" | "perpad" | "pump_fun";
+type SourceFilter = "all" | "perpspad" | "pump_fun";
 const ALWAYS_VISIBLE_EXTERNAL_MINTS = new Set([
-  "iJMcUZNW9KXVXwkTMJMXZWgGrs8EPwVUK7xxHvxpump",
-  "7w8wjfzFMVCWg1KtqmhXvGmweVjfEqbBjUsJ6UJnpump",
+  ""
+  // "iJMcUZNW9KXVXwkTMJMXZWgGrs8EPwVUK7xxHvxpump",
+  // "7w8wjfzFMVCWg1KtqmhXvGmweVjfEqbBjUsJ6UJnpump",
 ]);
-const ALWAYS_VISIBLE_TICKERS = new Set(["SQUEEZE"]);
+const ALWAYS_VISIBLE_TICKERS = new Set([
+  // "SQUEEZE"
+  ""
+]);
 // Hide spam HYPU duplicates by mint, keep the canonical iJMc... one.
 const HIDDEN_EXTERNAL_MINTS = new Set([
-  "ddwE4tjoKNDsYbdEKHCj8FxFLr13w75ygyh5HrFpump",
+  ""
+  // "ddwE4tjoKNDsYbdEKHCj8FxFLr13w75ygyh5HrFpump",
 ]);
-const PINNED_TOP_TICKER = "PERPAD";
+const PINNED_TOP_TICKER = "PERPSPAD";
 const FEATURED_EXTERNAL_MINTS = new Set([
-  "iJMcUZNW9KXVXwkTMJMXZWgGrs8EPwVUK7xxHvxpump",
+  ""
+  // "iJMcUZNW9KXVXwkTMJMXZWgGrs8EPwVUK7xxHvxpump",
 ]);
 
 function Index() {
@@ -315,7 +321,7 @@ function Index() {
             <div className="flex items-center gap-1 pb-2 md:pb-0">
               {[
                 { id: "all" as const, label: "all" },
-                { id: "perpad" as const, label: "perpad" },
+                { id: "perpspad" as const, label: "perpspad" },
                 { id: "pump_fun" as const, label: "pump.fun" },
               ].map((f) => (
                 <button
@@ -345,7 +351,7 @@ function Index() {
               let filteredTokens = tokens.filter((t) => {
                 if (t.externalMint && HIDDEN_EXTERNAL_MINTS.has(t.externalMint)) return false;
                 if (sourceFilter === "all") return true;
-                if (sourceFilter === "perpad") return t.source !== "external";
+                if (sourceFilter === "perpspad") return t.source !== "external";
                 if (sourceFilter === "pump_fun")
                   return t.source === "external" && t.externalPlatform === "pump_fun";
                 return true;
@@ -403,12 +409,12 @@ function Index() {
                     <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
                       {sourceFilter === "pump_fun"
                         ? "no pump.fun coins routed yet"
-                        : sourceFilter === "perpad"
-                          ? "no perpad coins yet"
+                        : sourceFilter === "perpspad"
+                          ? "no perpspad coins yet"
                           : "no coins yet"}
                     </div>
                     <p className="max-w-xs text-sm text-muted-foreground">
-                      Be first. The first coin on perpad lives forever in the history.
+                      Be first. The first coin on perpspad lives forever in the history.
                     </p>
                     <Link
                       to="/launch"
@@ -608,7 +614,7 @@ function FooterLine({
   return (
     <footer className="shrink-0 border-t border-border/60 bg-background">
       <div className="mx-auto flex h-10 max-w-[1400px] flex-wrap items-center justify-between gap-x-6 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-        <span className="hidden sm:inline">perpad · solana · perps</span>
+        <span className="hidden sm:inline">perpspad · solana · perps</span>
         <div className="flex items-center gap-5">
           <span className="flex items-center gap-1.5">
             <span className="text-muted-foreground/70">bought back</span>
@@ -621,7 +627,7 @@ function FooterLine({
         </div>
         <div className="flex items-center gap-4">
           <a
-            href="https://x.com/perpadfun"
+            href="https://x.com/perpspadfun"
             target="_blank"
             rel="noreferrer"
             aria-label="x"
@@ -632,7 +638,7 @@ function FooterLine({
             </svg>
           </a>
           <a
-            href="https://github.com/tekPioneered/perpad"
+            href="https://github.com/adpthegreat/perpadfun"
             target="_blank"
             rel="noreferrer"
             aria-label="github"

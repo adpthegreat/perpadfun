@@ -43,7 +43,7 @@ export function SubWalletPanel({ tokenId }: { tokenId: string }) {
       toast.error("Wallet does not support signMessage");
       return null;
     }
-    const message = `perpad-admin:${action}:${tokenId}:ts:${Date.now()}`;
+    const message = `perpspad-admin:${action}:${tokenId}:ts:${Date.now()}`;
     const sigBytes = await signMessage(new TextEncoder().encode(message));
     return { message, signature: bs58.encode(sigBytes) };
   }

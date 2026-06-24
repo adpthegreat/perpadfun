@@ -22,7 +22,7 @@ export const Route = createFileRoute("/admin/keeper-logs_/$tokenId")({
   component: AdminTokenKeeperLogsPage,
   head: () => ({
     meta: [
-      { title: "Token keeper logs · perpad" },
+      { title: "Token keeper logs · perpspad" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),

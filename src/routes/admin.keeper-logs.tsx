@@ -16,7 +16,7 @@ import { getAdminKey, setAdminKey } from "@/lib/admin-key";
 export const Route = createFileRoute("/admin/keeper-logs")({
   component: AdminKeeperLogsPage,
   head: () => ({
-    meta: [{ title: "Keeper logs · perpad" }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [{ title: "Keeper logs · perpspad" }, { name: "robots", content: "noindex, nofollow" }],
   }),
 });
 

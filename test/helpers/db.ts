@@ -70,14 +70,14 @@ let _seedSeq = 0;
 export async function seedToken(overrides: Record<string, unknown> = {}): Promise<string> {
   const seq = _seedSeq++;
   const cols: Record<string, unknown> = {
-    ticker: `TEST${seq}`, // unique per call (tokens_ticker_perpad_active_unique)
+    ticker: `TEST${seq}`, // unique per call (tokens_ticker_perpspad_active_unique)
     name: "Test Token",
     underlying: "SOL",
     leverage: 5,
     direction: "long",
     router: "imperial",
     status: "live",
-    source: "perpad",
+    source: "perpspad",
     fees_accrued_usd: 0,
     treasury_wallet_address: `TestWa11et${String(seq).padStart(34, "0")}`, // unique (column is UNIQUE)
     ...overrides,

@@ -120,7 +120,7 @@ export function HeroMechanic() {
         {/* Token side */}
         <div className="border border-foreground bg-background/60 p-4 backdrop-blur-sm">
           <div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground">
-            <span>perpad token</span>
+            <span>perpspad token</span>
             <span className="text-foreground">non-liq</span>
           </div>
           <div className="mt-3 flex items-baseline justify-between">

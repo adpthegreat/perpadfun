@@ -42,8 +42,8 @@ export const Route = createFileRoute("/token/$id")({
   errorComponent: ({ error }) => <div className="p-8">{error.message}</div>,
   head: ({ loaderData }) => ({
     meta: [
-      { title: `$${loaderData?.token.ticker} · perpad` },
-      { name: "description", content: `${loaderData?.token.name}, a ${loaderData?.token.leverage}x ${loaderData?.token.direction} ${loaderData?.token.underlying} coin on perpad.` },
+      { title: `$${loaderData?.token.ticker} · perpspad` },
+      { name: "description", content: `${loaderData?.token.name}, a ${loaderData?.token.leverage}x ${loaderData?.token.direction} ${loaderData?.token.underlying} coin on perpspad.` },
     ],
   }),
 });

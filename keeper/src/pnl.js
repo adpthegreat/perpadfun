@@ -9,7 +9,7 @@ export function pickEntryMid({ venueEntry, venueMark, existingMid } = {}) {
   const e = Number(venueEntry);
   if (Number.isFinite(e) && e > 0) return { price: e, source: "imperial" };
   const m = Number(venueMark);
-  if (Number.isFinite(m) && m > 0) return { price: m, source: "perpad_entry_mid" };
+  if (Number.isFinite(m) && m > 0) return { price: m, source: "perpspad_entry_mid" };
   const x = Number(existingMid);
   if (Number.isFinite(x) && x > 0) return { price: x, source: "reconciled" };
   return { price: null, source: null };

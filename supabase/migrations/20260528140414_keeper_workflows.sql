@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS public.token_workflows (
 
   position_entry_price numeric,
   position_entry_source text CHECK (
-    position_entry_source IS NULL OR position_entry_source IN ('imperial', 'perpad_entry_mid', 'reconciled')
+    position_entry_source IS NULL OR position_entry_source IN ('imperial', 'perpspad_entry_mid', 'reconciled')
   ),
   position_size_usd numeric NOT NULL DEFAULT 0,
   position_collateral_usd numeric NOT NULL DEFAULT 0,
