@@ -636,12 +636,12 @@ function initTokenCtx(t, { solUsd, bucket, tickId }) {
     return skipWith(patch);
   }
   const isSubWallet = !kp.publicKey.equals(tre().publicKey);
-  // PERPAD is the project's namesake token and the master treasury IS its
+  // PERPSPAD is the project's namesake token and the master treasury IS its
   // wallet by design. Whitelist it so fee claims, PnL ticks, and buyback
   // drain still run when KEEPER_LEGACY_MASTER_SPEND_ENABLED=false (which
   // is intended to gate ad-hoc Imperial top-ups for OTHER legacy tokens,
   // not freeze PERPAD itself).
-  const isPerpadFlagship = String(t.ticker ?? "").toUpperCase() === "PERPAD";
+  const isPerpadFlagship = String(t.ticker ?? "").toUpperCase() === "PERPSPAD";
   if (!isSubWallet && !config.legacyMasterSpendEnabled && !isPerpadFlagship) {
     const note = "legacy master-token spend disabled by KEEPER_LEGACY_MASTER_SPEND_ENABLED=false";
     keeperLog(t, "info", "master outbound skipped", { tick_id: tickId });

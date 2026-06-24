@@ -1,13 +1,13 @@
-# perpad
+# perpspad
 
 Solana launchpad where every coin ships with a public, leveraged perp treasury that earns trading fees, claims them on-chain, and uses them to buy back and burn its own supply.
 
-- Live site: https://perpad.fun
-- Whitepaper: https://perpad.fun/paper
+- Live site: https://perpspad.fun
+- Whitepaper: https://perpspad.fun/paper
 
 ## What it is
 
-Each perpad coin is:
+Each perpspad coin is:
 
 - a real SPL token on Solana mainnet, 1B supply, mint and freeze authorities revoked at creation
 - traded on a Meteora Dynamic Bonding Curve quoted in native SOL, then graduated into a Meteora DAMM v2 pool at 85 SOL raised

@@ -12,9 +12,9 @@ type Ctx = {
   wallet: WalletConn | null;
   connecting: boolean;
   connectSolanaWith: (name: SolanaWalletName) => Promise<void>;
-  /** @deprecated kept for backward compat – Perpad is Solana-only now */
+  /** @deprecated kept for backward compat – Perpspad is Solana-only now */
   connectSolana: () => Promise<void>;
-  /** @deprecated kept for backward compat – Perpad is Solana-only now */
+  /** @deprecated kept for backward compat – Perpspad is Solana-only now */
   connectEvm: (provider?: string) => Promise<void>;
   /** @deprecated */
   switchToHyperEvm: () => Promise<void>;
@@ -76,7 +76,7 @@ function WalletBridge({ children }: { children: ReactNode }) {
 
   const connectSolana = useCallback(() => connectSolanaWith("Phantom"), [connectSolanaWith]);
   const connectEvm = useCallback(async () => {
-    throw new Error("Perpad is Solana only.");
+    throw new Error("Perpspad is Solana only.");
   }, []);
   const switchToHyperEvm = useCallback(async () => {}, []);
 

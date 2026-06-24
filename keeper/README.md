@@ -51,8 +51,8 @@ Check it:
 
 ```bash
 fly logs
-curl https://perpad-keeper.fly.dev/health
-curl https://perpad-keeper.fly.dev/status
+curl https://perpspad-keeper.fly.dev/health
+curl https://perpspad-keeper.fly.dev/status
 ```
 
 ## Local dev

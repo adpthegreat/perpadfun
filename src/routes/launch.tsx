@@ -21,7 +21,7 @@ export const Route = createFileRoute("/launch")({
   component: LaunchPage,
   head: () => ({
     meta: [
-      { title: "Create a coin · perpad" },
+      { title: "Create a coin · perpspad" },
       { name: "description", content: "Pick a perp, choose direction and leverage, and launch a Solana token whose reserve mirrors that perp." },
     ],
   }),
@@ -207,13 +207,13 @@ function LaunchPage() {
                 pattern="[A-Z0-9]+"
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
-                placeholder="PERPAD"
+                placeholder="PERPSPAD"
                 className="mt-1.5 font-mono"
               />
             </div>
             <div>
               <Label htmlFor="name">Name</Label>
-              <Input id="name" required maxLength={50} value={name} onChange={(e) => setName(e.target.value)} placeholder="Perpad" className="mt-1.5" />
+              <Input id="name" required maxLength={50} value={name} onChange={(e) => setName(e.target.value)} placeholder="Perpspad" className="mt-1.5" />
             </div>
           </div>
 

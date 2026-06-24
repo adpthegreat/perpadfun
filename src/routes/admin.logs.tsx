@@ -23,7 +23,7 @@ export const Route = createFileRoute("/admin/logs")({
   component: AdminLogsPage,
   head: () => ({
     meta: [
-      { title: "Debug logs · perpad" },
+      { title: "Debug logs · perpspad" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),

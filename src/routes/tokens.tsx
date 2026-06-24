@@ -13,8 +13,8 @@ export const Route = createFileRoute("/tokens")({
   component: TokensPage,
   head: () => ({
     meta: [
-      { title: "Market · perpad" },
-      { name: "description", content: "Every coin live on perpad, each one collateralised by a perp." },
+      { title: "Market · perpspad" },
+      { name: "description", content: "Every coin live on perpspad, each one collateralised by a perp." },
     ],
   }),
 });
@@ -39,8 +39,8 @@ function TokensPage() {
         t.name.toLowerCase().includes(q.toLowerCase()),
     )
     .sort((a, b) => {
-      const aMain = a.ticker.toUpperCase() === "PERPAD" ? 1 : 0;
-      const bMain = b.ticker.toUpperCase() === "PERPAD" ? 1 : 0;
+      const aMain = a.ticker.toUpperCase() === "PERPSPAD" ? 1 : 0;
+      const bMain = b.ticker.toUpperCase() === "PERPSPAD" ? 1 : 0;
       return bMain - aMain;
     });
 

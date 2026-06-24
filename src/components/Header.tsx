@@ -11,8 +11,8 @@ export function Header() {
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/85 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-6 px-4">
         <Link to="/" className="flex items-center">
-          <img src={logo} alt="perpad" className="h-8 w-8 object-contain block dark:hidden" />
-          <img src={logoDark} alt="perpad" className="h-8 w-8 object-contain hidden dark:block" />
+          <img src={logo} alt="perpspad" className="h-8 w-8 object-contain block dark:hidden" />
+          <img src={logoDark} alt="perpspad" className="h-8 w-8 object-contain hidden dark:block" />
         </Link>
 
         <nav className="hidden items-center gap-6 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground md:flex">

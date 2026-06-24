@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/public/keeper/tokens")({
               // crash-prone position_opened_at / pending_drift_sig fields.
               "token_workflows ( state, blocked_reason, next_retry_at, updated_at )",
           )
-          // Native perpad tokens need a DBC mint to be managed. External
+          // Native perpspad tokens need a DBC mint to be managed. External
           // (pump.fun) tokens are managed once they have a treasury wallet
           // (i.e. fees have started flowing) so the keeper can tick their
           // perp position, track pnl_high_water, and fire the +$25 profit

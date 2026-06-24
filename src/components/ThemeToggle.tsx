@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 
-const STORAGE_KEY = "perpad-theme";
+const STORAGE_KEY = "perpspad-theme";
 
 function getInitial(): "light" | "dark" {
   if (typeof window === "undefined") return "light";

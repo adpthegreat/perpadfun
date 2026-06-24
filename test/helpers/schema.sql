@@ -11,7 +11,7 @@ create table if not exists public.tokens (
   leverage smallint not null default 1,
   direction text not null default 'long',
   status text not null default 'live',
-  source text not null default 'perpad',
+  source text not null default 'perpspad',
   router text not null default 'imperial',
   mint_address text,
   fees_accrued_usd numeric not null default 0,
@@ -54,7 +54,7 @@ create table if not exists public.token_workflows (
   locked_by text,
   position_entry_price numeric,
   position_entry_source text check (
-    position_entry_source is null or position_entry_source in ('imperial', 'perpad_entry_mid', 'reconciled')
+    position_entry_source is null or position_entry_source in ('imperial', 'perpspad_entry_mid', 'reconciled')
   ),
   updated_at timestamptz not null default now()
 );

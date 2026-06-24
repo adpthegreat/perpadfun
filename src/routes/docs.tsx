@@ -5,8 +5,8 @@ export const Route = createFileRoute("/docs")({
   component: DocsPage,
   head: () => ({
     meta: [
-      { title: "How it works, perpad" },
-      { name: "description", content: "perpad is a Solana launchpad where every coin runs a real Imperial-routed perp on the creator's market of choice. 50+ markets, fee-funded burns, public on-chain treasuries." },
+      { title: "How it works, perpspad" },
+      { name: "description", content: "perpspad is a Solana launchpad where every coin runs a real Imperial-routed perp on the creator's market of choice. 50+ markets, fee-funded burns, public on-chain treasuries." },
     ],
   }),
 });
@@ -23,7 +23,7 @@ function DocsPage() {
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">1. The idea</h2>
             <p className="mt-3 text-muted-foreground">
-              Most launchpads look the same. Fixed supply, bonding curve, an idle reserve. perpad keeps the launchpad shape but puts the fees to work. Every coin has its own on-chain sub-wallet that collects 100% of trade fees, opens a leveraged perpetual on the creator's chosen market, and burns supply from both the fee stream and realized profits.
+              Most launchpads look the same. Fixed supply, bonding curve, an idle reserve. perpspad keeps the launchpad shape but puts the fees to work. Every coin has its own on-chain sub-wallet that collects 100% of trade fees, opens a leveraged perpetual on the creator's chosen market, and burns supply from both the fee stream and realized profits.
             </p>
           </section>
 
@@ -33,7 +33,7 @@ function DocsPage() {
               Every launch is a real SPL token on Solana mainnet. One billion supply, mint and freeze authority revoked at creation, so the cap is fixed and nobody (including us) can mint more or freeze a holder. Trading runs through a Meteora Dynamic Bonding Curve quoted in SOL, then migrates to Meteora DAMM v2 once the curve fills. Buys and sells are normal Solana swaps, routable through Jupiter, Axiom, or any aggregator.
             </p>
             <p className="mt-3 text-muted-foreground">
-              The perp side is routed through Imperial, a meta-router that picks the best venue per trade across Jupiter Perps, Drift, Phoenix, GMX-style and Flash-style books, and others. The position is owned by the coin's public sub-wallet, not by perpad.
+              The perp side is routed through Imperial, a meta-router that picks the best venue per trade across Jupiter Perps, Drift, Phoenix, GMX-style and Flash-style books, and others. The position is owned by the coin's public sub-wallet, not by perpspad.
             </p>
           </section>
 
@@ -72,7 +72,7 @@ function DocsPage() {
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">6. External tokens</h2>
             <p className="mt-3 text-muted-foreground">
-              pump.fun creators can adopt perpad without re-launching. Point your fee receiver at a perpad sub-wallet, pick a market, side, and leverage, and the same keeper loop runs for your coin. External tokens only show up on the homepage once the first fee claim has actually been routed on-chain.
+              pump.fun creators can adopt perpspad without re-launching. Point your fee receiver at a perpspad sub-wallet, pick a market, side, and leverage, and the same keeper loop runs for your coin. External tokens only show up on the homepage once the first fee claim has actually been routed on-chain.
             </p>
           </section>
 

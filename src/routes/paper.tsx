@@ -5,15 +5,15 @@ export const Route = createFileRoute("/paper")({
   component: PaperPage,
   head: () => ({
     meta: [
-      { title: "perpad whitepaper. coins backed by a live perp position." },
-      { name: "description", content: "How perpad coins work. Meteora bonding curves, per-token sub-wallet treasuries, Imperial-routed perps across 50+ markets, and burns funded by fees and realized PnL." },
-      { property: "og:title", content: "perpad whitepaper" },
+      { title: "perpspad whitepaper. coins backed by a live perp position." },
+      { name: "description", content: "How perpspad coins work. Meteora bonding curves, per-token sub-wallet treasuries, Imperial-routed perps across 50+ markets, and burns funded by fees and realized PnL." },
+      { property: "og:title", content: "perpspad whitepaper" },
       { property: "og:description", content: "Coins, sub-wallet treasuries, the keeper loop, Imperial routing, and the burn flywheel, end to end." },
     ],
   }),
 });
 
-const MASTER_TREASURY = "9Kxfhk9JMckpzAmGm1hXFjdfdL4VjpHvBKu9p4kJWHB7";
+const MASTER_TREASURY = "FHmBz4SnZ5r6Rws958S8WJ5ymnrvUdwjgrVQ3BVeBH95";
 const MASTER_URL = `https://solscan.io/account/${MASTER_TREASURY}`;
 
 
@@ -22,10 +22,10 @@ function PaperPage() {
     <div className="min-h-screen bg-background">
       <Header />
       <article className="mx-auto max-w-2xl px-6 py-16">
-        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">whitepaper v5, May 2026</div>
-        <h1 className="font-display mt-2 text-4xl leading-[1.05] tracking-tight">perpad. coins backed by a live perp.</h1>
+        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">whitepaper v6, June 2026</div>
+        <h1 className="font-display mt-2 text-4xl leading-[1.05] tracking-tight">perpspad. coins backed by a live perp.</h1>
         <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-          perpad is a Solana launchpad where every coin runs a real leveraged perpetual, routed through Imperial across the best available venue, owned by that coin's on-chain sub-wallet. Trading fees feed the position, a slice of every fee buys back and burns supply, and the position stays open for the life of the token.
+          perpspad is a Solana launchpad where every coin runs a real leveraged perpetual, routed through Imperial across the best available venue, owned by that coin's on-chain sub-wallet. Trading fees feed the position, a slice of every fee buys back and burns supply, and the position stays open for the life of the token.
         </p>
 
         <div className="prose-content mt-12 space-y-10 text-[15px] leading-relaxed text-foreground/90">
@@ -39,7 +39,7 @@ function PaperPage() {
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">2. Curve</h2>
             <p className="mt-3 text-muted-foreground">
-              Trading happens against a Meteora Dynamic Bonding Curve quoted in native SOL. Buys and sells are normal Solana swaps, routable through Jupiter, Axiom, Phantom, or any aggregator. perpad never custodies user balances.
+              Trading happens against a Meteora Dynamic Bonding Curve quoted in native SOL. Buys and sells are normal Solana swaps, routable through Jupiter, Axiom, Phantom, or any aggregator. perpspad never custodies user balances.
             </p>
             <p className="mt-3 text-muted-foreground">
               The trade fee starts at 2.5% and decays to 1% over the first 24 hours. 100% of fees route to the coin's own sub-wallet (see below). Once the curve fills, the pool migrates to a Meteora DAMM v2 pool and fees keep flowing to the same sub-wallet.
@@ -58,7 +58,7 @@ function PaperPage() {
               <a href={MASTER_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-4 hover:underline">{MASTER_TREASURY}</a>
             </p>
             <p className="mt-3 text-muted-foreground">
-              Each coin's own sub-wallet address and live perp portfolio are linked directly from that coin's page on perpad. Click any token to see its treasury balance, claimed fees, open position, and burn history with one click out to Solscan or the routing venue.
+              Each coin's own sub-wallet address and live perp portfolio are linked directly from that coin's page on perpspad. Click any token to see its treasury balance, claimed fees, open position, and burn history with one click out to Solscan or the routing venue.
             </p>
           </section>
 
@@ -130,7 +130,7 @@ function PaperPage() {
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">9. External tokens (pump.fun)</h2>
             <p className="mt-3 text-muted-foreground">
-              perpad also adopts tokens that were launched elsewhere. A pump.fun creator can point their fee receiver at a perpad sub-wallet (one click from the token's page on perpad), pick an underlying market, side, and leverage, and the same keeper loop runs for that coin. To keep the homepage clean, an external token only appears once the first fee claim has actually been routed on-chain. Pending claims and spam mints stay hidden.
+              perpspad also adopts tokens that were launched elsewhere. A pump.fun creator can point their fee receiver at a perpspad sub-wallet (one click from the token's page on perpspad), pick an underlying market, side, and leverage, and the same keeper loop runs for that coin. To keep the homepage clean, an external token only appears once the first fee claim has actually been routed on-chain. Pending claims and spam mints stay hidden.
             </p>
           </section>
 

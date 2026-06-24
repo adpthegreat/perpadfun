@@ -20,7 +20,7 @@ describe("PnL - entry-mid precedence (pickEntryMid, T1)", () => {
     expect(pickEntryMid({ venueEntry: 100, venueMark: 99, existingMid: 98 })).toEqual({ price: 100, source: "imperial" });
   });
   it("falls back to the venue mark when there is no entry", () => {
-    expect(pickEntryMid({ venueEntry: 0, venueMark: 99, existingMid: 98 })).toEqual({ price: 99, source: "perpad_entry_mid" });
+    expect(pickEntryMid({ venueEntry: 0, venueMark: 99, existingMid: 98 })).toEqual({ price: 99, source: "perpspad_entry_mid" });
   });
   it("falls back to the previously-stored launch_mid", () => {
     expect(pickEntryMid({ venueEntry: undefined, venueMark: 0, existingMid: 98 })).toEqual({ price: 98, source: "reconciled" });
@@ -112,7 +112,7 @@ describe.skipIf(!dbAvailable)("PnL - persisted entry guarantee (DB reset per tes
 
   it("position_entry_source accepts exactly the sources pickEntryMid emits", async () => {
     const id = await seedToken();
-    for (const src of ["imperial", "perpad_entry_mid", "reconciled"]) {
+    for (const src of ["imperial", "perpspad_entry_mid", "reconciled"]) {
       await applyWorkflow(id, { state: "position_open", position_entry_source: src });
     }
     await expect(applyWorkflow(id, { state: "position_open", position_entry_source: "bogus" })).rejects.toThrow();

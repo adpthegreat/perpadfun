@@ -5,7 +5,7 @@
 // stays in the operator's browser and is verified server-side against
 // KEEPER_SECRET. keeper_logs itself remains non-public (no RLS read policy).
 
-const STORAGE_KEY = "perpad.adminKey";
+const STORAGE_KEY = "perpspad.adminKey";
 
 export function getAdminKey(): string {
   if (typeof window === "undefined") return "";

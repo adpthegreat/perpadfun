@@ -17,14 +17,14 @@ export function loadKeypair(secret) {
 }
 
 // MUST mirror src/lib/solana/subWallet.server.ts exactly:
-//   seed = HMAC_SHA256(masterSecretKey, "perpad-subwallet-v1:" + tokenId)
+//   seed = HMAC_SHA256(masterSecretKey, "perpspad-subwallet-v1:" + tokenId)
 //   kp   = Keypair.fromSeed(seed)
 // Any drift in the prefix string or hashing scheme orphans every existing
 // sub-wallet, so do NOT change the constant without coordinated rotation.
 export function deriveSubKeypair(masterKp, tokenId) {
   if (!tokenId) throw new Error('deriveSubKeypair: tokenId required');
   const seed = createHmac('sha256', Buffer.from(masterKp.secretKey))
-    .update(`perpad-subwallet-v1:${tokenId}`)
+    .update(`perpspad-subwallet-v1:${tokenId}`)
     .digest();
   return Keypair.fromSeed(new Uint8Array(seed));
 }
@@ -49,10 +49,10 @@ export function walletForToken(masterKp, token) {
   // row's legacy treasury address. Still allow the real PERPAD legacy row to
   // use its stored master treasury so a derived sub-wallet mismatch does not
   // block ticks, fee claims, or perps for the main token.
-  const ticker = String(token?.ticker ?? '').toUpperCase();
-  const isPerpadLegacyMaster = ticker === 'PERPAD'
-    && addr === '9Kxfhk9JMckpzAmGm1hXFjdfdL4VjpHvBKu9p4kJWHB7';
-  if (isPerpadLegacyMaster) return masterKp;
+  // const ticker = String(token?.ticker ?? '').toUpperCase();
+  // const isPerpadLegacyMaster = ticker === 'PERPAD'
+  //   && addr === '9Kxfhk9JMckpzAmGm1hXFjdfdL4VjpHvBKu9p4kJWHB7';
+  // if (isPerpadLegacyMaster) return masterKp;
 
   if (subAddr !== addr) {
     // Mismatch means TREASURY_SECRET_KEY was rotated since the row was

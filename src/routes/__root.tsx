@@ -75,16 +75,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "perpad" },
-      { name: "description", content: "perpad" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "perpad" },
-      { property: "og:description", content: "perpad" },
+      { title: "perpspad" },
+      { name: "description", content: "perpspad" },
+      { name: "author", content: "Perpspad" }, 
+      { property: "og:title", content: "perpspad" },
+      { property: "og:description", content: "perpspad" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "perpad" },
-      { name: "twitter:description", content: "perpad" },
+      { name: "twitter:site", content: "@Perpspad" },
+      { name: "twitter:title", content: "perpspad" },
+      { name: "twitter:description", content: "perpspad" },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/YmF2or8pFdenbVtI0kD9ofxuQxf1/social-images/social-1779433439727-4b952992-f4f9-4fa5-a724-0630fce8dc2d.webp" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/YmF2or8pFdenbVtI0kD9ofxuQxf1/social-images/social-1779433439727-4b952992-f4f9-4fa5-a724-0630fce8dc2d.webp" },
     ],
@@ -116,7 +116,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <HeadContent />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('perpad-theme');if(!t){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('perpspad-theme');if(!t){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`,
           }}
         />
       </head>

@@ -23,8 +23,8 @@ function isAllowedPreviewOrigin(origin: string | null) {
       hostname === "localhost" ||
       hostname.endsWith("lovableproject.com") ||
       hostname.endsWith("lovable.app") ||
-      hostname === "perpad.fun" ||
-      hostname === "www.perpad.fun"
+      hostname === "perpspad.fun" ||
+      hostname === "www.perpspad.fun"
     );
   } catch {
     return false;

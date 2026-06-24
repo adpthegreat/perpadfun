@@ -21,8 +21,8 @@ export const Route = createFileRoute("/stats")({
   component: StatsPage,
   head: () => ({
     meta: [
-      { title: "Stats · perpad" },
-      { name: "description", content: "Platform-wide stats for perpad: assets, leverage, fees, buybacks, and more." },
+      { title: "Stats · perpspad" },
+      { name: "description", content: "Platform-wide stats for perpspad: assets, leverage, fees, buybacks, and more." },
     ],
   }),
 });
@@ -47,7 +47,7 @@ function StatsPage() {
     <div className="min-h-screen bg-background text-foreground">
       <Header />
       <main className="mx-auto w-full max-w-6xl px-4 py-8">
-        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">perpad</div>
+        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">perpspad</div>
         <h1 className="text-2xl font-semibold tracking-tight">Platform stats</h1>
         <p className="mt-1 font-mono text-[11px] text-muted-foreground">
           Aggregated across every token · auto-refresh 60s
