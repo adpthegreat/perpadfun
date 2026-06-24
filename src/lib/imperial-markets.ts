@@ -64,6 +64,13 @@ export const IMPERIAL_MAX_LEVERAGE: Record<string, number> = {
   GOOGL: 20,
   TSLA: 20,
   MU: 15,
+  MSFT: 20,
+  META: 20,
+  AMZN: 20,
+  SNDK: 15,
+  AMD: 10,
+  INTC: 10,
+  CRWV: 10,
 };
 
 // Phoenix's max across all listed markets is 25× (GOLD, SILVER). Drop the
@@ -116,7 +123,7 @@ const MARKET_PRIORITY: readonly string[] = [
   "FET", "RENDER", "VIRTUAL", "TAO", "WLD",
   "FARTCOIN", "CHIP", "SKR", "MEGA", "MET", "VVV", "MON",
   "COPPER",
-  "GOOGL", "TSLA", "MU",
+  "GOOGL", "TSLA", "MU", "MSFT", "META", "AMZN", "SNDK", "AMD", "INTC", "CRWV",
 ];
 
 // The launchable Phoenix markets in display order — THE source for the UI

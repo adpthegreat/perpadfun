@@ -40,7 +40,7 @@ function DocsPage() {
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">3. Markets and leverage</h2>
             <p className="mt-3 text-muted-foreground">
-              At launch you pick the underlying market and the leverage. Imperial currently covers 50+ markets across crypto majors, Sol-eco / DeFi, memes, US stocks (TSLA, GOOGL, NVDA, AAPL, AMD, MU, AMZN, SPY), commodities (XAU, XAG, WTI, NATGAS, COPPER), and major FX pairs.
+              At launch you pick the underlying market and the leverage. Imperial currently covers 50+ markets across crypto majors, Sol-eco / DeFi, memes, US stocks (TSLA, GOOGL, NVDA, AAPL, AMD, MU, MSFT, META, AMZN, SNDK, INTC, CRWV, SPY), commodities (XAU, XAG, WTI, NATGAS, COPPER), and major FX pairs.
             </p>
             <p className="mt-3 text-muted-foreground">
               Leverage is split into two tiers. Base is 2x, 3x, 5x. Degen is 10x, 25x, 50x, 100x, capped by the venue's reported max for that market so you can't pick a leverage Imperial would reject at open. Degen tokens are flagged with a red outline on the homepage.

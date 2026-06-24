@@ -295,6 +295,13 @@ const SUPPORTED_MARKETS_SNAPSHOT = Object.freeze({
   GOOGL:  { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
   TSLA:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
   MU:     { venue: 'phoenix', maxLeverage: 15 },                  // direct passthrough
+  MSFT:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
+  META:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
+  AMZN:   { venue: 'phoenix', maxLeverage: 20 },                  // direct passthrough
+  SNDK:   { venue: 'phoenix', maxLeverage: 15 },                  // direct passthrough
+  AMD:    { venue: 'phoenix', maxLeverage: 10 },                  // direct passthrough
+  INTC:   { venue: 'phoenix', maxLeverage: 10 },                  // direct passthrough
+  CRWV:   { venue: 'phoenix', maxLeverage: 10 },                  // direct passthrough
 
   // ─── Other crypto majors ───
   XRP:      { venue: 'phoenix', maxLeverage: 15 },
