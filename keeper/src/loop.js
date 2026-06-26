@@ -2619,6 +2619,19 @@ export async function tick() {
   const tickId = newTickId();
   const tickStartedAt = Date.now();
   let tickErrors = 0;
+
+  // Server-owned launch reconciliation: promote public `launching` rows to `live`
+  // once their pool is on-chain, or expire stale ones. Guarantees every paid public
+  // launch becomes a managed token without depending on a client callback. Best-effort.
+  try {
+    await fetch(`${config.perpadBaseUrl}/api/admin/reconcile-launches`, {
+      method: "POST",
+      headers: { "x-keeper-secret": config.keeperSecret },
+    });
+  } catch (e) {
+    console.warn(`[loop] reconcile-launches failed: ${e.message}`);
+  }
+
   let tickClaimedUsd = 0;
   const all = await listActiveTokens();
   let tokens = KEEPER_MINT_ALLOWLIST.length
