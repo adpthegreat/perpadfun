@@ -31,13 +31,3 @@ begin
   return new;
 end;
 $$;
-
-update public.tokens
-set
-  position_size_usd = 34976.59,
-  position_collateral_usd = 1364.71,
-  launch_mid = 60.4531,
-  treasury_pnl_usd = -298.79,
-  last_tick_mid = 59.925,
-  last_tick_at = now()
-where id = '3758abb2-8aa7-4889-9851-8a438080b4b6';

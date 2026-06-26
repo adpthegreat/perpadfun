@@ -1,11 +1,3 @@
--- Hard guarantee for cause H (LAUNCH_REFACTOR.md follow-up #1).
---
--- APPLY ONLY AFTER the backfill reports 0 remaining nulls:
---   POST /api/admin/backfill-treasury-wallets        (x-keeper-secret)
---   then POST /api/admin/backfill-treasury-wallets?dryRun=1  -> count must be 0
---
--- After that, no token row can exist without a signer address. walletForToken
--- (keeper/src/wallet.js) already handles both stored values: the master address
--- resolves to the master keypair (legacy), a derived sub address to the
--- sub-wallet. So NOT NULL is safe and never breaks the keeper's row updates.
+-- Every token must have a signer address. Tokens are created with
+-- treasury_wallet_address set atomically, so this applies cleanly on an empty DB.
 ALTER TABLE public.tokens ALTER COLUMN treasury_wallet_address SET NOT NULL;

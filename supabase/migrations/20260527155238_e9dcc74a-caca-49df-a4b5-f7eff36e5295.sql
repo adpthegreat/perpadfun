@@ -1,1 +1,0 @@
-UPDATE public.tokens SET first_fee_routed_at = NULL, mint_pending = true WHERE external_mint = '9voQQTTdfbqfXwc9rZAdJEeXXjUWjHnB4wkShMT8pump';

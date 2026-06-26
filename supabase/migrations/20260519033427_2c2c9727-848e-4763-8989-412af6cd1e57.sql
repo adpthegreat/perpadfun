@@ -1,1 +1,0 @@
-DELETE FROM public.tokens WHERE ticker='TEST' AND status='launching';

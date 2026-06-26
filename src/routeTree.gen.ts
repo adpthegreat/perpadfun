@@ -19,11 +19,16 @@ import { Route as DocsRouteImport } from './routes/docs'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TokenIdRouteImport } from './routes/token.$id'
 import { Route as RouteFeesClaimTokenRouteImport } from './routes/route-fees.$claimToken'
+import { Route as ApiDocsRouteImport } from './routes/api/docs'
 import { Route as AdminLogsRouteImport } from './routes/admin.logs'
 import { Route as AdminKeeperLogsRouteImport } from './routes/admin.keeper-logs'
-import { Route as ApiAdminBackfillTreasuryWalletsRouteImport } from './routes/api/admin/backfill-treasury-wallets'
+import { Route as ApiV1OpenapiRouteImport } from './routes/api/v1/openapi'
+import { Route as ApiV1MarketsRouteImport } from './routes/api/v1/markets'
+import { Route as ApiV1LaunchRouteImport } from './routes/api/v1/launch'
+import { Route as ApiAdminReconcileLaunchesRouteImport } from './routes/api/admin/reconcile-launches'
 import { Route as AdminLogsTokenIdRouteImport } from './routes/admin.logs_.$tokenId'
 import { Route as AdminKeeperLogsTokenIdRouteImport } from './routes/admin.keeper-logs_.$tokenId'
+import { Route as ApiV1LaunchTokenIdRouteImport } from './routes/api/v1/launch.$tokenId'
 import { Route as ApiPublicSolanaRpcRouteImport } from './routes/api/public/solana/rpc'
 import { Route as ApiPublicKeeperWorkflowsRouteImport } from './routes/api/public/keeper/workflows'
 import { Route as ApiPublicKeeperWorkflowReportRouteImport } from './routes/api/public/keeper/workflow-report'
@@ -35,6 +40,7 @@ import { Route as ApiPublicKeeperLogsRouteImport } from './routes/api/public/kee
 import { Route as ApiPublicKeeperExternalSweepReportRouteImport } from './routes/api/public/keeper/external-sweep-report'
 import { Route as ApiPublicKeeperExternalRoutersRouteImport } from './routes/api/public/keeper/external-routers'
 import { Route as ApiPublicKeeperExternalRouterSeenRouteImport } from './routes/api/public/keeper/external-router-seen'
+import { Route as ApiV1LaunchTokenIdMetadataRouteImport } from './routes/api/v1/launch.$tokenId.metadata'
 
 const TokensRoute = TokensRouteImport.update({
   id: '/tokens',
@@ -86,6 +92,11 @@ const RouteFeesClaimTokenRoute = RouteFeesClaimTokenRouteImport.update({
   path: '/$claimToken',
   getParentRoute: () => RouteFeesRoute,
 } as any)
+const ApiDocsRoute = ApiDocsRouteImport.update({
+  id: '/api/docs',
+  path: '/api/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminLogsRoute = AdminLogsRouteImport.update({
   id: '/admin/logs',
   path: '/admin/logs',
@@ -96,10 +107,25 @@ const AdminKeeperLogsRoute = AdminKeeperLogsRouteImport.update({
   path: '/admin/keeper-logs',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAdminBackfillTreasuryWalletsRoute =
-  ApiAdminBackfillTreasuryWalletsRouteImport.update({
-    id: '/api/admin/backfill-treasury-wallets',
-    path: '/api/admin/backfill-treasury-wallets',
+const ApiV1OpenapiRoute = ApiV1OpenapiRouteImport.update({
+  id: '/api/v1/openapi',
+  path: '/api/v1/openapi',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1MarketsRoute = ApiV1MarketsRouteImport.update({
+  id: '/api/v1/markets',
+  path: '/api/v1/markets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1LaunchRoute = ApiV1LaunchRouteImport.update({
+  id: '/api/v1/launch',
+  path: '/api/v1/launch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminReconcileLaunchesRoute =
+  ApiAdminReconcileLaunchesRouteImport.update({
+    id: '/api/admin/reconcile-launches',
+    path: '/api/admin/reconcile-launches',
     getParentRoute: () => rootRouteImport,
   } as any)
 const AdminLogsTokenIdRoute = AdminLogsTokenIdRouteImport.update({
@@ -111,6 +137,11 @@ const AdminKeeperLogsTokenIdRoute = AdminKeeperLogsTokenIdRouteImport.update({
   id: '/admin/keeper-logs_/$tokenId',
   path: '/admin/keeper-logs/$tokenId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1LaunchTokenIdRoute = ApiV1LaunchTokenIdRouteImport.update({
+  id: '/$tokenId',
+  path: '/$tokenId',
+  getParentRoute: () => ApiV1LaunchRoute,
 } as any)
 const ApiPublicSolanaRpcRoute = ApiPublicSolanaRpcRouteImport.update({
   id: '/api/public/solana/rpc',
@@ -174,6 +205,12 @@ const ApiPublicKeeperExternalRouterSeenRoute =
     path: '/api/public/keeper/external-router-seen',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiV1LaunchTokenIdMetadataRoute =
+  ApiV1LaunchTokenIdMetadataRouteImport.update({
+    id: '/metadata',
+    path: '/metadata',
+    getParentRoute: () => ApiV1LaunchTokenIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -186,11 +223,15 @@ export interface FileRoutesByFullPath {
   '/tokens': typeof TokensRoute
   '/admin/keeper-logs': typeof AdminKeeperLogsRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/api/docs': typeof ApiDocsRoute
   '/route-fees/$claimToken': typeof RouteFeesClaimTokenRoute
   '/token/$id': typeof TokenIdRoute
   '/admin/keeper-logs/$tokenId': typeof AdminKeeperLogsTokenIdRoute
   '/admin/logs/$tokenId': typeof AdminLogsTokenIdRoute
-  '/api/admin/backfill-treasury-wallets': typeof ApiAdminBackfillTreasuryWalletsRoute
+  '/api/admin/reconcile-launches': typeof ApiAdminReconcileLaunchesRoute
+  '/api/v1/launch': typeof ApiV1LaunchRouteWithChildren
+  '/api/v1/markets': typeof ApiV1MarketsRoute
+  '/api/v1/openapi': typeof ApiV1OpenapiRoute
   '/api/public/keeper/external-router-seen': typeof ApiPublicKeeperExternalRouterSeenRoute
   '/api/public/keeper/external-routers': typeof ApiPublicKeeperExternalRoutersRoute
   '/api/public/keeper/external-sweep-report': typeof ApiPublicKeeperExternalSweepReportRoute
@@ -202,6 +243,8 @@ export interface FileRoutesByFullPath {
   '/api/public/keeper/workflow-report': typeof ApiPublicKeeperWorkflowReportRoute
   '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
+  '/api/v1/launch/$tokenId': typeof ApiV1LaunchTokenIdRouteWithChildren
+  '/api/v1/launch/$tokenId/metadata': typeof ApiV1LaunchTokenIdMetadataRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -214,11 +257,15 @@ export interface FileRoutesByTo {
   '/tokens': typeof TokensRoute
   '/admin/keeper-logs': typeof AdminKeeperLogsRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/api/docs': typeof ApiDocsRoute
   '/route-fees/$claimToken': typeof RouteFeesClaimTokenRoute
   '/token/$id': typeof TokenIdRoute
   '/admin/keeper-logs/$tokenId': typeof AdminKeeperLogsTokenIdRoute
   '/admin/logs/$tokenId': typeof AdminLogsTokenIdRoute
-  '/api/admin/backfill-treasury-wallets': typeof ApiAdminBackfillTreasuryWalletsRoute
+  '/api/admin/reconcile-launches': typeof ApiAdminReconcileLaunchesRoute
+  '/api/v1/launch': typeof ApiV1LaunchRouteWithChildren
+  '/api/v1/markets': typeof ApiV1MarketsRoute
+  '/api/v1/openapi': typeof ApiV1OpenapiRoute
   '/api/public/keeper/external-router-seen': typeof ApiPublicKeeperExternalRouterSeenRoute
   '/api/public/keeper/external-routers': typeof ApiPublicKeeperExternalRoutersRoute
   '/api/public/keeper/external-sweep-report': typeof ApiPublicKeeperExternalSweepReportRoute
@@ -230,6 +277,8 @@ export interface FileRoutesByTo {
   '/api/public/keeper/workflow-report': typeof ApiPublicKeeperWorkflowReportRoute
   '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
+  '/api/v1/launch/$tokenId': typeof ApiV1LaunchTokenIdRouteWithChildren
+  '/api/v1/launch/$tokenId/metadata': typeof ApiV1LaunchTokenIdMetadataRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -243,11 +292,15 @@ export interface FileRoutesById {
   '/tokens': typeof TokensRoute
   '/admin/keeper-logs': typeof AdminKeeperLogsRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/api/docs': typeof ApiDocsRoute
   '/route-fees/$claimToken': typeof RouteFeesClaimTokenRoute
   '/token/$id': typeof TokenIdRoute
   '/admin/keeper-logs_/$tokenId': typeof AdminKeeperLogsTokenIdRoute
   '/admin/logs_/$tokenId': typeof AdminLogsTokenIdRoute
-  '/api/admin/backfill-treasury-wallets': typeof ApiAdminBackfillTreasuryWalletsRoute
+  '/api/admin/reconcile-launches': typeof ApiAdminReconcileLaunchesRoute
+  '/api/v1/launch': typeof ApiV1LaunchRouteWithChildren
+  '/api/v1/markets': typeof ApiV1MarketsRoute
+  '/api/v1/openapi': typeof ApiV1OpenapiRoute
   '/api/public/keeper/external-router-seen': typeof ApiPublicKeeperExternalRouterSeenRoute
   '/api/public/keeper/external-routers': typeof ApiPublicKeeperExternalRoutersRoute
   '/api/public/keeper/external-sweep-report': typeof ApiPublicKeeperExternalSweepReportRoute
@@ -259,6 +312,8 @@ export interface FileRoutesById {
   '/api/public/keeper/workflow-report': typeof ApiPublicKeeperWorkflowReportRoute
   '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
+  '/api/v1/launch/$tokenId': typeof ApiV1LaunchTokenIdRouteWithChildren
+  '/api/v1/launch/$tokenId/metadata': typeof ApiV1LaunchTokenIdMetadataRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -273,11 +328,15 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/admin/keeper-logs'
     | '/admin/logs'
+    | '/api/docs'
     | '/route-fees/$claimToken'
     | '/token/$id'
     | '/admin/keeper-logs/$tokenId'
     | '/admin/logs/$tokenId'
-    | '/api/admin/backfill-treasury-wallets'
+    | '/api/admin/reconcile-launches'
+    | '/api/v1/launch'
+    | '/api/v1/markets'
+    | '/api/v1/openapi'
     | '/api/public/keeper/external-router-seen'
     | '/api/public/keeper/external-routers'
     | '/api/public/keeper/external-sweep-report'
@@ -289,6 +348,8 @@ export interface FileRouteTypes {
     | '/api/public/keeper/workflow-report'
     | '/api/public/keeper/workflows'
     | '/api/public/solana/rpc'
+    | '/api/v1/launch/$tokenId'
+    | '/api/v1/launch/$tokenId/metadata'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -301,11 +362,15 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/admin/keeper-logs'
     | '/admin/logs'
+    | '/api/docs'
     | '/route-fees/$claimToken'
     | '/token/$id'
     | '/admin/keeper-logs/$tokenId'
     | '/admin/logs/$tokenId'
-    | '/api/admin/backfill-treasury-wallets'
+    | '/api/admin/reconcile-launches'
+    | '/api/v1/launch'
+    | '/api/v1/markets'
+    | '/api/v1/openapi'
     | '/api/public/keeper/external-router-seen'
     | '/api/public/keeper/external-routers'
     | '/api/public/keeper/external-sweep-report'
@@ -317,6 +382,8 @@ export interface FileRouteTypes {
     | '/api/public/keeper/workflow-report'
     | '/api/public/keeper/workflows'
     | '/api/public/solana/rpc'
+    | '/api/v1/launch/$tokenId'
+    | '/api/v1/launch/$tokenId/metadata'
   id:
     | '__root__'
     | '/'
@@ -329,11 +396,15 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/admin/keeper-logs'
     | '/admin/logs'
+    | '/api/docs'
     | '/route-fees/$claimToken'
     | '/token/$id'
     | '/admin/keeper-logs_/$tokenId'
     | '/admin/logs_/$tokenId'
-    | '/api/admin/backfill-treasury-wallets'
+    | '/api/admin/reconcile-launches'
+    | '/api/v1/launch'
+    | '/api/v1/markets'
+    | '/api/v1/openapi'
     | '/api/public/keeper/external-router-seen'
     | '/api/public/keeper/external-routers'
     | '/api/public/keeper/external-sweep-report'
@@ -345,6 +416,8 @@ export interface FileRouteTypes {
     | '/api/public/keeper/workflow-report'
     | '/api/public/keeper/workflows'
     | '/api/public/solana/rpc'
+    | '/api/v1/launch/$tokenId'
+    | '/api/v1/launch/$tokenId/metadata'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -358,10 +431,14 @@ export interface RootRouteChildren {
   TokensRoute: typeof TokensRoute
   AdminKeeperLogsRoute: typeof AdminKeeperLogsRoute
   AdminLogsRoute: typeof AdminLogsRoute
+  ApiDocsRoute: typeof ApiDocsRoute
   TokenIdRoute: typeof TokenIdRoute
   AdminKeeperLogsTokenIdRoute: typeof AdminKeeperLogsTokenIdRoute
   AdminLogsTokenIdRoute: typeof AdminLogsTokenIdRoute
-  ApiAdminBackfillTreasuryWalletsRoute: typeof ApiAdminBackfillTreasuryWalletsRoute
+  ApiAdminReconcileLaunchesRoute: typeof ApiAdminReconcileLaunchesRoute
+  ApiV1LaunchRoute: typeof ApiV1LaunchRouteWithChildren
+  ApiV1MarketsRoute: typeof ApiV1MarketsRoute
+  ApiV1OpenapiRoute: typeof ApiV1OpenapiRoute
   ApiPublicKeeperExternalRouterSeenRoute: typeof ApiPublicKeeperExternalRouterSeenRoute
   ApiPublicKeeperExternalRoutersRoute: typeof ApiPublicKeeperExternalRoutersRoute
   ApiPublicKeeperExternalSweepReportRoute: typeof ApiPublicKeeperExternalSweepReportRoute
@@ -447,6 +524,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RouteFeesClaimTokenRouteImport
       parentRoute: typeof RouteFeesRoute
     }
+    '/api/docs': {
+      id: '/api/docs'
+      path: '/api/docs'
+      fullPath: '/api/docs'
+      preLoaderRoute: typeof ApiDocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/logs': {
       id: '/admin/logs'
       path: '/admin/logs'
@@ -461,11 +545,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminKeeperLogsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/admin/backfill-treasury-wallets': {
-      id: '/api/admin/backfill-treasury-wallets'
-      path: '/api/admin/backfill-treasury-wallets'
-      fullPath: '/api/admin/backfill-treasury-wallets'
-      preLoaderRoute: typeof ApiAdminBackfillTreasuryWalletsRouteImport
+    '/api/v1/openapi': {
+      id: '/api/v1/openapi'
+      path: '/api/v1/openapi'
+      fullPath: '/api/v1/openapi'
+      preLoaderRoute: typeof ApiV1OpenapiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/markets': {
+      id: '/api/v1/markets'
+      path: '/api/v1/markets'
+      fullPath: '/api/v1/markets'
+      preLoaderRoute: typeof ApiV1MarketsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/launch': {
+      id: '/api/v1/launch'
+      path: '/api/v1/launch'
+      fullPath: '/api/v1/launch'
+      preLoaderRoute: typeof ApiV1LaunchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/reconcile-launches': {
+      id: '/api/admin/reconcile-launches'
+      path: '/api/admin/reconcile-launches'
+      fullPath: '/api/admin/reconcile-launches'
+      preLoaderRoute: typeof ApiAdminReconcileLaunchesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/logs_/$tokenId': {
@@ -481,6 +586,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/keeper-logs/$tokenId'
       preLoaderRoute: typeof AdminKeeperLogsTokenIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/launch/$tokenId': {
+      id: '/api/v1/launch/$tokenId'
+      path: '/$tokenId'
+      fullPath: '/api/v1/launch/$tokenId'
+      preLoaderRoute: typeof ApiV1LaunchTokenIdRouteImport
+      parentRoute: typeof ApiV1LaunchRoute
     }
     '/api/public/solana/rpc': {
       id: '/api/public/solana/rpc'
@@ -559,6 +671,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicKeeperExternalRouterSeenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/launch/$tokenId/metadata': {
+      id: '/api/v1/launch/$tokenId/metadata'
+      path: '/metadata'
+      fullPath: '/api/v1/launch/$tokenId/metadata'
+      preLoaderRoute: typeof ApiV1LaunchTokenIdMetadataRouteImport
+      parentRoute: typeof ApiV1LaunchTokenIdRoute
+    }
   }
 }
 
@@ -574,6 +693,29 @@ const RouteFeesRouteWithChildren = RouteFeesRoute._addFileChildren(
   RouteFeesRouteChildren,
 )
 
+interface ApiV1LaunchTokenIdRouteChildren {
+  ApiV1LaunchTokenIdMetadataRoute: typeof ApiV1LaunchTokenIdMetadataRoute
+}
+
+const ApiV1LaunchTokenIdRouteChildren: ApiV1LaunchTokenIdRouteChildren = {
+  ApiV1LaunchTokenIdMetadataRoute: ApiV1LaunchTokenIdMetadataRoute,
+}
+
+const ApiV1LaunchTokenIdRouteWithChildren =
+  ApiV1LaunchTokenIdRoute._addFileChildren(ApiV1LaunchTokenIdRouteChildren)
+
+interface ApiV1LaunchRouteChildren {
+  ApiV1LaunchTokenIdRoute: typeof ApiV1LaunchTokenIdRouteWithChildren
+}
+
+const ApiV1LaunchRouteChildren: ApiV1LaunchRouteChildren = {
+  ApiV1LaunchTokenIdRoute: ApiV1LaunchTokenIdRouteWithChildren,
+}
+
+const ApiV1LaunchRouteWithChildren = ApiV1LaunchRoute._addFileChildren(
+  ApiV1LaunchRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocsRoute: DocsRoute,
@@ -585,10 +727,14 @@ const rootRouteChildren: RootRouteChildren = {
   TokensRoute: TokensRoute,
   AdminKeeperLogsRoute: AdminKeeperLogsRoute,
   AdminLogsRoute: AdminLogsRoute,
+  ApiDocsRoute: ApiDocsRoute,
   TokenIdRoute: TokenIdRoute,
   AdminKeeperLogsTokenIdRoute: AdminKeeperLogsTokenIdRoute,
   AdminLogsTokenIdRoute: AdminLogsTokenIdRoute,
-  ApiAdminBackfillTreasuryWalletsRoute: ApiAdminBackfillTreasuryWalletsRoute,
+  ApiAdminReconcileLaunchesRoute: ApiAdminReconcileLaunchesRoute,
+  ApiV1LaunchRoute: ApiV1LaunchRouteWithChildren,
+  ApiV1MarketsRoute: ApiV1MarketsRoute,
+  ApiV1OpenapiRoute: ApiV1OpenapiRoute,
   ApiPublicKeeperExternalRouterSeenRoute:
     ApiPublicKeeperExternalRouterSeenRoute,
   ApiPublicKeeperExternalRoutersRoute: ApiPublicKeeperExternalRoutersRoute,
