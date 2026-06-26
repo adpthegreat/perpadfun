@@ -296,7 +296,9 @@ function Index() {
               playsInline
               className="absolute inset-0 h-full w-full object-cover opacity-50"
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-card via-card/60 to-card/20" />
+            {/* perpspad brand wash over the hero video — purple→teal, dark-weighted for legibility */}
+            <div className="absolute inset-0 bg-gradient-to-br from-[#9d4eff]/30 via-[#08080a]/75 to-[#16e0a3]/30" />
+            <div className="absolute inset-0 bg-gradient-to-r from-card via-card/40 to-transparent" />
             <div className="relative px-8 py-6 md:px-10 md:py-7">
               <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
                 solana · perp backed
