@@ -1,1 +1,0 @@
-UPDATE public.tokens SET first_fee_routed_at = now() WHERE id = '4ad061de-ead9-47f1-91ea-c12ed61a783d' AND first_fee_routed_at IS NULL;

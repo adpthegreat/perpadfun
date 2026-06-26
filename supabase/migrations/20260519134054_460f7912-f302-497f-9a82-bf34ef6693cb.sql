@@ -1,1 +1,0 @@
-DELETE FROM public.tokens WHERE id = '268c57cc-9bc1-43e2-8efc-480644da8211';

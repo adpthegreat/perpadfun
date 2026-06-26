@@ -1,1 +1,0 @@
-UPDATE public.tokens SET position_collateral_usd = 446.63, position_size_usd = 11173.74 WHERE id = '3758abb2-8aa7-4889-9851-8a438080b4b6';
