@@ -200,6 +200,20 @@
   transform: translateZ(0);
 }
 
+/* Coming-soon ambient perp tickers — gentle drift + fade */
+@keyframes ticker-drift {
+  0%, 100% { transform: translateY(0); opacity: 0.45; }
+  50% { transform: translateY(-12px); opacity: 0.95; }
+}
+.ticker-chip {
+  animation: ticker-drift var(--dur, 7s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-chip { animation: none; opacity: 0.7; }
+}
+
 /* Slick scrollbars: ultra-thin, ghost until hover */
 * {
   scrollbar-width: thin;

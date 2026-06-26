@@ -11,9 +11,11 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { MarketIcon } from "@/lib/market-icons";
 import { usePythSnapshot } from "@/hooks/usePythPrices";
 import { MARKET_DISPLAY_NAMES } from "@/lib/imperial-markets";
+import { COMING_SOON } from "@/lib/coming-soon";
+import { ComingSoon } from "@/components/ComingSoon";
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  component: COMING_SOON ? ComingSoon : Index,
   head: () => ({
     meta: [
       { title: "perpspad. solana coins with a perp treasury." },

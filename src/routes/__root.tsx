@@ -7,7 +7,9 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  redirect,
 } from "@tanstack/react-router";
+import { isUIRouteAllowed } from "@/lib/coming-soon";
 import { Toaster } from "@/components/ui/sonner";
 import { WalletProvider } from "@/lib/wallet/WalletContext";
 
@@ -71,6 +73,12 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  beforeLoad: ({ location }) => {
+    // Coming-soon gate: everything except "/", /token/*, /api/* redirects to "/".
+    if (!isUIRouteAllowed(location.pathname)) {
+      throw redirect({ to: "/" });
+    }
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
