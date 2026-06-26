@@ -4,10 +4,10 @@ import { Moon, Sun } from "lucide-react";
 const STORAGE_KEY = "perpspad-theme";
 
 function getInitial(): "light" | "dark" {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "dark";
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored === "dark" || stored === "light") return stored;
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "dark"; // brand is dark-first
 }
 
 export function applyTheme(theme: "light" | "dark") {
