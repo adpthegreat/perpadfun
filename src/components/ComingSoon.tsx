@@ -71,10 +71,15 @@ export function ComingSoon() {
           coins with a <em className="text-foreground">heartbeat</em>.
         </p>
 
-        <div className="mt-1 flex items-center gap-2.5">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#23e3a0]" />
-          <span className="font-mono text-xs uppercase tracking-[0.24em] text-muted-foreground">
-            coming soon
+        <div className="mt-1 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2.5">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#23e3a0]" />
+            <span className="font-mono text-xs uppercase tracking-[0.24em] text-muted-foreground">
+              coming soon
+            </span>
+          </div>
+          <span className="font-mono text-sm tracking-[0.3em] text-foreground md:text-base">
+            29 / 06 / 2026
           </span>
         </div>
 
