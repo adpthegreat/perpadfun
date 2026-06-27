@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 // the wordmark, brand purple→teal gradient layered over it, ambient perp tickers
 // drifting around the screen, links to socials only.
 const X_URL = "https://x.com/perpspadfun";
+const TG_URL = "https://t.me/+Uq5NsdlR0So1YWNk";
 
 type Ticker = { s: string; l: number; d: "LONG" | "SHORT"; top: string; left: string; dur: string; delay: string; hot?: boolean };
 
@@ -83,14 +84,24 @@ export function ComingSoon() {
           </span>
         </div>
 
-        <a
-          href={X_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.18em] backdrop-blur transition-colors hover:border-[#9d4eff] hover:text-[#9d4eff]"
-        >
-          follow on X →
-        </a>
+        <div className="mt-4 flex items-center gap-3">
+          <a
+            href={X_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.18em] backdrop-blur transition-colors hover:border-[#9d4eff] hover:text-[#9d4eff]"
+          >
+            follow on X →
+          </a>
+          <a
+            href={TG_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.18em] backdrop-blur transition-colors hover:border-[#16e0a3] hover:text-[#16e0a3]"
+          >
+            join TG →
+          </a>
+        </div>
       </div>
     </div>
   );

@@ -68,11 +68,11 @@ function PaperPage() {
               At launch the creator picks any supported market as the underlying. Imperial routing currently covers 50+ markets across five asset classes:
             </p>
             <ul className="mt-3 list-disc space-y-1.5 pl-5 text-muted-foreground">
-              <li><span className="text-foreground">Crypto majors and L1s.</span> BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, TON, NEAR, SUI, TRX, LTC, DOT, BCH, XLM, HYPE, LINK, APE, ZEC.</li>
-              <li><span className="text-foreground">DeFi and Sol-eco.</span> JUP, PYTH, JTO, KMNO, AAVE, UNI, ARB, GMX, ENA.</li>
-              <li><span className="text-foreground">Memes.</span> BONK, PEPE, SHIB, WIF, FARTCOIN, PUMP, PENGU, BOME, TRUMP, MELANIA.</li>
-              <li><span className="text-foreground">Stocks.</span> TSLA, GOOGL, NVDA, AAPL, AMD, MU, MSFT, META, AMZN, SNDK, INTC, CRWV, SPY.</li>
-              <li><span className="text-foreground">Commodities and FX.</span> XAU, XAG, WTI, NATGAS, COPPER, EUR, GBP, USDJPY, USDCHF, USDCAD, AUD, NZD.</li>
+              <li><span className="text-foreground">Crypto majors and L1s.</span> BTC, ETH, SOL, BNB, XRP, DOGE, ADA, TON, NEAR, SUI, TRX, XLM, HYPE, ZEC.</li>
+              <li><span className="text-foreground">DeFi and Sol-eco.</span> JUP, JTO, AAVE, ENA.</li>
+              <li><span className="text-foreground">Memes.</span> FARTCOIN.</li>
+              <li><span className="text-foreground">Stocks.</span> TSLA, GOOGL, NVDA, AAPL, SPCX, AMD, MU, MSFT, META, AMZN, SNDK, INTC, CRWV.</li>
+              <li><span className="text-foreground">Commodities.</span> XAU, XAG, WTI, COPPER.</li>
             </ul>
             <p className="mt-3 text-muted-foreground">
               Leverage tiers are split into Base (2x, 3x, 5x) and Degen (10x, 25x, 50x, 100x). The Degen tier is capped by the venue's reported max for that market, so a creator can never pick a leverage Imperial would reject at open.
@@ -118,9 +118,9 @@ function PaperPage() {
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">8. Position lifecycle</h2>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-muted-foreground">
-              <li><span className="text-foreground">Open.</span> Once $100 of total fees have accrued, the keeper opens the position with $25 collateral at the creator's chosen leverage and direction.</li>
-              <li><span className="text-foreground">Top up.</span> Every additional $100 of fees claimed adds +$50 collateral to the same position, at the same leverage.</li>
-              <li><span className="text-foreground">Take profit.</span> The keeper watches realized PnL each tick. The base profit-slice threshold is +$5, and it scales up by +$5 for every $1,000 of position size (e.g. $5 at &lt;$1k, $10 at $1k to $2k, $15 at $2k to $3k, and so on). When PnL crosses the current threshold, just enough size is closed to lock in that slice. The released funds are swapped to the coin on Jupiter and burned on-chain. The cycle repeats.</li>
+              <li><span className="text-foreground">Open.</span> Once $20 of total fees have accrued, the keeper opens the position with $20 collateral at the creator's chosen leverage and direction.</li>
+              <li><span className="text-foreground">Top up.</span> Every additional $20 of fees claimed adds +$20 collateral to the same position, at the same leverage.</li>
+              <li><span className="text-foreground">Take profit.</span> The keeper marks the position's floating (unrealized) PnL each tick. Every time it climbs another 25% of the position's current collateral above the last lock-in, the keeper closes a slice of the position to realize that profit — size and collateral scale down together, so the nominal leverage is preserved. The released funds are swapped to the coin on Jupiter and burned on-chain, and the cycle repeats from the new high-water mark.</li>
               <li><span className="text-foreground">Losses.</span> If price moves against the position, PnL goes negative. Nothing closes, nothing burns from PnL. Top-ups keep extending runway. The 25% buyback slice still burns from fees regardless.</li>
               <li><span className="text-foreground">Liquidation safety.</span> Each top-up checks effective leverage and liquidation buffer first. If a top-up would push the position above the safety cap or shrink the liq buffer below 25% of collateral, it's skipped and the fees stay queued for the next tick.</li>
               <li><span className="text-foreground">Permanence.</span> The position stays open for the life of the token. There is no graduation event that unwinds it. The coin remains backed by a live leveraged perp on the creator's chosen market, growing with fees, shaving profits into burns, forever.</li>
@@ -143,7 +143,7 @@ function PaperPage() {
               fees claimed, 25% reserve, $10 floor, Jupiter swap to coin, on-chain burn tx
             </p>
             <p className="mt-3 font-mono text-xs text-foreground/80">
-              fees claimed, 50% perp margin, position realizes profit threshold (+$5 base, +$5 per $1k of size), slice closed via Imperial, Jupiter swap to coin, on-chain burn tx
+              fees claimed, 50% perp margin, floating PnL climbs +25% of collateral over the last lock-in, slice closed via Imperial, Jupiter swap to coin, on-chain burn tx
             </p>
             <p className="mt-3 text-muted-foreground">
               The first path burns from every fee, win or lose. The second path adds burns on top whenever the perp prints profit. Every step in either chain is a public Solana transaction.
