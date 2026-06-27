@@ -15,7 +15,7 @@ import {
 } from "@/components/admin-logs/cells";
 // Reads keeper_logs via the secret-gated /api/public/keeper/logs route using the
 // admin key (x-keeper-secret) from localStorage — keeper_logs stays non-public.
-import { getKeeperLogStats, listKeeperLogs, AdminKeyError } from "@/lib/keeper-logs.client";
+import { getKeeperLogStats, listKeeperLogs, AdminKeyError } from "@/lib/keeper-logs.api";
 import { getAdminKey, setAdminKey } from "@/lib/admin-key";
 
 export const Route = createFileRoute("/admin/keeper-logs_/$tokenId")({
