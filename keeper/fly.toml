@@ -1,25 +1,26 @@
-# Fly.io config for the perpspad Drift keeper.
-# Run `fly launch --copy-config --no-deploy` from the keeper/ directory the
-# first time. Then `fly secrets set ...` and `fly deploy`.
+# fly.toml app configuration file generated for perpspad-keeper on 2026-06-28T13:19:53+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "perpspad-keeper"
-primary_region = "iad"
+app = 'perpspad-keeper'
+primary_region = 'iad'
 
 [build]
 
 [env]
-  PORT = "8080"
-  LOOP_INTERVAL_MS = "15000"
+  LOOP_INTERVAL_MS = '15000'
+  PORT = '8080'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "off"
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
-  processes = ["app"]
+  processes = ['app']
 
 [[vm]]
-  cpu_kind = "shared"
+  memory = '1gb'
   cpus = 1
-  memory_mb = 512
+  memory_mb = 1024

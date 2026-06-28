@@ -6,7 +6,7 @@
 //     reconciler promotes it to `live` once the pool appears on-chain, or deletes it
 //     if the pool never materializes (TTL). No half-states survive.
 import { randomUUID } from "node:crypto";
-import { Connection, Keypair, PublicKey, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, SystemProgram, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
 import { getServerSolanaRpcUrl } from "@/lib/wallet/solanaConfig";
 import { getTreasuryKeypair } from "@/lib/solana/treasury.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -65,7 +65,12 @@ export type BaseLaunchFields = {
   creatorAddress: string;
 };
 export type PublicLaunchInput = BaseLaunchFields & { devBuy: number };
-export type AdminLaunchInput = BaseLaunchFields & { devBuy: number; leftoverTokens?: number; feeSchedule?: FeeSchedule };
+export type AdminLaunchInput = BaseLaunchFields & { devBuy: number; leftoverTokens?: number; feeSchedule?: FeeSchedule; tokenId?: string };
+
+// Sub-wallet funding floor (lamports), mirrors launchAsTreasury: rent for config/pool/mint + 2 tx
+// fees + retry buffer (0.10 SOL) + a small keeper ops seed (0.01 SOL). Dev-buy (SOL pools) on top.
+const LAUNCH_RENT_AND_FEES_LAMPORTS = 100_000_000;
+const SUB_WALLET_OPS_SEED_LAMPORTS = 10_000_000;
 
 function assertMarket(underlying: string, leverage: number) {
   if (!isLaunchableMarket(underlying)) throw new Error(`unsupported market: ${underlying}`);
@@ -196,8 +201,52 @@ export async function launchAdmin(input: AdminLaunchInput): Promise<{
   const BN = await loadBN();
   const conn = new Connection(getServerSolanaRpcUrl(), "confirmed");
 
-  const tokenId = randomUUID();
+  const tokenId = input.tokenId ?? randomUUID();
   const subWallet = deriveSubWalletKeypair(tokenId);
+
+  // The deterministic sub-wallet is the SOLE payer/buyer/pool-creator. In admin/CLI mode there is no
+  // browser wallet to prefund it, so the .env/treasury key (the deployer here) funds it itself, then
+  // the sub-wallet launches — same role as the frontend prefund, just treasury-signed. Idempotent:
+  // only tops up the shortfall. SOL pools: SOL covers rent + fees + dev-buy. USDC pools: SOL covers
+  // rent/fees/ATA, and the dev-buy USDC moves from the treasury's USDC account into the sub's ATA.
+  const treasury = getTreasuryKeypair();
+  const solDevBuy = input.quote === "SOL" ? Math.round(input.devBuy * LAMPORTS_PER_SOL) : 0;
+  const requiredSol = solDevBuy + LAUNCH_RENT_AND_FEES_LAMPORTS + SUB_WALLET_OPS_SEED_LAMPORTS;
+  const fundIxs: any[] = [];
+  const subBal = await conn.getBalance(subWallet.publicKey, "confirmed");
+  if (subBal < requiredSol) {
+    fundIxs.push(
+      SystemProgram.transfer({ fromPubkey: treasury.publicKey, toPubkey: subWallet.publicKey, lamports: requiredSol - subBal }),
+    );
+  }
+  if (input.quote === "USDC") {
+    const spl = await import("@solana/spl-token");
+    const usdcMint = new PublicKey(USDC_MINT_STR);
+    const usdcAmount = Math.round(input.devBuy * 1_000_000);
+    const subAta = spl.getAssociatedTokenAddressSync(usdcMint, subWallet.publicKey, true);
+    let subUsdc = 0;
+    try {
+      subUsdc = Number((await conn.getTokenAccountBalance(subAta, "confirmed")).value.amount ?? 0);
+    } catch {
+      subUsdc = 0; // ATA not created yet
+    }
+    const usdcToSend = Math.max(0, usdcAmount - subUsdc);
+    if (usdcToSend > 0) {
+      const treAta = spl.getAssociatedTokenAddressSync(usdcMint, treasury.publicKey, false);
+      fundIxs.push(
+        spl.createAssociatedTokenAccountIdempotentInstruction(treasury.publicKey, subAta, subWallet.publicKey, usdcMint),
+        spl.createTransferCheckedInstruction(treAta, usdcMint, subAta, treasury.publicKey, usdcToSend, 6),
+      );
+    }
+  }
+  if (fundIxs.length > 0) {
+    const fundBh = await conn.getLatestBlockhash("confirmed");
+    const fundTx = new Transaction({ recentBlockhash: fundBh.blockhash, feePayer: treasury.publicKey }).add(...fundIxs);
+    fundTx.sign(treasury);
+    const fundSig = await conn.sendRawTransaction(fundTx.serialize(), { skipPreflight: false });
+    await conn.confirmTransaction({ signature: fundSig, ...fundBh }, "confirmed");
+  }
+
   const config = Keypair.generate();
   const baseMint = Keypair.generate();
   const userPk = new PublicKey(input.creatorAddress);

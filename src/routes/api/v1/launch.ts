@@ -38,6 +38,7 @@ const PublicBody = z.object({ ...Base, creatorAddress: z.string().min(32).max(44
 const AdminBody = z.object({
   ...Base,
   creatorAddress: z.string().min(32).max(44).optional(), // default = treasury
+  tokenId: z.string().uuid().optional(), // re-run a prepared+funded sub-wallet
   devBuy: z.number().nonnegative().default(0),
   leftoverTokens: z.number().nonnegative().optional(),
   feeSchedule: z.object({ startingFeeBps: z.number().int(), endingFeeBps: z.number().int(), numberOfPeriod: z.number().int(), totalDuration: z.number().int() }).optional(),
@@ -68,12 +69,14 @@ export const Route = createFileRoute("/api/v1/launch")({
             return apiErr(422, "validation", i.message, i.path.join("."));
           }
           const d = parsed.data;
-          const creatorAddress = d.creatorAddress ?? getTreasuryKeypair().publicKey.toBase58();
           try {
+            // dry-run only previews the supply split — no treasury key needed.
             if (new URL(request.url).searchParams.get("dryRun") === "1") {
               const { supplyBreakdown } = await previewLaunch({ quote: d.quote, leverage: d.leverage, leftoverTokens: d.leftoverTokens, feeSchedule: d.feeSchedule as FeeSchedule | undefined });
               return apiOk({ dryRun: true, supplyBreakdown, leftoverTokens: d.leftoverTokens ?? 0 });
             }
+            // default the creator to the treasury (needs TREASURY_SECRET_KEY) only when actually launching.
+            const creatorAddress = d.creatorAddress ?? getTreasuryKeypair().publicKey.toBase58();
             const res = await launchAdmin({ ...d, creatorAddress, feeSchedule: d.feeSchedule as FeeSchedule | undefined });
             return apiOk(res, { status: 201 });
           } catch (e) {
