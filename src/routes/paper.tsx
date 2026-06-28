@@ -19,13 +19,25 @@ const MASTER_URL = `https://solscan.io/account/${MASTER_TREASURY}`;
 
 function PaperPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="relative min-h-screen overflow-hidden">
+      {/* brand backdrop — rotating donut + purple→teal wash, same as the landing (fixed, subdued for readability) */}
+      <video
+        src="/hero-bg.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="pointer-events-none fixed inset-0 h-full w-full object-cover opacity-25"
+      />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-br from-[#9d4eff]/20 via-[#08080a]/80 to-[#16e0a3]/20" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_center,transparent_12%,var(--background)_82%)]" />
+      <div className="relative z-10">
       <Header />
       <article className="mx-auto max-w-2xl px-6 py-16">
-        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">whitepaper v6, June 2026</div>
-        <h1 className="font-display mt-2 text-4xl leading-[1.05] tracking-tight">perpspad. coins backed by a live perp.</h1>
+        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">whitepaper v1, June 2026</div>
+        <h1 className="font-display mt-2 text-4xl leading-[1.05] tracking-tight">Perpspad. coins backed by a live perp.</h1>
         <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-          perpspad is a Solana launchpad where every coin runs a real leveraged perpetual, routed through Imperial across the best available venue, owned by that coin's on-chain sub-wallet. Trading fees feed the position, a slice of every fee buys back and burns supply, and the position stays open for the life of the token.
+          Perpspad is a Solana launchpad where every coin runs a real leveraged perpetual, traded exclusively on the Phoenix CLOB through Imperial, owned by that coin's on-chain sub-wallet. Trading fees feed the position, a slice of every fee buys back and burns supply, and the position stays open for the life of the token.
         </p>
 
         <div className="prose-content mt-12 space-y-10 text-[15px] leading-relaxed text-foreground/90">
@@ -42,14 +54,14 @@ function PaperPage() {
               Trading happens against a Meteora Dynamic Bonding Curve quoted in native SOL. Buys and sells are normal Solana swaps, routable through Jupiter, Axiom, Phantom, or any aggregator. perpspad never custodies user balances.
             </p>
             <p className="mt-3 text-muted-foreground">
-              The trade fee starts at 2.5% and decays to 1% over the first 24 hours. 100% of fees route to the coin's own sub-wallet (see below). Once the curve fills, the pool migrates to a Meteora DAMM v2 pool and fees keep flowing to the same sub-wallet.
+              The trade fee starts at 3% and decays to 1% over the first 24 hours. 100% of fees route to the coin's own sub-wallet (see below). Once the curve fills, the pool migrates to a Meteora DAMM v2 pool and fees keep flowing to the same sub-wallet.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">3. Sub-wallet treasuries</h2>
             <p className="mt-3 text-muted-foreground">
-              Each coin gets its own deterministically-derived Solana sub-wallet at launch. That sub-wallet is the fee claimer on Meteora and the owner of the perp position. Funds for one coin can never touch another coin's position.
+              Each coin gets its own Solana sub-wallet at launch, created and registered through Imperial. That sub-wallet is the fee claimer on Meteora and the owner of the perp position. Funds for one coin can never touch another coin's position.
             </p>
             <p className="mt-3 text-muted-foreground">
               All sub-wallets are derived from one master treasury (the keeper's signer) so they can be operated by a single bot, but each address is public and viewable on chain. The master address is:
@@ -75,14 +87,14 @@ function PaperPage() {
               <li><span className="text-foreground">Commodities.</span> XAU, XAG, WTI, COPPER.</li>
             </ul>
             <p className="mt-3 text-muted-foreground">
-              Leverage tiers are split into Base (2x, 3x, 5x) and Degen (10x, 25x, 50x, 100x). The Degen tier is capped by the venue's reported max for that market, so a creator can never pick a leverage Imperial would reject at open.
+              Leverage tiers are split into Base (2x, 3x, 5x) and Degen (10x, 20x, 25x). The Degen tier is capped by the venue's reported max for that market, so a creator can never pick a leverage Imperial would reject at open.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">5. Imperial routing</h2>
             <p className="mt-3 text-muted-foreground">
-              Every open, top-up, and close is quoted through Imperial and executed on Phoenix Trade (a Solana CLOB). Phoenix is currently the exclusive venue for new positions — the CLOB gives the keeper deterministic slippage and the lowest round-trip cost we&apos;ve measured across Imperial&apos;s supported venues. The keeper records the chosen venue with every action so the route is auditable per claim.
+              Every open, top-up, and close is routed through Imperial and executed exclusively on Phoenix, a Solana central-limit order book (CLOB). The CLOB gives the keeper deterministic slippage and a tight round-trip cost, and the keeper records the venue with every action so each route is auditable per claim. Sub-wallet creation runs through Imperial too, so a coin's account and its trading are managed end to end on the same rails.
             </p>
             <p className="mt-3 text-muted-foreground">
               Sub-wallets post USDC as collateral. The keeper swaps SOL to USDC on Jupiter on the same tick that it deposits, so the position is always denominated in dollars and the venue choice is independent of which SPL token the coin is.
@@ -173,6 +185,7 @@ function PaperPage() {
 
         </div>
       </article>
+      </div>
     </div>
   );
 }

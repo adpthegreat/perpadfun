@@ -11,6 +11,7 @@ export function isUIRouteAllowed(pathname: string): boolean {
   if (!COMING_SOON) return true;
   if (pathname === "/") return true;
   if (pathname.startsWith("/token/")) return true; // token detail pages stay live
+  if (pathname === "/paper") return true; // whitepaper stays live
   if (pathname.startsWith("/api/")) return true; // never gate API routes
   return false;
 }

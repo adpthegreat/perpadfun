@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { Link } from "@tanstack/react-router";
 
 // perpspad coming-soon landing: the spinning donut (hero-bg.mp4) centered behind
 // the wordmark, brand purple→teal gradient layered over it, ambient perp tickers
@@ -84,7 +85,7 @@ export function ComingSoon() {
           </span>
         </div>
 
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
           <a
             href={X_URL}
             target="_blank"
@@ -101,6 +102,12 @@ export function ComingSoon() {
           >
             join TG →
           </a>
+          <Link
+            to="/paper"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.18em] backdrop-blur transition-colors hover:border-foreground hover:text-foreground"
+          >
+            read the paper →
+          </Link>
         </div>
       </div>
     </div>
