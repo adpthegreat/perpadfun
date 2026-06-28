@@ -37,7 +37,7 @@ function PaperPage() {
         <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">whitepaper v1, June 2026</div>
         <h1 className="font-display mt-2 text-4xl leading-[1.05] tracking-tight">Perpspad. coins backed by a live perp.</h1>
         <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-          Perpspad is a Solana launchpad where every coin runs a real leveraged perpetual, traded exclusively on the Phoenix CLOB through Imperial, owned by that coin's on-chain sub-wallet. Trading fees feed the position, a slice of every fee buys back and burns supply, and the position stays open for the life of the token.
+          Perpspad is a Solana launchpad where every coin runs a real leveraged perpetual, traded exclusively on the Phoenix CLOB through Imperial, owned by that coin's onchain sub-wallet. Trading fees feed the position, a slice of every fee buys back and burns supply, and the position stays open for the life of the token.
         </p>
 
         <div className="prose-content mt-12 space-y-10 text-[15px] leading-relaxed text-foreground/90">
@@ -108,7 +108,7 @@ function PaperPage() {
             </p>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-muted-foreground">
               <li><span className="text-foreground">50% to the perp.</span> Counts toward the open gate, then feeds collateral top-ups on the live position.</li>
-              <li><span className="text-foreground">25% to buyback and burn.</span> Accrues in a per-token reserve. Once the reserve crosses $10, the keeper swaps that SOL to the coin on Jupiter and burns it on-chain. Smaller amounts wait in the reserve until they cross the floor.</li>
+              <li><span className="text-foreground">25% to buyback and burn.</span> Accrues in a per-token reserve. Once the reserve crosses $10, the keeper swaps that SOL to the coin on Jupiter and burns it onchain. Smaller amounts wait in the reserve until they cross the floor.</li>
               <li><span className="text-foreground">25% to the treasury reserve.</span> Stays as SOL in the sub-wallet as a runway buffer for tx fees, rent, and future top-ups.</li>
             </ul>
           </section>
@@ -121,7 +121,7 @@ function PaperPage() {
             <ol className="mt-3 list-decimal space-y-2 pl-5 text-muted-foreground">
               <li>Confirms any perp request from the previous tick.</li>
               <li>Claims trading fees from Meteora (DBC pre-graduation, DAMM v2 after) into the coin's sub-wallet, then applies the 50 / 25 / 25 split above.</li>
-              <li>Drains the buyback reserve when it crosses $10. Jupiter swap to the coin, on-chain SPL burn.</li>
+              <li>Drains the buyback reserve when it crosses $10. Jupiter swap to the coin, onchain SPL burn.</li>
               <li>Quotes Imperial for the current decision (open, top-up, or take-profit) and routes to the winning venue.</li>
               <li>Marks the live perp to market and decides whether to open, top up, or take profit.</li>
             </ol>
@@ -132,7 +132,7 @@ function PaperPage() {
             <ul className="mt-3 list-disc space-y-2 pl-5 text-muted-foreground">
               <li><span className="text-foreground">Open.</span> Once $20 of total fees have accrued, the keeper opens the position with $20 collateral at the creator's chosen leverage and direction.</li>
               <li><span className="text-foreground">Top up.</span> Every additional $20 of fees claimed adds +$20 collateral to the same position, at the same leverage.</li>
-              <li><span className="text-foreground">Take profit.</span> The keeper marks the position's floating (unrealized) PnL each tick. Every time it climbs another 25% of the position's current collateral above the last lock-in, the keeper closes a slice of the position to realize that profit — size and collateral scale down together, so the nominal leverage is preserved. The released funds are swapped to the coin on Jupiter and burned on-chain, and the cycle repeats from the new high-water mark.</li>
+              <li><span className="text-foreground">Take profit.</span> The keeper marks the position's floating (unrealized) PnL each tick. Every time it climbs another 25% of the position's current collateral above the last lock-in, the keeper closes a slice of the position to realize that profit — size and collateral scale down together, so the nominal leverage is preserved. The released funds are swapped to the coin on Jupiter and burned onchain, and the cycle repeats from the new high-water mark.</li>
               <li><span className="text-foreground">Losses.</span> If price moves against the position, PnL goes negative. Nothing closes, nothing burns from PnL. Top-ups keep extending runway. The 25% buyback slice still burns from fees regardless.</li>
               <li><span className="text-foreground">Liquidation safety.</span> Each top-up checks effective leverage and liquidation buffer first. If a top-up would push the position above the safety cap or shrink the liq buffer below 25% of collateral, it's skipped and the fees stay queued for the next tick.</li>
               <li><span className="text-foreground">Permanence.</span> The position stays open for the life of the token. There is no graduation event that unwinds it. The coin remains backed by a live leveraged perp on the creator's chosen market, growing with fees, shaving profits into burns, forever.</li>
@@ -142,7 +142,7 @@ function PaperPage() {
           <section>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">9. External tokens (pump.fun)</h2>
             <p className="mt-3 text-muted-foreground">
-              perpspad also adopts tokens that were launched elsewhere. A pump.fun creator can point their fee receiver at a perpspad sub-wallet (one click from the token's page on perpspad), pick an underlying market, side, and leverage, and the same keeper loop runs for that coin. To keep the homepage clean, an external token only appears once the first fee claim has actually been routed on-chain. Pending claims and spam mints stay hidden.
+              perpspad also adopts tokens that were launched elsewhere. A pump.fun creator can point their fee receiver at a perpspad sub-wallet (one click from the token's page on perpspad), pick an underlying market, side, and leverage, and the same keeper loop runs for that coin. To keep the homepage clean, an external token only appears once the first fee claim has actually been routed onchain. Pending claims and spam mints stay hidden.
             </p>
           </section>
 
@@ -152,10 +152,10 @@ function PaperPage() {
               Burns leave circulation through two independent paths, both signed by the coin's sub-wallet:
             </p>
             <p className="mt-3 font-mono text-xs text-foreground/80">
-              fees claimed, 25% reserve, $10 floor, Jupiter swap to coin, on-chain burn tx
+              fees claimed, 25% reserve, $10 floor, Jupiter swap to coin, onchain burn tx
             </p>
             <p className="mt-3 font-mono text-xs text-foreground/80">
-              fees claimed, 50% perp margin, floating PnL climbs +25% of collateral over the last lock-in, slice closed via Imperial, Jupiter swap to coin, on-chain burn tx
+              fees claimed, 50% perp margin, floating PnL climbs +25% of collateral over the last lock-in, slice closed via Imperial, Jupiter swap to coin, onchain burn tx
             </p>
             <p className="mt-3 text-muted-foreground">
               The first path burns from every fee, win or lose. The second path adds burns on top whenever the perp prints profit. Every step in either chain is a public Solana transaction.
@@ -166,7 +166,7 @@ function PaperPage() {
             <h2 className="text-xl font-semibold tracking-tight text-foreground">11. What you can verify</h2>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-muted-foreground">
               <li>Every SPL mint, pool, fee claim, perp action, buyback swap, and burn is a confirmed mainnet transaction.</li>
-              <li>Each coin's sub-wallet is one public address. SOL in matches Meteora fee claims and realized perp profits. SOL out matches Jupiter swaps and margin top-ups, which match on-chain burns and venue position deltas.</li>
+              <li>Each coin's sub-wallet is one public address. SOL in matches Meteora fee claims and realized perp profits. SOL out matches Jupiter swaps and margin top-ups, which match onchain burns and venue position deltas.</li>
               <li>Open perp positions are visible on the routing venue linked from each coin and queryable through the public API at <code className="font-mono text-foreground">/api/public/keeper/tokens</code>.</li>
             </ul>
           </section>
