@@ -714,7 +714,7 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
           baseFeeParams: {
             baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
             feeSchedulerParam: {
-              startingFeeBps: 250,
+              startingFeeBps: 300,
               endingFeeBps: 100,
               numberOfPeriod: 24,
               totalDuration: 216_000,

@@ -23,9 +23,9 @@ export const PUBLIC_LAUNCH_FEE_SOL = Number(process.env.PUBLIC_LAUNCH_FEE_SOL ??
 export type CurvePreset = "gentle" | "standard" | "parabolic";
 export type Quote = "SOL" | "USDC";
 
-// Standard anti-snipe fee: exponential 99% -> 2.5%. Public always uses it; admin may override.
+// Standard anti-snipe fee: exponential 3% -> 1%. Public always uses it; admin may override.
 export type FeeSchedule = { startingFeeBps: number; endingFeeBps: number; numberOfPeriod: number; totalDuration: number };
-export const STANDARD_FEE_SCHEDULE: FeeSchedule = { startingFeeBps: 9900, endingFeeBps: 250, numberOfPeriod: 60, totalDuration: 9000 };
+export const STANDARD_FEE_SCHEDULE: FeeSchedule = { startingFeeBps: 500, endingFeeBps: 250, numberOfPeriod: 60, totalDuration: 9000 };
 
 const PRESETS = {
   SOL: {
@@ -110,7 +110,7 @@ async function buildConfigParams(
       dynamicFeeEnabled: true,
       collectFeeMode: sdk.CollectFeeMode.QuoteToken,
       creatorTradingFeePercentage: 0,
-      poolCreationFee: 0,
+      poolCreationFee: 1,
       enableFirstSwapWithMinFee: false,
     },
     migration: {
