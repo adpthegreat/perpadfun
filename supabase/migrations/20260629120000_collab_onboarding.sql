@@ -132,3 +132,13 @@ begin
   return v_code;
 end;
 $$;
+
+-- ── RLS: service-role only ───────────────────────────────────────────────────
+-- Both tables are read/written EXCLUSIVELY by the service-role server functions
+-- (src/lib/collab.functions.ts), which bypass RLS. Enabling RLS with NO policies
+-- denies the public anon key any access — so the code pool can't be scraped, and
+-- a signup's task flags (x_followed / tg_joined / wallet_verified) can't be forged
+-- directly via PostgREST to bypass the server checks in claim_collab_code().
+alter table public.collab_codes   enable row level security;
+alter table public.collab_signups enable row level security;
+
