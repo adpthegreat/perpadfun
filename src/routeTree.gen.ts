@@ -31,6 +31,7 @@ import { Route as AdminLogsTokenIdRouteImport } from './routes/admin.logs_.$toke
 import { Route as AdminKeeperLogsTokenIdRouteImport } from './routes/admin.keeper-logs_.$tokenId'
 import { Route as ApiV1LaunchTokenIdRouteImport } from './routes/api/v1/launch.$tokenId'
 import { Route as ApiPublicSolanaRpcRouteImport } from './routes/api/public/solana/rpc'
+import { Route as ApiPublicQuestWalletRouteImport } from './routes/api/public/quest/wallet'
 import { Route as ApiPublicQuestStepRouteImport } from './routes/api/public/quest/step'
 import { Route as ApiPublicQuestSessionRouteImport } from './routes/api/public/quest/session'
 import { Route as ApiPublicKeeperWorkflowsRouteImport } from './routes/api/public/keeper/workflows'
@@ -158,6 +159,11 @@ const ApiPublicSolanaRpcRoute = ApiPublicSolanaRpcRouteImport.update({
   path: '/api/public/solana/rpc',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicQuestWalletRoute = ApiPublicQuestWalletRouteImport.update({
+  id: '/api/public/quest/wallet',
+  path: '/api/public/quest/wallet',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicQuestStepRoute = ApiPublicQuestStepRouteImport.update({
   id: '/api/public/quest/step',
   path: '/api/public/quest/step',
@@ -277,6 +283,7 @@ export interface FileRoutesByFullPath {
   '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
   '/api/public/quest/session': typeof ApiPublicQuestSessionRoute
   '/api/public/quest/step': typeof ApiPublicQuestStepRoute
+  '/api/public/quest/wallet': typeof ApiPublicQuestWalletRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
   '/api/v1/launch/$tokenId': typeof ApiV1LaunchTokenIdRouteWithChildren
   '/api/public/quest/telegram/status': typeof ApiPublicQuestTelegramStatusRoute
@@ -316,6 +323,7 @@ export interface FileRoutesByTo {
   '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
   '/api/public/quest/session': typeof ApiPublicQuestSessionRoute
   '/api/public/quest/step': typeof ApiPublicQuestStepRoute
+  '/api/public/quest/wallet': typeof ApiPublicQuestWalletRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
   '/api/v1/launch/$tokenId': typeof ApiV1LaunchTokenIdRouteWithChildren
   '/api/public/quest/telegram/status': typeof ApiPublicQuestTelegramStatusRoute
@@ -356,6 +364,7 @@ export interface FileRoutesById {
   '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
   '/api/public/quest/session': typeof ApiPublicQuestSessionRoute
   '/api/public/quest/step': typeof ApiPublicQuestStepRoute
+  '/api/public/quest/wallet': typeof ApiPublicQuestWalletRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
   '/api/v1/launch/$tokenId': typeof ApiV1LaunchTokenIdRouteWithChildren
   '/api/public/quest/telegram/status': typeof ApiPublicQuestTelegramStatusRoute
@@ -397,6 +406,7 @@ export interface FileRouteTypes {
     | '/api/public/keeper/workflows'
     | '/api/public/quest/session'
     | '/api/public/quest/step'
+    | '/api/public/quest/wallet'
     | '/api/public/solana/rpc'
     | '/api/v1/launch/$tokenId'
     | '/api/public/quest/telegram/status'
@@ -436,6 +446,7 @@ export interface FileRouteTypes {
     | '/api/public/keeper/workflows'
     | '/api/public/quest/session'
     | '/api/public/quest/step'
+    | '/api/public/quest/wallet'
     | '/api/public/solana/rpc'
     | '/api/v1/launch/$tokenId'
     | '/api/public/quest/telegram/status'
@@ -475,6 +486,7 @@ export interface FileRouteTypes {
     | '/api/public/keeper/workflows'
     | '/api/public/quest/session'
     | '/api/public/quest/step'
+    | '/api/public/quest/wallet'
     | '/api/public/solana/rpc'
     | '/api/v1/launch/$tokenId'
     | '/api/public/quest/telegram/status'
@@ -514,6 +526,7 @@ export interface RootRouteChildren {
   ApiPublicKeeperWorkflowsRoute: typeof ApiPublicKeeperWorkflowsRoute
   ApiPublicQuestSessionRoute: typeof ApiPublicQuestSessionRoute
   ApiPublicQuestStepRoute: typeof ApiPublicQuestStepRoute
+  ApiPublicQuestWalletRoute: typeof ApiPublicQuestWalletRoute
   ApiPublicSolanaRpcRoute: typeof ApiPublicSolanaRpcRoute
   ApiPublicQuestTelegramStatusRoute: typeof ApiPublicQuestTelegramStatusRoute
   ApiPublicQuestTelegramWebhookRoute: typeof ApiPublicQuestTelegramWebhookRoute
@@ -673,6 +686,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/solana/rpc'
       fullPath: '/api/public/solana/rpc'
       preLoaderRoute: typeof ApiPublicSolanaRpcRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/quest/wallet': {
+      id: '/api/public/quest/wallet'
+      path: '/api/public/quest/wallet'
+      fullPath: '/api/public/quest/wallet'
+      preLoaderRoute: typeof ApiPublicQuestWalletRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/quest/step': {
@@ -852,6 +872,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicKeeperWorkflowsRoute: ApiPublicKeeperWorkflowsRoute,
   ApiPublicQuestSessionRoute: ApiPublicQuestSessionRoute,
   ApiPublicQuestStepRoute: ApiPublicQuestStepRoute,
+  ApiPublicQuestWalletRoute: ApiPublicQuestWalletRoute,
   ApiPublicSolanaRpcRoute: ApiPublicSolanaRpcRoute,
   ApiPublicQuestTelegramStatusRoute: ApiPublicQuestTelegramStatusRoute,
   ApiPublicQuestTelegramWebhookRoute: ApiPublicQuestTelegramWebhookRoute,

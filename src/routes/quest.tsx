@@ -1,17 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Loader2, Twitter, Repeat2, Send, Wallet, ArrowUpRight, Lock } from "lucide-react";
+import { Check, Loader2, Twitter, Repeat2, Send, Wallet, ArrowUpRight, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useWallet } from "@/lib/wallet/WalletContext";
 import {
   startSession,
   recordStep,
   fetchTelegramStatus,
+  submitWallet,
   type QuestSession,
 } from "@/lib/quest/client";
 import { xFollowUrl, xRetweetUrl, tgBotDeepLink } from "@/lib/quest/config";
+import { isLikelySolAddress } from "@/lib/quest/shared";
 import { useHonoraryStep } from "@/lib/quest/useHonoraryStep";
 
 export const Route = createFileRoute("/quest")({
@@ -131,10 +135,60 @@ function QuestPage() {
     setTgActive(true);
   }
 
-  const completed = [follow.status === "done", retweet.status === "done", tgJoined].filter(
-    Boolean,
-  ).length;
-  const totalSteps = 4; // incl. the SOL submit step (built next)
+  // Step 4 — wallet capture.
+  const { wallet } = useWallet();
+  const [walletInput, setWalletInput] = useState("");
+  const [walletSubmitting, setWalletSubmitting] = useState(false);
+  const [savedAddr, setSavedAddr] = useState<string | null>(null);
+  const walletDone = !!savedAddr;
+
+  // Reflect a wallet submitted on a previous visit (resume).
+  useEffect(() => {
+    if (session?.sol_address) setSavedAddr(session.sol_address);
+  }, [session?.sol_address]);
+
+  async function submitWalletAddr() {
+    if (!sid) return;
+    const addr = walletInput.trim();
+    if (!isLikelySolAddress(addr)) {
+      toast.error("That doesn't look like a Solana address");
+      return;
+    }
+    setWalletSubmitting(true);
+    try {
+      const r = await submitWallet(sid, addr);
+      setSavedAddr(r.sol_address);
+      toast.success("Wallet saved — you're in!");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save wallet");
+    } finally {
+      setWalletSubmitting(false);
+    }
+  }
+
+  // Referral link — shareable as soon as the session exists.
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const referralUrl = session ? `${origin}/quest?ref=${session.referral_code}` : "";
+  const [copied, setCopied] = useState(false);
+  function copyReferral() {
+    if (!referralUrl) return;
+    navigator.clipboard
+      ?.writeText(referralUrl)
+      .then(() => {
+        setCopied(true);
+        toast.success("Referral link copied");
+        window.setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => toast.error("Couldn't copy"));
+  }
+
+  const completed = [
+    follow.status === "done",
+    retweet.status === "done",
+    tgJoined,
+    walletDone,
+  ].filter(Boolean).length;
+  const totalSteps = 4;
   const pct = Math.round((completed / totalSteps) * 100);
 
   return (
@@ -254,18 +308,92 @@ function QuestPage() {
               )}
             </StepRow>
 
-            {/* Step 4 — Submit SOL address (built next) */}
-            <StepRow
-              n={4}
-              icon={<Wallet className="h-4 w-4" />}
-              title="Submit your SOL address"
-              subtitle="Unlocks at token launch to claim your airdrop"
-              done={false}
-            >
-              <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
-                <Lock className="h-3.5 w-3.5" /> soon
+            {/* Step 4 — Submit SOL address (wallet capture) */}
+            <div className="px-5 py-4">
+              <div className="flex items-center gap-4">
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center border ${
+                    walletDone
+                      ? "border-[#16e0a3]/40 text-[#16e0a3]"
+                      : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {walletDone ? <Check className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    step 4
+                  </div>
+                  <div className="text-sm text-foreground">Submit your SOL address</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {walletDone
+                      ? `saved · ${savedAddr!.slice(0, 4)}…${savedAddr!.slice(-4)}`
+                      : "where your airdrop will land"}
+                  </div>
+                </div>
+                {walletDone && <DoneTag />}
+              </div>
+              {!walletDone && (
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    value={walletInput}
+                    onChange={(e) => setWalletInput(e.target.value)}
+                    placeholder="Your Solana address"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    disabled={!sid || walletSubmitting}
+                    className="font-mono text-xs"
+                  />
+                  <div className="flex shrink-0 items-center gap-2">
+                    {wallet?.address && wallet.address !== walletInput && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setWalletInput(wallet.address)}
+                      >
+                        use connected
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      disabled={!sid || walletSubmitting || !isLikelySolAddress(walletInput.trim())}
+                      onClick={submitWalletAddr}
+                    >
+                      {walletSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Submit"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Referral link — issued as soon as the session exists */}
+        {session && !sessionQuery.isError && (
+          <div className="mt-5 border border-border bg-card p-4">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                your referral link
               </span>
-            </StepRow>
+              {completed === totalSteps && (
+                <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#16e0a3]">
+                  <Check className="h-3.5 w-3.5" /> you're in
+                </span>
+              )}
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-sm bg-secondary px-2 py-1.5 font-mono text-xs text-foreground">
+                {referralUrl}
+              </code>
+              <Button size="sm" variant="outline" className="shrink-0" onClick={copyReferral}>
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              Invite friends — verified referrals count toward your allocation.
+            </div>
           </div>
         )}
 

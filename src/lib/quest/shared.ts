@@ -40,3 +40,9 @@ export function genReferralCode(randomBytes: Uint8Array): string {
 export function isWellFormedReferralCode(code: string): boolean {
   return /^[2-9A-HJ-NP-Za-km-z]{6,16}$/.test(code);
 }
+
+// Cheap client/server shape check for a Solana address (base58, 32–44 chars, no 0/O/I/l).
+// The authoritative check (bs58 decodes to 32 bytes) lives server-side in server.ts.
+export function isLikelySolAddress(addr: string): boolean {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr);
+}

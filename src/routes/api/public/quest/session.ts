@@ -9,7 +9,8 @@ import { rateLimit } from "@/lib/api/rateLimit";
 import { clientIp, ipHash, randomReferralCode, safeJson } from "@/lib/quest/server";
 import { stepsOf, isWellFormedReferralCode } from "@/lib/quest/shared";
 
-const SELECT = "session_id, referral_code, referred_by, x_followed, x_retweeted, tg_joined";
+const SELECT =
+  "session_id, referral_code, referred_by, sol_address, x_followed, x_retweeted, tg_joined";
 
 const Body = z.object({
   session_id: z.string().uuid().optional(),
@@ -52,6 +53,7 @@ export const Route = createFileRoute("/api/public/quest/session")({
                 session_id: existing.session_id,
                 referral_code: existing.referral_code,
                 referred_by: existing.referred_by,
+                sol_address: existing.sol_address,
                 steps: stepsOf(existing),
               });
             }
@@ -90,6 +92,7 @@ export const Route = createFileRoute("/api/public/quest/session")({
                 session_id: data.session_id,
                 referral_code: data.referral_code,
                 referred_by: data.referred_by,
+                sol_address: data.sol_address,
                 steps: stepsOf(data),
               });
             }

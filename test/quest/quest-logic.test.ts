@@ -7,6 +7,7 @@ import {
   stepsOf,
   genReferralCode,
   isWellFormedReferralCode,
+  isLikelySolAddress,
 } from "../../src/lib/quest/shared";
 
 describe("isJoinedStatus (Telegram getChatMember → joined)", () => {
@@ -66,5 +67,20 @@ describe("referral codes", () => {
     expect(isWellFormedReferralCode("0OIl1")).toBe(false); // ambiguous chars excluded
     expect(isWellFormedReferralCode("has space")).toBe(false);
     expect(isWellFormedReferralCode("waytoolongreferralcode123")).toBe(false);
+  });
+});
+
+describe("isLikelySolAddress (shape pre-check)", () => {
+  it("accepts well-formed base58 Solana addresses", () => {
+    expect(isLikelySolAddress("So11111111111111111111111111111111111111112")).toBe(true);
+    expect(isLikelySolAddress("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM")).toBe(true);
+  });
+
+  it("rejects the wrong shape (too short/long, bad chars, spaces)", () => {
+    expect(isLikelySolAddress("")).toBe(false);
+    expect(isLikelySolAddress("abc")).toBe(false);
+    expect(isLikelySolAddress("0x1234567890abcdef")).toBe(false); // EVM-style
+    expect(isLikelySolAddress("has space in it aaaaaaaaaaaaaaaaaaaaaaaaa")).toBe(false);
+    expect(isLikelySolAddress("0OIl" + "1".repeat(40))).toBe(false); // ambiguous chars
   });
 });

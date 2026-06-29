@@ -8,6 +8,7 @@ export type QuestSession = {
   session_id: string;
   referral_code: string;
   referred_by: string | null;
+  sol_address: string | null;
   steps: QuestSteps;
 };
 
@@ -72,4 +73,11 @@ export async function fetchTelegramStatus(sessionId: string): Promise<TelegramSt
     `/api/public/quest/telegram/status?session_id=${encodeURIComponent(sessionId)}`,
   );
   return unwrap<TelegramStatus>(res);
+}
+
+export async function submitWallet(
+  sessionId: string,
+  solAddress: string,
+): Promise<{ sol_address: string; steps: QuestSteps }> {
+  return postJson("/api/public/quest/wallet", { session_id: sessionId, sol_address: solAddress });
 }
