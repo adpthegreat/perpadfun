@@ -82,3 +82,30 @@ Load-bearing gates are wallet-side (age, prior on-chain activity) + `UNIQUE(tele
 - [ ] **[next]** Step 4 SOL submit (wallet/paste + base58 + prior-holder detection)
 - [ ] **[next]** Referral link/copy, live wallets-joined counter, prior-holder allocation preview
 - [ ] **[next]** Sybil hardening (per-IP caps, claim-time re-verify, unclaimed-reserve rule)
+
+## Deploy & verify (for the live instance)
+
+This migration only **adds** a table (`CREATE TABLE IF NOT EXISTS` + indexes + RLS + trigger);
+it does not touch existing `tokens` rows, so it is safe to apply to the live, populated
+Supabase (unlike `token_wallet_not_null`).
+
+1. Apply the migration to live Supabase; confirm `public.quest_entries` exists.
+2. (optional) Regenerate `integrations/supabase/types.ts` from the live DB to supersede the
+   hand-added `quest_entries` block.
+3. @BotFather → create the bot, get `TELEGRAM_BOT_TOKEN`, set `VITE_TELEGRAM_BOT_USERNAME`.
+4. **Add the bot as an admin of the channel** — required for getChatMember to resolve users.
+5. Set env and redeploy:
+   - server: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID` (e.g. `@perpspad` or `-100…`),
+     `TELEGRAM_CHANNEL_URL`, `TELEGRAM_WEBHOOK_SECRET` (`SUPABASE_URL`/`SERVICE_ROLE_KEY` already set).
+   - client (build-time): `VITE_PERPSPAD_X_HANDLE`, `VITE_PERPSPAD_X_TWEET_ID`,
+     `VITE_TELEGRAM_BOT_USERNAME`, `VITE_TELEGRAM_CHANNEL_URL`.
+6. Register the webhook:
+   `curl "https://api.telegram.org/bot<TOKEN>/setWebhook" -d url=https://<host>/api/public/quest/telegram/webhook -d secret_token=<TELEGRAM_WEBHOOK_SECRET>`
+7. E2E: open `/quest` → honorary X steps (spinner→done) → Join Telegram → bot `/start` binds →
+   join channel → page poll flips to verified. Confirm the `quest_entries` row in Supabase.
+
+**Verified locally:** vite build, `tsc --noEmit`, migration applies on local Postgres (full
+chain + behavioral smoke of the trigger and the unique-telegram-id gate), 8 logic tests
+(getChatMember status mapping + referral codes), and routing/validation/error-envelope via curl.
+**Needs the live stack:** the getChatMember round-trip against a real bot+channel, and the
+browser interactive flow (Supabase local stack is Docker/disk-blocked here; Chrome ext not connected).
