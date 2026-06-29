@@ -41,6 +41,18 @@ export const Route = createFileRoute("/api/public/quest/wallet")({
             return apiErr(400, "bad_address", "that doesn't look like a Solana address");
           }
 
+          // Gate: steps 1–3 (follow, retweet, join TG) must be done before a wallet is accepted.
+          const { data: state, error: selErr } = await supabaseAdmin
+            .from("quest_entries")
+            .select("x_followed, x_retweeted, tg_joined")
+            .eq("session_id", session_id)
+            .maybeSingle();
+          if (selErr) return apiErr(500, "db_error", selErr.message);
+          if (!state) return apiErr(404, "unknown_session", "session not found");
+          if (!(state.x_followed && state.x_retweeted && state.tg_joined)) {
+            return apiErr(400, "steps_incomplete", "complete the follow, retweet, and Telegram steps first");
+          }
+
           const { data, error } = await supabaseAdmin
             .from("quest_entries")
             .update({ sol_address })

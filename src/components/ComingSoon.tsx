@@ -72,6 +72,8 @@ function StepPill({
 
 export function ComingSoon() {
   const q = useQuestFlow();
+  // Wallet submit is gated until follow + retweet + join-TG are all done.
+  const priorDone = q.follow.status === "done" && q.retweet.status === "done" && q.tg.joined;
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background text-foreground">
@@ -157,7 +159,7 @@ export function ComingSoon() {
                 <Check className="h-3.5 w-3.5" /> wallet saved · {q.savedAddr!.slice(0, 4)}…
                 {q.savedAddr!.slice(-4)}
               </div>
-            ) : (
+            ) : priorDone ? (
               <div className="flex w-full max-w-sm items-center gap-2">
                 <Input
                   value={q.walletInput}
@@ -178,6 +180,10 @@ export function ComingSoon() {
                   {q.walletSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "submit"}
                 </Button>
               </div>
+            ) : (
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/60">
+                finish the steps above to submit your wallet
+              </p>
             )}
 
             {/* Referral link + progress */}
