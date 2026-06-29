@@ -15,8 +15,8 @@ import { IMPERIAL_MAX_LEVERAGE } from "../../src/lib/imperial-markets.ts";
 function parseKeeperMarkets(): Record<string, number> {
   const path = fileURLToPath(new URL("../../keeper/src/imperial.js", import.meta.url));
   const src = readFileSync(path, "utf8");
-  const start = src.indexOf("SUPPORTED_MARKETS = Object.freeze({");
-  expect(start, "SUPPORTED_MARKETS block not found in keeper/src/imperial.js").toBeGreaterThan(-1);
+  const start = src.indexOf("SUPPORTED_MARKETS_SNAPSHOT = Object.freeze({");
+  expect(start, "SUPPORTED_MARKETS_SNAPSHOT block not found in keeper/src/imperial.js").toBeGreaterThan(-1);
   const block = src.slice(start, src.indexOf("});", start));
   const out: Record<string, number> = {};
   // Match e.g.  BTC:  { venue: 'phoenix', maxLeverage: 20, alias: 'WTIOIL' },
