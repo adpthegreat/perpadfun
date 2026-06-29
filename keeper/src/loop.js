@@ -1731,13 +1731,40 @@ async function openPositionStep(ctx) {
                 0,
                 Math.floor((Number(ctx.imperialDepositedThisTickUsd || 0) - liveColl) * 100) / 100,
               );
-              const entry = await resolveImperialEntryPrice({
-                verifiedPos,
-                symbol: ctx.underlying,
-                venue: quote?.venue,
-                token: t,
-              });
-              if (entry.price) ctx.patch.launch_mid = entry.price;
+              // launch_mid MUST be captured at open. If it's null the keeper's PnL
+              // (and therefore take-profit) is broken for the life of the position,
+              // because the entry-capture window (ENTRY_CAPTURE_WINDOW_MS) then closes
+              // and it can never be recovered from the live mark. Imperial frequently
+              // returns no entry price and the venue mark fetch can blip, so retry the
+              // resolution (venue entry → live mark fallback) with backoff, and warn
+              // (persisted) if it STILL fails so it's never silently null. See KEEPER_PNL.md.
+              let entryPrice = null;
+              try {
+                entryPrice = await backOff(
+                  async () => {
+                    const entry = await resolveImperialEntryPrice({
+                      verifiedPos,
+                      symbol: ctx.underlying,
+                      venue: quote?.venue,
+                      token: t,
+                    });
+                    const p =
+                      Number(entry?.price) ||
+                      Number(await readImperialLiveMarkUsd(ctx.underlying).catch(() => 0)) ||
+                      0;
+                    if (!(p > 0)) throw new Error("no entry/mark price yet");
+                    return p;
+                  },
+                  { numOfAttempts: 5, startingDelay: 500, timeMultiple: 2, maxDelay: 4000, jitter: "full", retry: () => true },
+                );
+              } catch (e) {
+                keeperLog(t, "warn", "launch_mid capture failed at open — PnL/TP degraded until recapture", {
+                  tick_id: ctx.tickId,
+                  symbol: ctx.underlying,
+                  error: e.message,
+                });
+              }
+              if (entryPrice) ctx.patch.launch_mid = Number(entryPrice);
               if (ctx.imperialFundingSource === "fresh" || ctx.imperialFundingSource === "parked") {
                 ctx.feesAccruedDelta -= openColl;
               }
@@ -2241,7 +2268,13 @@ export async function pnlAndTakeProfitStep(ctx) {
       // their reported unrealizedPnlUsd toward zero. We preserve the ORIGINAL entry
       // in launch_mid (never overwrite after open) and compute PnL ourselves from
       // mark vs original entry. This matches what Imperial's UI actually displays.
-      const origEntry = Number(t.launch_mid ?? 0);
+      //
+      // Prefer the entry CAPTURED THIS TICK (ctx.patch.launch_mid, set in
+      // readPositionPreState) over the stale DB value — so PnL/TP work immediately
+      // and don't depend on launch_mid having round-tripped through the DB. For a
+      // token whose launch_mid is already frozen, the recapture is skipped and this
+      // falls back to t.launch_mid (no drift). See KEEPER_ENTRY_CAPTURE_RECOVERY.md.
+      const origEntry = Number(ctx.patch.launch_mid ?? t.launch_mid ?? 0);
       const markPx = Number(pos.markPriceUsd);
       const sizeForPnl = Number.isFinite(sUsd) && sUsd > 0 ? sUsd : Number(t.position_size_usd ?? 0);
       if (ctx.isImperialRouted && origEntry > 0 && Number.isFinite(markPx) && markPx > 0 && sizeForPnl > 0) {

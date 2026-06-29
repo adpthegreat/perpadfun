@@ -151,7 +151,7 @@ export function TreasuryPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-4">
+      <div className="mt-4 grid grid-cols-3 gap-4">
         <div>
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             Bought back
@@ -174,6 +174,14 @@ export function TreasuryPanel({
             {state
               ? state.tokensBurned.toLocaleString(undefined, { maximumFractionDigits: 0 })
               : "."}
+          </div>
+        </div>
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Profits taken
+          </div>
+          <div className="mt-1 font-mono text-sm tabular-nums text-primary">
+            {state ? fmtUsd(state.profitsTakenUsd ?? 0) : "."}
           </div>
         </div>
       </div>
@@ -267,13 +275,33 @@ export function TreasuryPanel({
                 );
               }
               if (e.kind === "buyback") {
+                // A "buyback" row carrying pnl_delta_usd is the take-profit SPLIT
+                // marker (the realized profit). "buyback" is a PINNED kind (see the
+                // milestone query in getTreasury), so rendering the TP from it keeps
+                // "took profit" pinned in the feed the same way buyback /
+                // position-opened are. Rows without it are the actual SOL->token
+                // buyback drains.
+                if ((e.pnlDeltaUsd ?? 0) > 0) {
+                  return (
+                    <div
+                      key={e.id}
+                      className="flex items-center justify-between rounded bg-primary/10 px-2 py-1"
+                    >
+                      <span className="text-primary">
+                        took profit +{fmtUsd(e.pnlDeltaUsd ?? 0)}
+                        {txLink}
+                      </span>
+                      <span className="text-muted-foreground">{ts}</span>
+                    </div>
+                  );
+                }
                 return (
                   <div
                     key={e.id}
                     className="flex items-center justify-between rounded bg-primary/10 px-2 py-1"
                   >
                     <span className="text-primary">
-                      buyback +{fmtUsd(e.pnlDeltaUsd ?? 0)}
+                      buyback {e.solAmount ? fmtSol(e.solAmount) : ""}
                       {txLink}
                     </span>
                     <span className="text-muted-foreground">{ts}</span>
@@ -362,6 +390,10 @@ export function TreasuryPanel({
                 );
               }
               const note = e.note ?? "";
+              // The take-profit is rendered as a PINNED "took profit" row from the
+              // buyback split marker above. Hide the duplicate detailed TP tick
+              // (an unpinned "tick" event) so it doesn't also show as a price tick.
+              if (/TP:\s*closed/i.test(note)) return null;
               if (
                 note &&
                 (note.includes("gate") ||

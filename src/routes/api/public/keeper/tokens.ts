@@ -40,7 +40,7 @@ export const Route = createFileRoute("/api/public/keeper/tokens")({
         const { data, error } = await supabaseAdmin
           .from("tokens")
           .select(
-            "id, ticker, underlying, leverage, direction, mint_address, external_mint, external_platform, source, dbc_pool_address, dbc_config_address, graduated_pool_address, quote_token, sol_raised, position_size_usd, position_collateral_usd, opened_collateral_usd, treasury_pnl_usd, last_tick_at, fees_accrued_usd, position_opened_at, last_sol_raised_seen, buyback_reserve_usd, pnl_high_water_usd, pending_drift_sig, last_fee_claim_at, last_fee_claim_signature, lp_position_address, migration_status, treasury_wallet_address, imperial_profile_index, imperial_profile_pda, router, " +
+            "id, ticker, underlying, leverage, direction, mint_address, external_mint, external_platform, source, dbc_pool_address, dbc_config_address, graduated_pool_address, quote_token, sol_raised, position_size_usd, position_collateral_usd, opened_collateral_usd, launch_mid, treasury_pnl_usd, last_tick_at, fees_accrued_usd, position_opened_at, last_sol_raised_seen, buyback_reserve_usd, pnl_high_water_usd, pending_drift_sig, last_fee_claim_at, last_fee_claim_signature, lp_position_address, migration_status, treasury_wallet_address, imperial_profile_index, imperial_profile_pda, router, " +
               // Embed the durable workflow state so the keeper can guard opens on
               // it (Fix 3a — see OPEN_CHAIN_REFACTOR_V2.md) instead of the
               // crash-prone position_opened_at / pending_drift_sig fields.

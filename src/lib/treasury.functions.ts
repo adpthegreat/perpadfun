@@ -121,6 +121,7 @@ export type TreasuryState = {
   tokensBurned: number;
   buybackSol: number;
   buybackUsd: number;
+  profitsTakenUsd: number;
   positionSizeUsd: number;
   positionCollateralUsd: number;
   positionOpen: boolean;
@@ -195,7 +196,7 @@ export const getTreasury = createServerFn({ method: "GET" })
     // external_buyback / buyback / burn events with tokens_amount).
     const { data: burnRows } = await supabaseAdmin
       .from("treasury_events")
-      .select("tokens_amount, sol_amount, kind")
+      .select("tokens_amount, sol_amount, pnl_delta_usd, kind")
       .eq("token_id", data.tokenId)
       .in("kind", ["burn", "buyback", "external_buyback"]);
     const burnedFromEvents = (burnRows ?? []).reduce(
@@ -207,6 +208,15 @@ export const getTreasury = createServerFn({ method: "GET" })
         r.kind === "buyback" || r.kind === "external_buyback"
           ? acc + Number(r.sol_amount ?? 0)
           : acc,
+      0,
+    );
+    // Total realized profit locked in via take-profit — the FULL realizedActual,
+    // not just the 25% treasury skim. The keeper tags each TP with a "buyback"-kind
+    // event carrying pnl_delta_usd = realizedActual (loop.js TP step). The actual
+    // buyback-drain "buyback" events have NO pnl_delta_usd, so this sums cleanly
+    // (each TP counted once; drains contribute 0).
+    const profitsTakenUsd = (burnRows ?? []).reduce(
+      (acc, r) => (r.kind === "buyback" ? acc + Math.max(0, Number(r.pnl_delta_usd ?? 0)) : acc),
       0,
     );
 
@@ -316,6 +326,7 @@ export const getTreasury = createServerFn({ method: "GET" })
         tokensBurned: Math.max(Number(t.tokens_burned ?? 0), auditedBurnedBaseUnits) / 1e6,
         buybackSol: auditedBuybackSol,
         buybackUsd: auditedBuybackSol * solUsd,
+        profitsTakenUsd,
 
         positionSizeUsd: sizeUsd,
         positionCollateralUsd: collUsd,
