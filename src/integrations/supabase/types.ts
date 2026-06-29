@@ -167,6 +167,72 @@ export type Database = {
         }
         Relationships: []
       }
+      quest_entries: {
+        Row: {
+          created_at: string
+          id: string
+          ip_hash: string | null
+          referral_code: string
+          referred_by: string | null
+          session_id: string
+          sol_address: string | null
+          status: string
+          telegram_user_id: number | null
+          telegram_username: string | null
+          tg_joined: boolean
+          tg_joined_at: string | null
+          tg_verified_at: string | null
+          updated_at: string
+          user_agent: string | null
+          x_followed: boolean
+          x_followed_at: string | null
+          x_retweeted: boolean
+          x_retweeted_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          referral_code: string
+          referred_by?: string | null
+          session_id: string
+          sol_address?: string | null
+          status?: string
+          telegram_user_id?: number | null
+          telegram_username?: string | null
+          tg_joined?: boolean
+          tg_joined_at?: string | null
+          tg_verified_at?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          x_followed?: boolean
+          x_followed_at?: string | null
+          x_retweeted?: boolean
+          x_retweeted_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_hash?: string | null
+          referral_code?: string
+          referred_by?: string | null
+          session_id?: string
+          sol_address?: string | null
+          status?: string
+          telegram_user_id?: number | null
+          telegram_username?: string | null
+          tg_joined?: boolean
+          tg_joined_at?: string | null
+          tg_verified_at?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          x_followed?: boolean
+          x_followed_at?: string | null
+          x_retweeted?: boolean
+          x_retweeted_at?: string | null
+        }
+        Relationships: []
+      }
       token_workflows: {
         Row: {
           attempt_count: number

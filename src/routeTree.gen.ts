@@ -30,6 +30,8 @@ import { Route as AdminLogsTokenIdRouteImport } from './routes/admin.logs_.$toke
 import { Route as AdminKeeperLogsTokenIdRouteImport } from './routes/admin.keeper-logs_.$tokenId'
 import { Route as ApiV1LaunchTokenIdRouteImport } from './routes/api/v1/launch.$tokenId'
 import { Route as ApiPublicSolanaRpcRouteImport } from './routes/api/public/solana/rpc'
+import { Route as ApiPublicQuestStepRouteImport } from './routes/api/public/quest/step'
+import { Route as ApiPublicQuestSessionRouteImport } from './routes/api/public/quest/session'
 import { Route as ApiPublicKeeperWorkflowsRouteImport } from './routes/api/public/keeper/workflows'
 import { Route as ApiPublicKeeperWorkflowReportRouteImport } from './routes/api/public/keeper/workflow-report'
 import { Route as ApiPublicKeeperWorkflowLocksRouteImport } from './routes/api/public/keeper/workflow-locks'
@@ -41,6 +43,8 @@ import { Route as ApiPublicKeeperExternalSweepReportRouteImport } from './routes
 import { Route as ApiPublicKeeperExternalRoutersRouteImport } from './routes/api/public/keeper/external-routers'
 import { Route as ApiPublicKeeperExternalRouterSeenRouteImport } from './routes/api/public/keeper/external-router-seen'
 import { Route as ApiV1LaunchTokenIdMetadataRouteImport } from './routes/api/v1/launch.$tokenId.metadata'
+import { Route as ApiPublicQuestTelegramWebhookRouteImport } from './routes/api/public/quest/telegram/webhook'
+import { Route as ApiPublicQuestTelegramStatusRouteImport } from './routes/api/public/quest/telegram/status'
 
 const TokensRoute = TokensRouteImport.update({
   id: '/tokens',
@@ -148,6 +152,16 @@ const ApiPublicSolanaRpcRoute = ApiPublicSolanaRpcRouteImport.update({
   path: '/api/public/solana/rpc',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicQuestStepRoute = ApiPublicQuestStepRouteImport.update({
+  id: '/api/public/quest/step',
+  path: '/api/public/quest/step',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicQuestSessionRoute = ApiPublicQuestSessionRouteImport.update({
+  id: '/api/public/quest/session',
+  path: '/api/public/quest/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicKeeperWorkflowsRoute =
   ApiPublicKeeperWorkflowsRouteImport.update({
     id: '/api/public/keeper/workflows',
@@ -211,6 +225,18 @@ const ApiV1LaunchTokenIdMetadataRoute =
     path: '/metadata',
     getParentRoute: () => ApiV1LaunchTokenIdRoute,
   } as any)
+const ApiPublicQuestTelegramWebhookRoute =
+  ApiPublicQuestTelegramWebhookRouteImport.update({
+    id: '/api/public/quest/telegram/webhook',
+    path: '/api/public/quest/telegram/webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicQuestTelegramStatusRoute =
+  ApiPublicQuestTelegramStatusRouteImport.update({
+    id: '/api/public/quest/telegram/status',
+    path: '/api/public/quest/telegram/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -242,8 +268,12 @@ export interface FileRoutesByFullPath {
   '/api/public/keeper/workflow-locks': typeof ApiPublicKeeperWorkflowLocksRoute
   '/api/public/keeper/workflow-report': typeof ApiPublicKeeperWorkflowReportRoute
   '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
+  '/api/public/quest/session': typeof ApiPublicQuestSessionRoute
+  '/api/public/quest/step': typeof ApiPublicQuestStepRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
   '/api/v1/launch/$tokenId': typeof ApiV1LaunchTokenIdRouteWithChildren
+  '/api/public/quest/telegram/status': typeof ApiPublicQuestTelegramStatusRoute
+  '/api/public/quest/telegram/webhook': typeof ApiPublicQuestTelegramWebhookRoute
   '/api/v1/launch/$tokenId/metadata': typeof ApiV1LaunchTokenIdMetadataRoute
 }
 export interface FileRoutesByTo {
@@ -276,8 +306,12 @@ export interface FileRoutesByTo {
   '/api/public/keeper/workflow-locks': typeof ApiPublicKeeperWorkflowLocksRoute
   '/api/public/keeper/workflow-report': typeof ApiPublicKeeperWorkflowReportRoute
   '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
+  '/api/public/quest/session': typeof ApiPublicQuestSessionRoute
+  '/api/public/quest/step': typeof ApiPublicQuestStepRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
   '/api/v1/launch/$tokenId': typeof ApiV1LaunchTokenIdRouteWithChildren
+  '/api/public/quest/telegram/status': typeof ApiPublicQuestTelegramStatusRoute
+  '/api/public/quest/telegram/webhook': typeof ApiPublicQuestTelegramWebhookRoute
   '/api/v1/launch/$tokenId/metadata': typeof ApiV1LaunchTokenIdMetadataRoute
 }
 export interface FileRoutesById {
@@ -311,8 +345,12 @@ export interface FileRoutesById {
   '/api/public/keeper/workflow-locks': typeof ApiPublicKeeperWorkflowLocksRoute
   '/api/public/keeper/workflow-report': typeof ApiPublicKeeperWorkflowReportRoute
   '/api/public/keeper/workflows': typeof ApiPublicKeeperWorkflowsRoute
+  '/api/public/quest/session': typeof ApiPublicQuestSessionRoute
+  '/api/public/quest/step': typeof ApiPublicQuestStepRoute
   '/api/public/solana/rpc': typeof ApiPublicSolanaRpcRoute
   '/api/v1/launch/$tokenId': typeof ApiV1LaunchTokenIdRouteWithChildren
+  '/api/public/quest/telegram/status': typeof ApiPublicQuestTelegramStatusRoute
+  '/api/public/quest/telegram/webhook': typeof ApiPublicQuestTelegramWebhookRoute
   '/api/v1/launch/$tokenId/metadata': typeof ApiV1LaunchTokenIdMetadataRoute
 }
 export interface FileRouteTypes {
@@ -347,8 +385,12 @@ export interface FileRouteTypes {
     | '/api/public/keeper/workflow-locks'
     | '/api/public/keeper/workflow-report'
     | '/api/public/keeper/workflows'
+    | '/api/public/quest/session'
+    | '/api/public/quest/step'
     | '/api/public/solana/rpc'
     | '/api/v1/launch/$tokenId'
+    | '/api/public/quest/telegram/status'
+    | '/api/public/quest/telegram/webhook'
     | '/api/v1/launch/$tokenId/metadata'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -381,8 +423,12 @@ export interface FileRouteTypes {
     | '/api/public/keeper/workflow-locks'
     | '/api/public/keeper/workflow-report'
     | '/api/public/keeper/workflows'
+    | '/api/public/quest/session'
+    | '/api/public/quest/step'
     | '/api/public/solana/rpc'
     | '/api/v1/launch/$tokenId'
+    | '/api/public/quest/telegram/status'
+    | '/api/public/quest/telegram/webhook'
     | '/api/v1/launch/$tokenId/metadata'
   id:
     | '__root__'
@@ -415,8 +461,12 @@ export interface FileRouteTypes {
     | '/api/public/keeper/workflow-locks'
     | '/api/public/keeper/workflow-report'
     | '/api/public/keeper/workflows'
+    | '/api/public/quest/session'
+    | '/api/public/quest/step'
     | '/api/public/solana/rpc'
     | '/api/v1/launch/$tokenId'
+    | '/api/public/quest/telegram/status'
+    | '/api/public/quest/telegram/webhook'
     | '/api/v1/launch/$tokenId/metadata'
   fileRoutesById: FileRoutesById
 }
@@ -449,7 +499,11 @@ export interface RootRouteChildren {
   ApiPublicKeeperWorkflowLocksRoute: typeof ApiPublicKeeperWorkflowLocksRoute
   ApiPublicKeeperWorkflowReportRoute: typeof ApiPublicKeeperWorkflowReportRoute
   ApiPublicKeeperWorkflowsRoute: typeof ApiPublicKeeperWorkflowsRoute
+  ApiPublicQuestSessionRoute: typeof ApiPublicQuestSessionRoute
+  ApiPublicQuestStepRoute: typeof ApiPublicQuestStepRoute
   ApiPublicSolanaRpcRoute: typeof ApiPublicSolanaRpcRoute
+  ApiPublicQuestTelegramStatusRoute: typeof ApiPublicQuestTelegramStatusRoute
+  ApiPublicQuestTelegramWebhookRoute: typeof ApiPublicQuestTelegramWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -601,6 +655,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSolanaRpcRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/quest/step': {
+      id: '/api/public/quest/step'
+      path: '/api/public/quest/step'
+      fullPath: '/api/public/quest/step'
+      preLoaderRoute: typeof ApiPublicQuestStepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/quest/session': {
+      id: '/api/public/quest/session'
+      path: '/api/public/quest/session'
+      fullPath: '/api/public/quest/session'
+      preLoaderRoute: typeof ApiPublicQuestSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/keeper/workflows': {
       id: '/api/public/keeper/workflows'
       path: '/api/public/keeper/workflows'
@@ -678,6 +746,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1LaunchTokenIdMetadataRouteImport
       parentRoute: typeof ApiV1LaunchTokenIdRoute
     }
+    '/api/public/quest/telegram/webhook': {
+      id: '/api/public/quest/telegram/webhook'
+      path: '/api/public/quest/telegram/webhook'
+      fullPath: '/api/public/quest/telegram/webhook'
+      preLoaderRoute: typeof ApiPublicQuestTelegramWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/quest/telegram/status': {
+      id: '/api/public/quest/telegram/status'
+      path: '/api/public/quest/telegram/status'
+      fullPath: '/api/public/quest/telegram/status'
+      preLoaderRoute: typeof ApiPublicQuestTelegramStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -747,7 +829,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicKeeperWorkflowLocksRoute: ApiPublicKeeperWorkflowLocksRoute,
   ApiPublicKeeperWorkflowReportRoute: ApiPublicKeeperWorkflowReportRoute,
   ApiPublicKeeperWorkflowsRoute: ApiPublicKeeperWorkflowsRoute,
+  ApiPublicQuestSessionRoute: ApiPublicQuestSessionRoute,
+  ApiPublicQuestStepRoute: ApiPublicQuestStepRoute,
   ApiPublicSolanaRpcRoute: ApiPublicSolanaRpcRoute,
+  ApiPublicQuestTelegramStatusRoute: ApiPublicQuestTelegramStatusRoute,
+  ApiPublicQuestTelegramWebhookRoute: ApiPublicQuestTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
