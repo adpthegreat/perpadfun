@@ -228,6 +228,12 @@ export function _resetColdProbe() {
 // Round a number for structured-log metric fields; non-finite -> 0.
 const num2 = (n, d = 2) => (Number.isFinite(Number(n)) ? Number(Number(n).toFixed(d)) : 0);
 
+// Last blocked_reason persisted to keeper_logs, per token id. We persist a
+// "blocked" row only when the reason CHANGES (not every tick), so a perpetually
+// blocked token doesn't flood the table while still surfacing every distinct
+// reason + transitions. Cleared when the token unblocks.
+const _lastBlockedReason = new Map();
+
 // A token has work that must run every tick (so it can never be cold-throttled).
 export function tokenHasWork(t) {
   if (t.pending_drift_sig) return true; // must clear an in-flight open/topup sig
@@ -2616,9 +2622,22 @@ export async function tick() {
       });
       queueWorkflow(wfPatch);
       if (blockedReason) {
+        // stdout every tick (live grep) ...
         tokenLog(t, "workflow", "token blocked by keeper gate", {
           blocked_reason: blockedReason,
         });
+        // ... but persist to keeper_logs (queryable via /api/public/keeper/logs)
+        // only when the reason changes, so a stuck token doesn't write a row per tick.
+        if (_lastBlockedReason.get(t.id) !== blockedReason) {
+          keeperLog(t, "warn", "token blocked by keeper gate", {
+            blocked_reason: blockedReason,
+            tick_id: tickId,
+            event: "blocked",
+          });
+          _lastBlockedReason.set(t.id, blockedReason);
+        }
+      } else if (_lastBlockedReason.has(t.id)) {
+        _lastBlockedReason.delete(t.id); // unblocked → re-log next time it blocks
       }
       tickClaimedUsd += ctx.claimedSolUsd || 0;
       // One structured per-token record for the whole tick (KEEPER_OBSERVABILITY.md).
