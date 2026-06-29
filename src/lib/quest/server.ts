@@ -1,7 +1,18 @@
 // Server-only quest helpers: client IP, IP hashing, referral-code generation, and the
 // Telegram Bot API wrapper used by the webhook + membership check. Pure logic lives in
 // ./shared.ts so it can be tested without env or network.
+import { apiErr } from "@/lib/api/respond";
 import { genReferralCode, isJoinedStatus } from "@/lib/quest/shared";
+
+// Wrap a JSON route handler so any unexpected throw (e.g. a missing-env supabaseAdmin) returns
+// a JSON error envelope rather than the framework's HTML 500 page, which the client can't parse.
+export async function safeJson(fn: () => Promise<Response>): Promise<Response> {
+  try {
+    return await fn();
+  } catch (e) {
+    return apiErr(500, "server_error", e instanceof Error ? e.message : "unexpected error");
+  }
+}
 
 export function clientIp(request: Request): string {
   return (

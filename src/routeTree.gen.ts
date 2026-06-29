@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TokensRouteImport } from './routes/tokens'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as RouteFeesRouteImport } from './routes/route-fees'
+import { Route as QuestRouteImport } from './routes/quest'
 import { Route as PaperRouteImport } from './routes/paper'
 import { Route as LaunchRouteImport } from './routes/launch'
 import { Route as HomeRouteImport } from './routes/home'
@@ -59,6 +60,11 @@ const StatsRoute = StatsRouteImport.update({
 const RouteFeesRoute = RouteFeesRouteImport.update({
   id: '/route-fees',
   path: '/route-fees',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuestRoute = QuestRouteImport.update({
+  id: '/quest',
+  path: '/quest',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PaperRoute = PaperRouteImport.update({
@@ -244,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
   '/paper': typeof PaperRoute
+  '/quest': typeof QuestRoute
   '/route-fees': typeof RouteFeesRouteWithChildren
   '/stats': typeof StatsRoute
   '/tokens': typeof TokensRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByTo {
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
   '/paper': typeof PaperRoute
+  '/quest': typeof QuestRoute
   '/route-fees': typeof RouteFeesRouteWithChildren
   '/stats': typeof StatsRoute
   '/tokens': typeof TokensRoute
@@ -321,6 +329,7 @@ export interface FileRoutesById {
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
   '/paper': typeof PaperRoute
+  '/quest': typeof QuestRoute
   '/route-fees': typeof RouteFeesRouteWithChildren
   '/stats': typeof StatsRoute
   '/tokens': typeof TokensRoute
@@ -361,6 +370,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/launch'
     | '/paper'
+    | '/quest'
     | '/route-fees'
     | '/stats'
     | '/tokens'
@@ -399,6 +409,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/launch'
     | '/paper'
+    | '/quest'
     | '/route-fees'
     | '/stats'
     | '/tokens'
@@ -437,6 +448,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/launch'
     | '/paper'
+    | '/quest'
     | '/route-fees'
     | '/stats'
     | '/tokens'
@@ -476,6 +488,7 @@ export interface RootRouteChildren {
   HomeRoute: typeof HomeRoute
   LaunchRoute: typeof LaunchRoute
   PaperRoute: typeof PaperRoute
+  QuestRoute: typeof QuestRoute
   RouteFeesRoute: typeof RouteFeesRouteWithChildren
   StatsRoute: typeof StatsRoute
   TokensRoute: typeof TokensRoute
@@ -527,6 +540,13 @@ declare module '@tanstack/react-router' {
       path: '/route-fees'
       fullPath: '/route-fees'
       preLoaderRoute: typeof RouteFeesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quest': {
+      id: '/quest'
+      path: '/quest'
+      fullPath: '/quest'
+      preLoaderRoute: typeof QuestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/paper': {
@@ -804,6 +824,7 @@ const rootRouteChildren: RootRouteChildren = {
   HomeRoute: HomeRoute,
   LaunchRoute: LaunchRoute,
   PaperRoute: PaperRoute,
+  QuestRoute: QuestRoute,
   RouteFeesRoute: RouteFeesRouteWithChildren,
   StatsRoute: StatsRoute,
   TokensRoute: TokensRoute,

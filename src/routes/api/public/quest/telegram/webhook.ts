@@ -43,6 +43,39 @@ async function reply(chatId: number, text: string, withJoinButton: boolean) {
   }
 }
 
+// Bind the Telegram identity onto the session and tell the user what to do next. Isolated so
+// any throw (e.g. a misconfigured supabaseAdmin) still lets the webhook ack 200.
+async function handleStart(chatId: number, userId: number, username: string | undefined, payload: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("quest_entries")
+      .update({ telegram_user_id: userId, telegram_username: username ?? null })
+      .eq("session_id", payload)
+      .is("telegram_user_id", null)
+      .select("session_id")
+      .maybeSingle();
+
+    if (error) {
+      // 23505 = this Telegram account is already bound to a different quest entry.
+      const msg =
+        error.code === "23505"
+          ? "This Telegram account is already linked to another entry."
+          : "Something went wrong linking your entry. Try again from the site.";
+      await reply(chatId, msg, false);
+      return;
+    }
+
+    if (data) {
+      await reply(chatId, "✅ Linked! Join the channel below, then head back to the site to finish.", true);
+    } else {
+      // No row updated: either already linked to this session, or the session expired.
+      await reply(chatId, "Already linked. Join the channel below, then return to the site.", true);
+    }
+  } catch {
+    await reply(chatId, "Something went wrong on our side. Please try again in a moment.", false);
+  }
+}
+
 export const Route = createFileRoute("/api/public/quest/telegram/webhook")({
   server: {
     handlers: {
@@ -72,34 +105,7 @@ export const Route = createFileRoute("/api/public/quest/telegram/webhook")({
           return ok();
         }
 
-        // Bind only if this session has no Telegram identity yet (idempotent re-/start is fine).
-        const { data, error } = await supabaseAdmin
-          .from("quest_entries")
-          .update({
-            telegram_user_id: userId,
-            telegram_username: msg?.from?.username ?? null,
-          })
-          .eq("session_id", payload)
-          .is("telegram_user_id", null)
-          .select("session_id")
-          .maybeSingle();
-
-        if (error) {
-          // 23505 = this Telegram account is already bound to a different quest entry.
-          if (error.code === "23505") {
-            await reply(chatId, "This Telegram account is already linked to another entry.", false);
-          } else {
-            await reply(chatId, "Something went wrong linking your entry. Try again from the site.", false);
-          }
-          return ok();
-        }
-
-        if (data) {
-          await reply(chatId, "✅ Linked! Join the channel below, then head back to the site to finish.", true);
-        } else {
-          // No row updated: either already linked to this session, or the session expired.
-          await reply(chatId, "Already linked. Join the channel below, then return to the site.", true);
-        }
+        await handleStart(chatId, userId, msg?.from?.username, payload);
         return ok();
       },
     },
