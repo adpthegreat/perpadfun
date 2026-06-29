@@ -73,24 +73,12 @@ export function ComingSoon() {
           coins with a <em className="text-foreground">heartbeat</em>.
         </p>
 
-        <div className="mt-1 flex flex-col items-center gap-2">
-          <div className="flex items-center gap-2.5">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#23e3a0]" />
-            <span className="font-mono text-xs uppercase tracking-[0.24em] text-muted-foreground">
-              coming soon
-            </span>
-          </div>
-          <span className="font-mono text-sm tracking-[0.3em] text-foreground md:text-base">
-            29 / 06 / 2026
-          </span>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <a
             href={X_URL}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.18em] backdrop-blur transition-colors hover:border-[#9d4eff] hover:text-[#9d4eff]"
+            className="inline-flex items-center gap-2 rounded-full bg-foreground px-6 py-3 font-mono text-[13px] font-medium uppercase tracking-[0.18em] text-background shadow-[0_2px_28px_-6px_rgba(255,255,255,0.45)] transition-transform hover:-translate-y-0.5"
           >
             follow on X →
           </a>
@@ -98,13 +86,13 @@ export function ComingSoon() {
             href={TG_URL}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.18em] backdrop-blur transition-colors hover:border-[#16e0a3] hover:text-[#16e0a3]"
+            className="inline-flex items-center gap-2 rounded-full border border-[#16e0a3]/60 bg-[#16e0a3]/15 px-6 py-3 font-mono text-[13px] font-medium uppercase tracking-[0.18em] text-[#16e0a3] shadow-[0_0_26px_-8px_#16e0a3] backdrop-blur transition-colors hover:bg-[#16e0a3]/25"
           >
             join TG →
           </a>
           <Link
             to="/paper"
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.18em] backdrop-blur transition-colors hover:border-foreground hover:text-foreground"
+            className="inline-flex items-center gap-2 rounded-full border border-foreground/25 bg-card/80 px-6 py-3 font-mono text-[13px] uppercase tracking-[0.18em] text-foreground backdrop-blur transition-colors hover:border-foreground hover:bg-card"
           >
             read the paper →
           </Link>
