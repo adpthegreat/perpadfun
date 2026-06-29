@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     setupFiles: ["./test/helpers/setup-env.ts"],
-    include: ["test/**/*.test.ts"],
+    include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
     testTimeout: 30_000,
     hookTimeout: 60_000,
     // The DB-backed suites share ONE local Postgres and TRUNCATE between tests,
