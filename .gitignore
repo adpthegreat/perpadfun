@@ -51,3 +51,6 @@ supabase/.temp/
 *.sln
 *.sw?
 test/live/imperial-bug-report.md
+
+# perpspad CLI local launch log (tokenIds for sweeping)
+perpspad-cli/.launches.log

@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { Connection, Keypair, PublicKey, SystemProgram, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
 import { getServerSolanaRpcUrl } from "@/lib/wallet/solanaConfig";
 import { getTreasuryKeypair } from "@/lib/solana/treasury.server";
+import { backOff } from "@/lib/backoff";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { computeSupplyBreakdown, validateLeftover, type SupplyBreakdown } from "@/lib/launch/supplyBreakdown";
 import { deriveSubWalletKeypair, tokenInvariantsFor } from "@/lib/solana/subWallet.server";
@@ -85,6 +86,32 @@ async function loadBN() {
   return (await import("bn.js")).default as any;
 }
 
+// Worker-safe confirmation — the SAME technique launchAsTreasury uses for its prefund: poll
+// getSignatureStatus with exponential backoff (HTTP, no WebSocket signatureSubscribe to stall on a
+// Cloudflare Worker). Throws on a terminal on-chain error or if it never reaches confirmed/finalized.
+async function pollConfirmed(conn: Connection, sig: string, minStatus: "processed" | "confirmed" = "confirmed"): Promise<void> {
+  const accept = minStatus === "processed" ? ["processed", "confirmed", "finalized"] : ["confirmed", "finalized"];
+  let ok = false;
+  let onChainErr: unknown = null;
+  await backOff(
+    async () => {
+      const v = (await conn.getSignatureStatus(sig, { searchTransactionHistory: true })).value;
+      if (v?.err) {
+        onChainErr = v.err;
+        return;
+      }
+      if (v?.confirmationStatus && accept.includes(v.confirmationStatus)) {
+        ok = true;
+        return;
+      }
+      throw new Error("not yet confirmed");
+    },
+    { numOfAttempts: 16, startingDelay: 1000, timeMultiple: 1.5, maxDelay: 4000, jitter: "full", retry: () => true },
+  ).catch(() => {});
+  if (onChainErr) throw new Error(`tx ${sig} failed on-chain: ${JSON.stringify(onChainErr)}`);
+  if (!ok) throw new Error(`tx ${sig} not confirmed in time`);
+}
+
 // Build the Meteora DBC config params (curve + leftover + anti-snipe fee).
 async function buildConfigParams(
   sdk: any,
@@ -115,7 +142,7 @@ async function buildConfigParams(
       dynamicFeeEnabled: true,
       collectFeeMode: sdk.CollectFeeMode.QuoteToken,
       creatorTradingFeePercentage: 0,
-      poolCreationFee: 1,
+      poolCreationFee: 0,
       enableFirstSwapWithMinFee: false,
     },
     migration: {
@@ -244,7 +271,7 @@ export async function launchAdmin(input: AdminLaunchInput): Promise<{
     const fundTx = new Transaction({ recentBlockhash: fundBh.blockhash, feePayer: treasury.publicKey }).add(...fundIxs);
     fundTx.sign(treasury);
     const fundSig = await conn.sendRawTransaction(fundTx.serialize(), { skipPreflight: false });
-    await conn.confirmTransaction({ signature: fundSig, ...fundBh }, "confirmed");
+    await pollConfirmed(conn, fundSig);
   }
 
   const config = Keypair.generate();
@@ -273,17 +300,19 @@ export async function launchAdmin(input: AdminLaunchInput): Promise<{
   createConfigTx.feePayer = subWallet.publicKey;
   createConfigTx.partialSign(config, subWallet);
   const configSig = await conn.sendRawTransaction(createConfigTx.serialize(), { skipPreflight: false });
-  await conn.confirmTransaction({ signature: configSig, ...bh1 }, "confirmed");
+  // HTTP poll for "processed" (no WebSocket — confirmTransaction's signatureSubscribe stalls on a
+  // Worker and is what hung us). Non-fatal: the pool send's preflight below fails if config didn't land.
+  await pollConfirmed(conn, configSig, "processed").catch((e) => console.warn("[launchAdmin] config confirm", e));
 
   const bh2 = await conn.getLatestBlockhash("confirmed");
   createPoolWithFirstBuyTx.recentBlockhash = bh2.blockhash;
   createPoolWithFirstBuyTx.feePayer = subWallet.publicKey;
   createPoolWithFirstBuyTx.partialSign(baseMint, subWallet);
+  // send with preflight: a tx that would fail throws HERE (no row written), so a successful send
+  // means it will land. RPC lag must never orphan it → persist live now, confirm best-effort after.
   const poolSig = await conn.sendRawTransaction(createPoolWithFirstBuyTx.serialize(), { skipPreflight: false });
-  await conn.confirmTransaction({ signature: poolSig, ...bh2 }, "confirmed");
   const poolAddress = sdk.deriveDbcPoolAddress(quoteMint, baseMint.publicKey, config.publicKey).toBase58();
 
-  // both txs confirmed -> write the complete live row (atomic: no row before this point)
   await upsertTokenRow({
     tokenId,
     fields: input,
@@ -294,7 +323,8 @@ export async function launchAdmin(input: AdminLaunchInput): Promise<{
     configAddress: config.publicKey.toBase58(),
     signature: poolSig,
   });
-
+  // No confirm here: the pool send already passed preflight, the row is `live`, and the keeper
+  // reconciler verifies the pool on-chain. (A confirmTransaction would re-introduce the WS stall.)
   return {
     tokenId,
     mint: baseMint.publicKey.toBase58(),
@@ -304,6 +334,7 @@ export async function launchAdmin(input: AdminLaunchInput): Promise<{
     status: "live",
   };
 }
+
 
 // ── Public mode (keyless, fee-gated): build the caller-signed config + pool txs
 // (leftover=0, standard fee, + 0.01 SOL caller→treasury fee) and insert a TRANSIENT
