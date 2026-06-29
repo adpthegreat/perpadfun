@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Loader2, Twitter, Repeat2, Send, Wallet, ArrowUpRight, Lock } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import {
   type QuestSession,
 } from "@/lib/quest/client";
 import { xFollowUrl, xRetweetUrl, tgBotDeepLink } from "@/lib/quest/config";
+import { useHonoraryStep } from "@/lib/quest/useHonoraryStep";
 
 export const Route = createFileRoute("/quest")({
   component: QuestPage,
@@ -26,66 +27,6 @@ export const Route = createFileRoute("/quest")({
     ],
   }),
 });
-
-type HonoraryStatus = "idle" | "awaiting" | "verifying" | "done";
-
-// Honorary step: open a link, and when the user returns to this tab show a ~1s spinner, then
-// mark the step complete on the server. Not verified against the destination by design.
-function useHonoraryStep(initialDone: boolean, complete: () => Promise<void>) {
-  const [status, setStatus] = useState<HonoraryStatus>(initialDone ? "done" : "idle");
-  const armed = useRef(false);
-  const timer = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    if (initialDone) setStatus("done");
-  }, [initialDone]);
-
-  const runVerify = useCallback(() => {
-    setStatus("verifying");
-    timer.current = window.setTimeout(async () => {
-      try {
-        await complete();
-        setStatus("done");
-      } catch (e) {
-        setStatus("idle");
-        toast.error(e instanceof Error ? e.message : "Could not save that step");
-      }
-    }, 1000);
-  }, [complete]);
-
-  const open = useCallback(
-    (url: string) => {
-      setStatus((s) => (s === "done" ? "done" : "awaiting"));
-      const win = window.open(url, "_blank", "noopener,noreferrer");
-      armed.current = true;
-      // Popup blocked → we can't detect a return, so honor it after the spinner.
-      if (!win) {
-        armed.current = false;
-        runVerify();
-      }
-    },
-    [runVerify],
-  );
-
-  // Detect the user coming back to this tab.
-  useEffect(() => {
-    function onReturn() {
-      if (armed.current && document.visibilityState === "visible") {
-        armed.current = false;
-        runVerify();
-      }
-    }
-    window.addEventListener("focus", onReturn);
-    document.addEventListener("visibilitychange", onReturn);
-    return () => {
-      window.removeEventListener("focus", onReturn);
-      document.removeEventListener("visibilitychange", onReturn);
-      if (timer.current) window.clearTimeout(timer.current);
-    };
-  }, [runVerify]);
-
-  return { status, open };
-}
 
 function StepRow({
   n,
