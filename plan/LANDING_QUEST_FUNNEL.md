@@ -105,7 +105,9 @@ Supabase (unlike `token_wallet_not_null`).
    join channel → page poll flips to verified. Confirm the `quest_entries` row in Supabase.
 
 **Verified locally:** vite build, `tsc --noEmit`, migration applies on local Postgres (full
-chain + behavioral smoke of the trigger and the unique-telegram-id gate), 8 logic tests
-(getChatMember status mapping + referral codes), and routing/validation/error-envelope via curl.
-**Needs the live stack:** the getChatMember round-trip against a real bot+channel, and the
-browser interactive flow (Supabase local stack is Docker/disk-blocked here; Chrome ext not connected).
+chain + behavioral smoke of the trigger and the unique-telegram-id gate), routing/validation/
+error-envelope via curl, and 11 vitest tests — getChatMember status mapping + referral codes,
+plus a jsdom + Testing Library test of the honorary step (open → return → 1s spinner → done,
+with a regression case that re-renders mid-spinner). Full suite 100 passed / 40 skipped (DB-bound).
+**Needs the live stack:** the getChatMember round-trip against a real bot+channel, and an
+end-to-end browser pass against the deployed Supabase (local Supabase stack was Docker-blocked).
