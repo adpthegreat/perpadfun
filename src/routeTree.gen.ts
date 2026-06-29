@@ -13,6 +13,7 @@ import { Route as TokensRouteImport } from './routes/tokens'
 import { Route as StatsRouteImport } from './routes/stats'
 import { Route as RouteFeesRouteImport } from './routes/route-fees'
 import { Route as PaperRouteImport } from './routes/paper'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LaunchRouteImport } from './routes/launch'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as DocsRouteImport } from './routes/docs'
@@ -60,6 +61,11 @@ const RouteFeesRoute = RouteFeesRouteImport.update({
 const PaperRoute = PaperRouteImport.update({
   id: '/paper',
   path: '/paper',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LaunchRoute = LaunchRouteImport.update({
@@ -217,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
+  '/onboarding': typeof OnboardingRoute
   '/paper': typeof PaperRoute
   '/route-fees': typeof RouteFeesRouteWithChildren
   '/stats': typeof StatsRoute
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
+  '/onboarding': typeof OnboardingRoute
   '/paper': typeof PaperRoute
   '/route-fees': typeof RouteFeesRouteWithChildren
   '/stats': typeof StatsRoute
@@ -286,6 +294,7 @@ export interface FileRoutesById {
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
+  '/onboarding': typeof OnboardingRoute
   '/paper': typeof PaperRoute
   '/route-fees': typeof RouteFeesRouteWithChildren
   '/stats': typeof StatsRoute
@@ -322,6 +331,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/home'
     | '/launch'
+    | '/onboarding'
     | '/paper'
     | '/route-fees'
     | '/stats'
@@ -356,6 +366,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/home'
     | '/launch'
+    | '/onboarding'
     | '/paper'
     | '/route-fees'
     | '/stats'
@@ -390,6 +401,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/home'
     | '/launch'
+    | '/onboarding'
     | '/paper'
     | '/route-fees'
     | '/stats'
@@ -425,6 +437,7 @@ export interface RootRouteChildren {
   DocsRoute: typeof DocsRoute
   HomeRoute: typeof HomeRoute
   LaunchRoute: typeof LaunchRoute
+  OnboardingRoute: typeof OnboardingRoute
   PaperRoute: typeof PaperRoute
   RouteFeesRoute: typeof RouteFeesRouteWithChildren
   StatsRoute: typeof StatsRoute
@@ -480,6 +493,13 @@ declare module '@tanstack/react-router' {
       path: '/paper'
       fullPath: '/paper'
       preLoaderRoute: typeof PaperRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/launch': {
@@ -721,6 +741,7 @@ const rootRouteChildren: RootRouteChildren = {
   DocsRoute: DocsRoute,
   HomeRoute: HomeRoute,
   LaunchRoute: LaunchRoute,
+  OnboardingRoute: OnboardingRoute,
   PaperRoute: PaperRoute,
   RouteFeesRoute: RouteFeesRouteWithChildren,
   StatsRoute: StatsRoute,
