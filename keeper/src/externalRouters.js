@@ -26,12 +26,7 @@ import {
 } from '@solana/web3.js';
 import { loadKeypair, deriveSubKeypair } from './wallet.js';
 import { burnExistingTokenBalance, buybackAndBurn } from './buyback.js';
-import {
-  openPosition,
-  increasePosition,
-  readPerpPosition,
-  SUPPORTED_SYMBOLS,
-} from './jupiterPerps.js';
+import { SUPPORTED_SYMBOLS } from './supportedSymbols.js';
 import { isSupportedMarket as isImperialSupportedMarket, authenticate as imperialAuthenticate, MIN_COLLATERAL_USD as IMPERIAL_MIN_USD } from './imperial.js';
 import { depositToImperialProfile } from './imperialDeposit.js';
 
@@ -205,75 +200,6 @@ async function prefetchLamports(addresses) {
 
 // ---- legs ----
 
-
-async function legPerp({ router, sub, perpSol, maxSpendLamports, events }) {
-  if (perpSol <= 0) return false;
-  const sym = String(router.underlying ?? '').toUpperCase();
-  if (!isUnderlyingSupportedForRouter(router, sym)) {
-    const routerKind = String(router?.router ?? 'imperial').toLowerCase();
-    console.warn(`[externalRouters] ${router.id} unsupported underlying=${router.underlying} for router=${routerKind}, skipping perp leg`);
-    return false;
-  }
-  const side = router.direction === 'short' ? 'short' : 'long';
-  const lev = Math.max(1, Math.min(Number(router.leverage ?? 1), 100));
-
-  let solPx;
-  try { solPx = await getUsdPriceFor('SOL'); } catch (e) {
-    console.warn(`[externalRouters] perp: SOL price fetch failed: ${e.message}`);
-    return false;
-  }
-  if (!Number.isFinite(solPx) || solPx <= 0) return false;
-
-  const collateralUsd = perpSol * solPx;
-  if (collateralUsd < MIN_PERP_COLLATERAL_USD) {
-    console.log(`[externalRouters] ${sym} ${side} ${lev}x: collateral $${collateralUsd.toFixed(2)} < min $${MIN_PERP_COLLATERAL_USD}, skipping perp leg`);
-    return false;
-  }
-  const sizeUsd = collateralUsd * lev;
-
-  // open vs increase
-  let existing = null;
-  try { existing = await readPerpPosition({ symbol: sym, side, kp: sub }); }
-  catch (e) { console.warn(`[externalRouters] readPerpPosition failed: ${e.message}`); }
-
-  try {
-    const beforeLamports = await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'));
-    const maxSpendSol = Math.max(0, maxSpendLamports) / LAMPORTS_PER_SOL;
-    let res;
-    if (existing) {
-      res = await increasePosition({
-        symbol: sym, side,
-        addSizeUsd: sizeUsd,
-        addCollateralUsd: collateralUsd,
-        kp: sub,
-      });
-    } else {
-      res = await openPosition({
-        symbol: sym, side,
-        collateralUsd, sizeUsd,
-        kp: sub,
-      });
-    }
-    const sig = res?.signature ?? null;
-    events.push({
-      token_id: router.id,
-      kind: 'external_perp',
-      swept_sol: perpSol,
-      tx_sig: sig,
-      note: `${existing ? 'increase' : 'open'} ${sym} ${side} ${lev}x: +$${sizeUsd.toFixed(2)} size, +$${collateralUsd.toFixed(2)} collateral (${perpSol.toFixed(6)} SOL)${res?.simulated ? ' [sim]' : ''}`,
-    });
-    console.log(`[externalRouters] perp ${router.ticker ?? router.id.slice(0,6)} ${sym} ${side} ${lev}x size=$${sizeUsd.toFixed(2)} sig=${sig?.slice(0,16) ?? 'null'}…`);
-    const afterLamports = await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'));
-    const spentSol = Math.max(0, beforeLamports - afterLamports) / LAMPORTS_PER_SOL;
-    if (spentSol > maxSpendSol + 0.01) {
-      console.warn(`[externalRouters] perp ${router.ticker ?? router.id.slice(0,6)} overspent split cap: spent=${spentSol.toFixed(6)} SOL cap=${maxSpendSol.toFixed(6)} SOL`);
-    }
-    return true;
-  } catch (e) {
-    console.warn(`[externalRouters] perp leg failed token=${router.id}: ${e.message}`);
-    return false;
-  }
-}
 
 // Imperial-routed tokens deposit their perp slice straight into the Imperial
 // profile as USDC. Replaces legPerp for any router with router='imperial'.
@@ -667,21 +593,10 @@ export async function sweepExternalRouters() {
           note: `market_unsupported: ${sym || 'unknown'} unavailable for Imperial routing — perp slice redirected to buyback`,
         });
       } else {
-        // Perp leg: Imperial-routed tokens deposit straight to their profile
-        // (Jupiter can't trade HYPE/PUMP/DOGE/ZEC/WLD/NVDA). Legacy Jupiter
-        // routers keep the old openPosition flow.
-        const routerKind = String(r.router ?? 'imperial').toLowerCase();
-        if (routerKind === 'imperial') {
-          await legImperialDeposit({ router: r, sub, perpSol, solUsd, events });
-        } else {
-          await legPerp({
-            router: r,
-            sub,
-            perpSol,
-            maxSpendLamports: Math.floor(splitBudget * PERP_RATIO),
-            events,
-          });
-        }
+        // Perp leg: all external routers deposit their perp slice straight into
+        // the Imperial profile (Jupiter perps removed — see
+        // plan/REMOVE_JUPITER_PERPS.md). loop.js fires the open / top-up.
+        await legImperialDeposit({ router: r, sub, perpSol, solUsd, events });
       }
 
       processed++;

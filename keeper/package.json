@@ -1,10 +1,9 @@
 {
-  "name": "perpad-jupiter-keeper",
+  "name": "perpspad-keeper",
   "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "node scripts/patch-jup-perps-client.mjs",
     "start": "node src/index.js",
     "dev": "node --watch src/index.js"
   },
@@ -14,7 +13,6 @@
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.95.4",
     "@solana/kit": "^6.1.0",
-    "jup-perps-client": "^1.2.0",
     "bs58": "^6.0.0",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0"

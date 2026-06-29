@@ -1,13 +1,11 @@
-// Imperial Exchange trade primitives.
-//
-// Mirrors the public surface of jupiterPerps.js so loop.js can branch on
-// `t.router === 'imperial'` with a one-line swap per call site:
+// Imperial Exchange trade primitives. Wrapped by the venue adapter (src/venue.js)
+// and dispatched via resolveVenue(token); loop.js calls these through that adapter.
 //
 //   imperialReadPosition({ profileIndex, symbol, side, token, wallet })
 //     -> { sizeUsd, collateralUsd, side, entryPriceUsd, markPriceUsd, unrealizedPnlUsd, raw }
 //
 //   imperialOpenPosition({ authToken, kp, profileIndex, symbol, side, collateralUsd, leverage, slippageBps })
-//     -> { signature, simulated, error }     (matches Jupiter shape)
+//     -> { signature, simulated, error }
 //
 //   imperialIncreasePosition({ authToken, kp, profileIndex, symbol, side, addSizeUsd, addCollateralUsd, leverage, slippageBps, solUsd, rpcUrl })
 //     -> { signature, simulated, error, depositPrep? }
@@ -60,7 +58,7 @@ import {
   ensurePhoenixRegistered,
 } from './imperial.js';
 import { ensureUsdcForDeposit, depositToImperialProfile } from './imperialDeposit.js';
-import { SUPPORTED_SYMBOLS } from './jupiterPerps.js';
+import { SUPPORTED_SYMBOLS } from './supportedSymbols.js';
 import { pickEntryMid } from './pnl.js';
 import { withRetry } from './rateLimiter.js';
 

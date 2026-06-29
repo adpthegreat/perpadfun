@@ -1,5 +1,5 @@
 // Shared on-chain program IDs, the wSOL mint, and Jupiter v6 endpoints.
-// Single source of truth so buyback.js / fees.js / jupiterPerps.js / swap.js
+// Single source of truth so buyback.js / fees.js / swap.js
 // don't each redeclare them. (SOL_MINT in some files is the same value as
 // WSOL_MINT — import it as `WSOL_MINT as SOL_MINT` there.)
 

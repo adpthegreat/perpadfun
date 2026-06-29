@@ -18,18 +18,8 @@
 
 import { config } from "./config.js";
 import os from "node:os";
-import {
-  getJupPerps,
-  getFreeCollateralUsd,
-  openPosition,
-  increasePosition,
-  topUpCollateral,
-  withdrawCollateral,
-  partialClose,
-  unwrapWsol,
-  readPerpPosition,
-  closePerp,
-} from "./jupiterPerps.js";
+import { resolveVenue } from "./venue.js";
+import { unwrapWsol } from "./wsol.js";
 import {
   Connection,
   PublicKey,
@@ -47,7 +37,7 @@ import {
   buybackAndBurn,
   buybackSpendableLamports,
 } from "./buyback.js";
-import { swapSolToUsdc, swapUsdcToSol, MIN_VIABLE_USDC } from "./swap.js";
+import { swapUsdcToSol, MIN_VIABLE_USDC } from "./swap.js";
 import { withRetry } from "./rateLimiter.js";
 import { backOff } from "./backoff.js";
 import { intentHash, tickBucket, buildTxLogEntry } from "./idempotency.js";
@@ -1226,15 +1216,13 @@ async function readPositionPreState(ctx) {
         // checking parked profile USDC. Imperial balance endpoints can
         // include locked collateral, so this live read prevents counting
         // existing collateral as reusable free margin on every tick.
-        ctx.chainPos = await imperialReadPosition({
+        ctx.chainPos = await resolveVenue(t).readPosition({
           profileIndex: t.imperial_profile_index,
           symbol: ctx.underlying,
           side: ctx.side,
           token: await ctx.ensureAuth().catch(() => null),
           wallet: ctx.kp.publicKey.toBase58(),
         });
-      } else {
-        ctx.chainPos = await readPerpPosition({ symbol: ctx.underlying, side: ctx.side, kp: ctx.kp });
       }
       if (ctx.chainPos) {
         ctx.hasLivePosition = true;
@@ -1642,7 +1630,7 @@ async function openPositionStep(ctx) {
               `[3b] ${t.ticker} pre-open pending marker failed (proceeding): ${e.message}`,
             );
           }
-          const res = await imperialOpenPosition({
+          const res = await resolveVenue(t).open({
             authToken,
             kp: ctx.kp,
             profileIndex: t.imperial_profile_index,
@@ -1770,100 +1758,6 @@ async function openPositionStep(ctx) {
       // External jupiter coins: externalRouters opens the position from
       // the pump.fun creator-fee sweep. Don't run the legacy loop open
       // path (it would try to swap from an empty sub-wallet and spam).
-    } else {
-      // --------- JUPITER (legacy) OPEN BRANCH ---------
-      const freeUsdc = await getFreeCollateralUsd(ctx.kp);
-      if (freeUsdc < openColl) {
-        // Try to top up USDC by swapping the SOL fees sitting in the wallet.
-        const rawNeed = openColl - freeUsdc + 0.5; // small buffer for slippage rounding
-        const need = ctx.isSubWallet ? rawNeed : Math.min(rawNeed, Math.max(0, ctx.perpFundingBudgetUsd));
-        if (!ctx.isSubWallet && need < rawNeed) {
-          console.warn(
-            `[loop] ${t.ticker} legacy master SOL->USDC open swap capped: $${rawNeed.toFixed(2)} -> $${need.toFixed(2)} (accrued fees only)`,
-          );
-        }
-        try {
-          const sw = await swapSolToUsdc({ wantUsdc: need, solUsd, kp: ctx.kp });
-          if (sw) {
-            ctx.events.push({
-              kind: "tick",
-              note: `swapped ${sw.solSpent.toFixed(4)} SOL -> $${sw.usdcReceived.toFixed(2)} USDC for perp open (sig ${sw.swapSig.slice(0, 16)}..)`,
-              tx_sig: sw.swapSig,
-            });
-          } else {
-            ctx.events.push({
-              kind: "tick",
-              note: `OPEN gate hit ($${ctx.feesAccruedAfter.toFixed(2)}) but wallet USDC $${freeUsdc.toFixed(2)} < $${openColl} and insufficient SOL to swap`,
-            });
-          }
-        } catch (e) {
-          keeperLog(t, "warn", "SOL->USDC swap failed", { error: e.message, tick_id: ctx.tickId });
-          ctx.events.push({ kind: "tick", note: `SOL->USDC swap err: ${e.message.slice(0, 200)}` });
-        }
-        // Defer the actual open to the next tick so the USDC balance is
-        // fully visible to Jupiter perps before we sign the open tx.
-      } else {
-        try {
-          // [imperial:shadow] log-only quote; never blocks or alters the open.
-          await imperialQuoteIfEnabled({
-            symbol: ctx.underlying,
-            side: ctx.side,
-            collateralUsd: openColl,
-            leverage: ctx.leverage,
-            context: "open",
-          });
-          const res = await openPosition({
-            symbol: ctx.underlying,
-            side: ctx.side,
-            collateralUsd: openColl,
-            sizeUsd,
-            kp: ctx.kp,
-          });
-
-          const openAccepted = !res.error && (res.signature || config.hedgeMode === "simulate");
-          if (res.signature) {
-            ctx.patch.pending_drift_sig = res.signature;
-            const intent = intentHash([
-              t.id,
-              "perp_open",
-              bucket,
-              openColl.toFixed(2),
-              ctx.side,
-              ctx.leverage,
-            ]);
-            ctx.txLog.push(
-              buildTxLogEntry({
-                kind: "drift_adjust",
-                intent,
-                status: "pending",
-                signature: res.signature,
-                amountUsd: sizeUsd,
-              }),
-            );
-          }
-          if (openAccepted) {
-            ctx.patch.position_opened = true;
-            ctx.patch.position_size_usd = sizeUsd;
-            ctx.patch.position_collateral_usd = openColl;
-            ctx.patch.opened_collateral_usd = openColl;
-            ctx.feesAccruedDelta -= openColl;
-            ctx.events.push({
-              kind: "open",
-              note:
-                `${config.hedgeMode}: opened ${ctx.side} ${ctx.underlying} ${ctx.leverage}x coll=$${openColl} size=$${sizeUsd.toFixed(2)}` +
-                (res.simulated && !res.signature ? " [SIMULATED]" : ""),
-            });
-          } else {
-            ctx.events.push({
-              kind: "tick",
-              note: `open attempt failed: ${res.error ? res.error.slice(0, 200) : "no signature returned"}`,
-            });
-          }
-        } catch (e) {
-          keeperLog(t, "warn", "open failed", { error: e.message, tick_id: ctx.tickId });
-          ctx.events.push({ kind: "tick", note: `open error: ${e.message.slice(0, 200)}` });
-        }
-      }
     }
   }
 }
@@ -2291,83 +2185,6 @@ export async function topUpAndRepairStep(ctx) {
       // jupiter top-up gate below would just spam "insufficient SOL"
       // every tick because the sub-wallet is intentionally drained after
       // each split. Skip silently.
-    } else {
-      // --------- JUPITER (legacy) TOP-UP BRANCH ---------
-      const freeUsdc = await getFreeCollateralUsd(ctx.kp);
-      if (freeUsdc < addColl) {
-        const rawNeed = addColl - freeUsdc + 0.5;
-        const need = ctx.isSubWallet ? rawNeed : Math.min(rawNeed, Math.max(0, ctx.perpFundingBudgetUsd));
-        if (!ctx.isSubWallet && need < rawNeed) {
-          console.warn(
-            `[loop] ${t.ticker} legacy master SOL->USDC top-up swap capped: $${rawNeed.toFixed(2)} -> $${need.toFixed(2)} (accrued fees only)`,
-          );
-        }
-        try {
-          const sw = await swapSolToUsdc({ wantUsdc: need, solUsd, kp: ctx.kp });
-          if (sw) {
-            ctx.events.push({
-              kind: "tick",
-              note: `swapped ${sw.solSpent.toFixed(4)} SOL -> $${sw.usdcReceived.toFixed(2)} USDC for perp top-up (sig ${sw.swapSig.slice(0, 16)}..)`,
-              tx_sig: sw.swapSig,
-            });
-          } else {
-            ctx.events.push({
-              kind: "tick",
-              note: `top-up gate hit ($${ctx.feesAccruedAfter.toFixed(2)}/${topupGate}) but wallet USDC $${freeUsdc.toFixed(2)} < $${addColl.toFixed(2)} and insufficient SOL to swap`,
-            });
-          }
-        } catch (e) {
-          keeperLog(t, "warn", "top-up SOL->USDC swap failed", { error: e.message, tick_id: ctx.tickId });
-          ctx.events.push({
-            kind: "tick",
-            note: `top-up SOL->USDC swap err: ${e.message.slice(0, 200)}`,
-          });
-        }
-      } else {
-        try {
-          await imperialQuoteIfEnabled({
-            symbol: ctx.underlying,
-            side: ctx.side,
-            collateralUsd: addColl,
-            leverage: baseLeverage,
-            context: "topup",
-          });
-          const res = isAboveTarget
-            ? await topUpCollateral({ symbol: ctx.underlying, side: ctx.side, addCollateralUsd: addColl, kp: ctx.kp })
-            : await increasePosition({
-                symbol: ctx.underlying,
-                side: ctx.side,
-                addSizeUsd: addSize,
-                addCollateralUsd: addColl,
-                kp: ctx.kp,
-              });
-
-          const topUpAccepted =
-            !res.error && (res.signature || config.hedgeMode === "simulate");
-          if (res.signature) ctx.patch.pending_drift_sig = res.signature;
-          if (topUpAccepted) {
-            const newSize = sizeUsdNow + addSize;
-            const newColl = ctx.currentColl + addColl;
-            ctx.patch.position_size_usd = newSize;
-            ctx.patch.position_collateral_usd = newColl;
-            ctx.feesAccruedDelta -= topupGate;
-            ctx.reserveDelta += Math.max(0, topupGate - addColl);
-            ctx.events.push({
-              kind: "tick",
-              note: isAboveTarget
-                ? `deleveraging top-up ${ctx.side} ${ctx.underlying}: +$${addColl.toFixed(2)} coll, +$0.00 size until back to ${baseLeverage.toFixed(1)}x`
-                : `top-up ${ctx.side} ${ctx.underlying}: +$${addColl.toFixed(2)} coll, +$${addSize.toFixed(2)} size @${baseLeverage.toFixed(1)}x` +
-                  (res.simulated && !res.signature ? " [SIMULATED]" : "") +
-                  (res.error ? ` ERR: ${res.error.slice(0, 150)}` : ""),
-            });
-          } else if (res.error) {
-            ctx.events.push({ kind: "tick", note: `top-up err: ${res.error.slice(0, 200)}` });
-          }
-        } catch (e) {
-          keeperLog(t, "warn", "top-up failed", { error: e.message, tick_id: ctx.tickId });
-          ctx.events.push({ kind: "tick", note: `top-up error: ${e.message.slice(0, 200)}` });
-        }
-      }
     }
   }
 }
@@ -2386,7 +2203,7 @@ export async function pnlAndTakeProfitStep(ctx) {
     if (!pos && ctx.patch.position_opened) {
       try {
         if (ctx.isImperialRouted) {
-          pos = await imperialReadPosition({
+          pos = await resolveVenue(t).readPosition({
             profileIndex: t.imperial_profile_index,
             symbol: ctx.underlying,
             side: ctx.side,
@@ -2394,8 +2211,6 @@ export async function pnlAndTakeProfitStep(ctx) {
             token: await ctx.ensureAuth().catch(() => null),
             wallet: ctx.kp.publicKey.toBase58(),
           });
-        } else {
-          pos = await readPerpPosition({ symbol: ctx.underlying, side: ctx.side, kp: ctx.kp });
         }
       } catch (e) {
         keeperLog(t, "warn", "readPos failed", { error: e.message, tick_id: tickId });
@@ -2471,7 +2286,7 @@ export async function pnlAndTakeProfitStep(ctx) {
       try {
         const res = await withVenueRetry("tp close", ctx, async () =>
           ctx.imperialFullTrade
-            ? await imperialPartialClose({
+            ? await resolveVenue(t).partialClose({
                 authToken: await ctx.ensureAuth(),
                 kp: ctx.kp,
                 profileIndex: t.imperial_profile_index,
@@ -2481,13 +2296,11 @@ export async function pnlAndTakeProfitStep(ctx) {
                 currentSizeUsd: sizeUsd,
                 positionId: pos?.positionPda || t.imperial_profile_pda || undefined,
               })
-            : ctx.imperialTradeEnabled
-              ? {
-                  signature: null,
-                  simulated: false,
-                  error: `imperial tp blocked: positionMode=${config.imperial.positionMode}`,
-                }
-              : await partialClose({ symbol: ctx.underlying, side: ctx.side, reduceSizeUsd: closeSizeUsd, kp: ctx.kp }));
+            : {
+                signature: null,
+                simulated: false,
+                error: `tp blocked: positionMode=${config.imperial.positionMode}`,
+              });
         const realSignature = isRealSolanaSignature(res.signature);
         const accepted = !res.error && (config.hedgeMode !== "live" || realSignature || res.verifiedVia === "positions");
         if (realSignature) {
@@ -2709,8 +2522,6 @@ export async function tick() {
     return score(b) - score(a);
   });
 
-  await getJupPerps();
-
   let solUsd;
   try {
     solUsd = await getSolUsd();
@@ -2873,14 +2684,23 @@ export async function adminCloseHedge(tokenId) {
   const underlying = String(t.underlying ?? "").toUpperCase();
   const side = String(t.direction ?? "long").toLowerCase() === "short" ? "short" : "long";
   const kp = walletForToken(tre(), t);
-  const pos = await readPerpPosition({ symbol: underlying, side, kp });
+  const authToken = await getAuthToken(kp);
+  const pos = await resolveVenue(t).readPosition({
+    profileIndex: t.imperial_profile_index,
+    symbol: underlying,
+    side,
+    token: authToken,
+    wallet: kp.publicKey.toBase58(),
+  });
   if (!pos) return { ok: true, note: "no live position to close" };
-  const res = await closePerp({
+  const res = await resolveVenue(t).close({
+    authToken,
+    kp,
+    profileIndex: t.imperial_profile_index,
     symbol: underlying,
     side,
     sizeUsd: pos.sizeUsd,
-    collateralUsd: pos.collateralUsd,
-    kp,
+    leverage: Math.max(1, Number(t.leverage ?? 2)),
   });
 
   return {
@@ -2913,13 +2733,25 @@ export async function adminForceOpen(tokenId, overrides = {}) {
   }
 
   const kp = walletForToken(tre(), t);
-  const freeUsdc = await getFreeCollateralUsd(kp);
+  const authToken = await getAuthToken(kp);
+  const freeUsdc = await resolveVenue(t).freeCollateralUsd({
+    profileIndex: t.imperial_profile_index,
+    authToken,
+    profilePda: t.imperial_profile_pda,
+  });
   if (freeUsdc < collateralUsd) {
-    return { ok: false, error: `wallet USDC $${freeUsdc.toFixed(2)} < required $${collateralUsd}` };
+    return { ok: false, error: `imperial profile USDC $${freeUsdc.toFixed(2)} < required $${collateralUsd}` };
   }
 
-  await getJupPerps();
-  const res = await openPosition({ symbol: underlying, side, collateralUsd, sizeUsd, kp });
+  const res = await resolveVenue(t).open({
+    authToken,
+    kp,
+    profileIndex: t.imperial_profile_index,
+    symbol: underlying,
+    side,
+    collateralUsd,
+    leverage,
+  });
 
   // Mirror the loop's accounting so the UI immediately reflects the open.
   const patch = {

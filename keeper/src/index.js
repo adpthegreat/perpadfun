@@ -1,7 +1,6 @@
 import Fastify from 'fastify';
 import { config } from './config.js';
 import { tick, adminCloseHedge, adminForceOpen } from './loop.js';
-import { getJupPerps, getFreeCollateralUsd } from './jupiterPerps.js';
 import { runBurnSweepTick, getBurnSweepStatus } from './buybackQueue.js';
 import { runReconcileTick, getReconcileStatus } from './positionReconcile.js';
 import { runStateReconcileTick, getStateReconcileStatus } from './stateReconcile.js';
@@ -120,10 +119,8 @@ app.get('/health', async () => ({
 }));
 
 app.get('/status', async () => {
-  await getJupPerps();
-  const free = await getFreeCollateralUsd();
   return {
-    venue: 'jupiter-perps',
+    venue: 'imperial',
     hedgeMode: config.hedgeMode,
     feeGateUsd: config.feeGateUsd,
     openCollateralUsd: config.openCollateralUsd,
@@ -135,7 +132,6 @@ app.get('/status', async () => {
     stateReconcile: getStateReconcileStatus(),
       externalSweep: getExternalSweepStatus(),
     marketSync: getMarketSyncStatus(),
-    freeCollateralUsd: free,
     lastRun, lastResult, lastError,
   };
 });
@@ -223,8 +219,6 @@ const start = async () => {
     },
     'keeper config loaded v6-cleanup',
   );
-
-  getJupPerps().catch((e) => app.log.error('jupiter perps init failed: ' + e.message));
 
   runForever();
   runExternalSweepForever();

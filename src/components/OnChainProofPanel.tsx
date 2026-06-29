@@ -13,15 +13,19 @@ function AddrRow({
   label,
   address,
   hint,
-  // For the Imperial profile / position-owner row we link to jup.ag/portfolio
-  // instead of solscan because that view shows the live perp position state
-  // (collateral, size, PnL, mark) that Imperial routes to Phoenix.
+  // For the Imperial profile / position-owner row we link to the venue's live
+  // position view (imperial.space for Imperial, jup.ag/portfolio for legacy
+  // Jupiter) rather than solscan, since that shows collateral/size/PnL/mark.
+  // `linkAddress` lets the link target differ from the displayed address —
+  // Imperial profiles are keyed by the owner wallet, not the collateral PDA.
   linkVariant = "solscan",
+  linkAddress,
 }: {
   label: string;
   address: string | null | undefined;
   hint?: string;
-  linkVariant?: "solscan" | "jup-portfolio";
+  linkVariant?: "solscan" | "jup-portfolio" | "imperial";
+  linkAddress?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   if (!address) {
@@ -60,15 +64,21 @@ function AddrRow({
         </button>
         <a
           href={
-            linkVariant === "jup-portfolio"
-              ? `https://jup.ag/portfolio/${address}`
-              : `https://solscan.io/account/${address}`
+            linkVariant === "imperial"
+              ? `https://www.imperial.space/profile/${linkAddress ?? address}`
+              : linkVariant === "jup-portfolio"
+                ? `https://jup.ag/portfolio/${linkAddress ?? address}`
+                : `https://solscan.io/account/${linkAddress ?? address}`
           }
           target="_blank"
           rel="noreferrer"
           className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary underline underline-offset-2 hover:opacity-80"
         >
-          {linkVariant === "jup-portfolio" ? "jup.ag/portfolio ↗" : "solscan ↗"}
+          {linkVariant === "imperial"
+            ? "view position ↗"
+            : linkVariant === "jup-portfolio"
+              ? "jup.ag/portfolio ↗"
+              : "solscan ↗"}
         </a>
       </div>
     </div>
@@ -132,7 +142,8 @@ export function OnChainProofPanel({
               ? "PDA that holds the live perp collateral on Imperial."
               : "Wallet that owns the Jupiter perp position NFT."
           }
-          linkVariant="jup-portfolio"
+          linkVariant={router === "imperial" ? "imperial" : "jup-portfolio"}
+          linkAddress={router === "imperial" ? treasuryPubkey : undefined}
         />
       </div>
 

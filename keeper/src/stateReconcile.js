@@ -19,7 +19,6 @@ import { config } from './config.js';
 import { listStuckTokens, sendReport } from './perpad.js';
 import { authenticate as imperialAuthenticate } from './imperial.js';
 import { imperialReadPosition } from './imperialPerps.js';
-import { readPerpPosition } from './jupiterPerps.js';
 import { loadKeypair, walletForToken } from './wallet.js';
 import { workflowStateFromToken, State, setWorkflowStateSync, keeperLog } from './workflow.js';
 
@@ -140,15 +139,7 @@ async function readVenuePosition(t) {
     }
   }
 
-  if (router === 'jupiter' || router === 'external') {
-    try {
-      return await readPerpPosition({ symbol: sym(t), side: side(t), kp });
-    } catch {
-      return undefined;
-    }
-  }
-
-  return undefined; // unknown router -> never clear
+  return undefined; // unknown router -> never clear (jupiter/external perps removed)
 }
 
 let _running = false;
