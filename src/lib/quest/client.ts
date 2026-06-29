@@ -63,7 +63,7 @@ export async function startSession(ref?: string | null): Promise<QuestSession> {
 
 export async function recordStep(
   sessionId: string,
-  step: "x_follow" | "x_retweet",
+  step: "x_follow" | "x_retweet" | "tg_join",
 ): Promise<{ steps: QuestSteps }> {
   return postJson("/api/public/quest/step", { session_id: sessionId, step });
 }

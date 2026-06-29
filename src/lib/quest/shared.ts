@@ -2,7 +2,7 @@
 // server.ts so the membership decision and step projection can be unit-tested without a
 // live Telegram bot or Supabase connection.
 
-export type QuestStep = "x_follow" | "x_retweet";
+export type QuestStep = "x_follow" | "x_retweet" | "tg_join";
 
 export type QuestSteps = {
   x_follow: boolean;

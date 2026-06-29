@@ -4,7 +4,7 @@ import { Check, Loader2, Copy } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useQuestFlow } from "@/lib/quest/useQuestFlow";
-import { xFollowUrl, xRetweetUrl } from "@/lib/quest/config";
+import { xFollowUrl, xRetweetUrl, TG_CHANNEL_URL } from "@/lib/quest/config";
 
 // perpspad landing: the spinning donut (hero-bg.mp4) centered behind the wordmark, brand
 // purple→teal gradient over it, ambient perp tickers drifting around, and the pre-launch
@@ -73,7 +73,8 @@ function StepPill({
 export function ComingSoon() {
   const q = useQuestFlow();
   // Wallet submit is gated until follow + retweet + join-TG are all done.
-  const priorDone = q.follow.status === "done" && q.retweet.status === "done" && q.tg.joined;
+  const priorDone =
+    q.follow.status === "done" && q.retweet.status === "done" && q.tg.status === "done";
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background text-foreground">
@@ -144,12 +145,12 @@ export function ComingSoon() {
                 onClick={() => q.retweet.open(xRetweetUrl())}
               />
               <StepPill
-                done={q.tg.joined}
-                busy={q.tg.active && !q.tg.joined}
+                done={q.tg.status === "done"}
+                busy={q.tg.status === "awaiting" || q.tg.status === "verifying"}
                 label="join TG →"
                 doneLabel="joined TG"
                 disabled={!q.sid}
-                onClick={q.tg.join}
+                onClick={() => q.tg.open(TG_CHANNEL_URL)}
               />
             </div>
 
@@ -159,31 +160,34 @@ export function ComingSoon() {
                 <Check className="h-3.5 w-3.5" /> wallet saved · {q.savedAddr!.slice(0, 4)}…
                 {q.savedAddr!.slice(-4)}
               </div>
-            ) : priorDone ? (
-              <div className="flex w-full max-w-sm items-center gap-2">
-                <Input
-                  value={q.walletInput}
-                  onChange={(e) => q.setWalletInput(e.target.value)}
-                  placeholder="your SOL address"
-                  spellCheck={false}
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  disabled={!q.sid || q.walletSubmitting}
-                  className="rounded-full border-border bg-card/70 text-center font-mono text-xs backdrop-blur"
-                />
-                <Button
-                  size="sm"
-                  className="shrink-0 rounded-full"
-                  disabled={!q.sid || q.walletSubmitting || !q.walletInput.trim()}
-                  onClick={q.submitWalletAddr}
-                >
-                  {q.walletSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "submit"}
-                </Button>
-              </div>
             ) : (
-              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/60">
-                finish the steps above to submit your wallet
-              </p>
+              <div className="flex w-full max-w-sm flex-col items-center gap-1.5">
+                <div className="flex w-full items-center gap-2">
+                  <Input
+                    value={q.walletInput}
+                    onChange={(e) => q.setWalletInput(e.target.value)}
+                    placeholder="your SOL address"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    disabled={!q.sid || q.walletSubmitting || !priorDone}
+                    className="rounded-full border-border bg-card/70 text-center font-mono text-xs backdrop-blur"
+                  />
+                  <Button
+                    size="sm"
+                    className="shrink-0 rounded-full"
+                    disabled={!q.sid || q.walletSubmitting || !priorDone || !q.walletInput.trim()}
+                    onClick={q.submitWalletAddr}
+                  >
+                    {q.walletSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "submit"}
+                  </Button>
+                </div>
+                {!priorDone && (
+                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/55">
+                    finish the steps above first
+                  </span>
+                )}
+              </div>
             )}
 
             {/* Referral link + progress */}

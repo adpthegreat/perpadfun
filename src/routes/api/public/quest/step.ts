@@ -1,7 +1,8 @@
-// POST /api/public/quest/step — record an honorary X step (follow / retweet) against a
-// session. These steps are NOT verified against X (no paid X API / OAuth); we record a
-// server timestamp so claim eligibility is tracked. Telegram is intentionally not settable
-// here — it is set only by the real getChatMember check in telegram/status.ts.
+// POST /api/public/quest/step — record an honorary quest step (follow / retweet / join-TG)
+// against a session. These are NOT verified against X or Telegram (no paid X API / OAuth, and
+// TG join is click-through); we record a server timestamp so claim eligibility is tracked.
+// The real getChatMember verification path still exists in telegram/status.ts if you want to
+// upgrade tg_joined from honorary to verified.
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -14,7 +15,7 @@ const SELECT = "x_followed, x_retweeted, tg_joined";
 
 const Body = z.object({
   session_id: z.string().uuid(),
-  step: z.enum(["x_follow", "x_retweet"]),
+  step: z.enum(["x_follow", "x_retweet", "tg_join"]),
 });
 
 export const Route = createFileRoute("/api/public/quest/step")({
@@ -44,7 +45,9 @@ export const Route = createFileRoute("/api/public/quest/step")({
           const patch =
             step === "x_follow"
               ? { x_followed: true, x_followed_at: now }
-              : { x_retweeted: true, x_retweeted_at: now };
+              : step === "x_retweet"
+                ? { x_retweeted: true, x_retweeted_at: now }
+                : { tg_joined: true, tg_joined_at: now };
 
           const { data, error } = await supabaseAdmin
             .from("quest_entries")

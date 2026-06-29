@@ -1,17 +1,15 @@
 // All quest state + handlers in one hook, so the funnel can be rendered anywhere (the
 // landing splash, a standalone page) without duplicating logic.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useWallet } from "@/lib/wallet/WalletContext";
 import {
   startSession,
   recordStep,
-  fetchTelegramStatus,
   submitWallet,
   type QuestSession,
 } from "@/lib/quest/client";
-import { tgBotDeepLink } from "@/lib/quest/config";
 import { isLikelySolAddress } from "@/lib/quest/shared";
 import { useHonoraryStep } from "@/lib/quest/useHonoraryStep";
 
@@ -37,32 +35,10 @@ export function useQuestFlow() {
     if (sid) await recordStep(sid, "x_retweet");
   });
 
-  // Telegram — deep-link to the bot, then poll the real getChatMember check.
-  const [tgActive, setTgActive] = useState(false);
-  const serverTgJoined = session?.steps.tg_joined ?? false;
-  const tgQuery = useQuery({
-    queryKey: ["quest-tg", sid],
-    queryFn: () => fetchTelegramStatus(sid!),
-    enabled: !!sid && tgActive && !serverTgJoined,
-    refetchInterval: 2500,
+  // Telegram — honorary (click → open the channel → ~1s spinner → done), same as the X steps.
+  const tg = useHonoraryStep(session?.steps.tg_joined ?? false, async () => {
+    if (sid) await recordStep(sid, "tg_join");
   });
-  const tgJoined = serverTgJoined || tgQuery.data?.joined === true;
-  const tgBound = tgQuery.data?.bound === true;
-
-  const joinedToastShown = useRef(false);
-  useEffect(() => {
-    if (tgJoined && !joinedToastShown.current) {
-      joinedToastShown.current = true;
-      setTgActive(false);
-      toast.success("Telegram verified");
-    }
-  }, [tgJoined]);
-
-  function joinTelegram() {
-    if (!sid) return;
-    window.open(tgBotDeepLink(sid), "_blank", "noopener,noreferrer");
-    setTgActive(true);
-  }
 
   // Wallet capture.
   const { wallet } = useWallet();
@@ -113,7 +89,7 @@ export function useQuestFlow() {
   const completed = [
     follow.status === "done",
     retweet.status === "done",
-    tgJoined,
+    tg.status === "done",
     walletDone,
   ].filter(Boolean).length;
   const totalSteps = 4;
@@ -124,7 +100,7 @@ export function useQuestFlow() {
     sid,
     follow,
     retweet,
-    tg: { active: tgActive, joined: tgJoined, bound: tgBound, join: joinTelegram },
+    tg,
     walletConn: wallet,
     walletInput,
     setWalletInput,
