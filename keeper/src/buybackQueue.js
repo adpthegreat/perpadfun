@@ -23,6 +23,7 @@ import { burnExistingTokenBalance } from './buyback.js';
 import { loadKeypair, walletForToken, deriveSubKeypair } from './wallet.js';
 import { listActiveTokens, sendReport } from './perpad.js';
 import { intentHash, tickBucket, buildTxLogEntry } from './idempotency.js';
+import { keeperLog } from './workflow.js';
 
 let _conn = null;
 function conn() {
@@ -58,7 +59,7 @@ export function getBurnSweepStatus() {
 }
 
 // Resolve which kp owns the buyback ATA for a given token.
-//   - perpad-native (source='perpad'): treasury wallet (master OR per-token
+//   - perpad-native (source='perpspad'): treasury wallet (master OR per-token
 //     sub-wallet, picked by walletForToken).
 //   - external (source='external'):  the external sub-wallet, which is the
 //     same sub-wallet derived from the master keypair using the token id.
@@ -125,7 +126,7 @@ export async function runBurnSweepTick() {
     try {
       tokens = await listActiveTokens();
     } catch (e) {
-      console.warn(`[burn-sweep] listActiveTokens failed: ${e.message}`);
+      keeperLog(null, "warn", `[burn-sweep] listActiveTokens failed: ${e.message}`);
       return { scanned: 0, pending: 0, burned: 0, errors: 1 };
     }
 
@@ -175,13 +176,15 @@ export async function runBurnSweepTick() {
               },
             ],
           });
-          console.log(
+          keeperLog(
+            t,
+            "info",
             `[burn-sweep] ${t.ticker ?? t.id.slice(0, 6)} burned stranded ${r.tokensBurned} units mint=${mintAddr.slice(0, 8)}… sig=${r.burnSig?.slice(0, 16)}…`,
           );
         }
       } catch (e) {
         errors++;
-        console.warn(`[burn-sweep] ${t.ticker ?? t.id.slice(0, 6)} burn failed: ${e.message}`);
+        keeperLog(t, "warn", `[burn-sweep] ${t.ticker ?? t.id.slice(0, 6)} burn failed: ${e.message}`);
       }
     }
 
@@ -189,7 +192,7 @@ export async function runBurnSweepTick() {
       try {
         await sendReport(reports);
       } catch (e) {
-        console.warn(`[burn-sweep] sendReport failed: ${e.message}`);
+        keeperLog(null, "warn", `[burn-sweep] sendReport failed: ${e.message}`); //add current token
         errors++;
       }
     }
@@ -201,7 +204,7 @@ export async function runBurnSweepTick() {
     _pendingMintsLastScan = pending;
     const ms = Date.now() - startedAt;
     if (burned > 0 || pending > 0 || errors > 0) {
-      console.log(`[burn-sweep] done scanned=${tokens.length} pending=${pending} burned=${burned} errors=${errors} ms=${ms}`);
+      keeperLog(null, "info", `[burn-sweep] done scanned=${tokens.length} pending=${pending} burned=${burned} errors=${errors} ms=${ms}`);
     }
   }
   return { scanned: tokens.length, pending, burned, errors };

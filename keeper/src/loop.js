@@ -265,7 +265,9 @@ export function shouldSkipColdTick(t, now) {
 
 // Startup banner so logs prove the keeper deployed the normalized 50/25/25 split
 // build plus master-principal protection.
-console.log(
+keeperLog(
+  null,
+  "info",
   `[loop] loaded fee-split-v6 normalized-50-25-25 master-principal-protected buybackRatio=${config.buybackFromFeesRatio} treasuryHoldRatio=${config.treasuryHoldRatio} perpMarginRatio=${config.perpMarginRatio} minBuybackUsd=$${config.minBuybackUsd} minBuybackSol=${config.minBuybackSol}`,
 );
 
@@ -369,7 +371,7 @@ async function solUiFor(pubkey) {
 const MASTER_SUBWALLET_TOPUPS_ENABLED = String(process.env.MASTER_SUBWALLET_TOPUPS_ENABLED ?? "false").toLowerCase() === "true";
 const MIN_SUB_SOL = (BUYBACK_BASE_FLOOR_LAMPORTS + SUB_BUYBACK_OPERATING_RESERVE_LAMPORTS + 1_000_000) / 1_000_000_000;
 const TARGET_SUB_SOL = MIN_SUB_SOL + 0.003;
-async function ensureSubWalletSol(kp) {
+async function ensureSubWalletSol(kp, token = null) {
   if (!MASTER_SUBWALLET_TOPUPS_ENABLED) return;
   if (!kp || kp.publicKey.equals(tre().publicKey)) return;
   const sol = await solUiFor(kp.publicKey);
@@ -385,11 +387,13 @@ async function ensureSubWalletSol(kp) {
       }),
     );
     const sig = await sendAndConfirmTransaction(conn(), tx, [tre()], { commitment: "confirmed" });
-    console.log(
+    keeperLog(
+      token,
+      "info",
       `[sub-topup] ${kp.publicKey.toBase58()} +${topUp.toFixed(4)} SOL sig=${sig.slice(0, 16)}…`,
     );
   } catch (e) {
-    console.warn(`[sub-topup] failed ${kp.publicKey.toBase58()}:`, e.message);
+    keeperLog(token, "warn", `[sub-topup] failed ${kp.publicKey.toBase58()}: ${e.message}`);
   }
 }
 
@@ -406,16 +410,16 @@ const DEPOSIT_TOPUP_MAX_USD = DEPOSIT_TOPUP_ENABLED
   : 0;
 
 const DEPOSIT_TOPUP_BUFFER_USD = 1.5; // covers Jupiter slippage + reserve
-async function topupSubForDeposit({ kp, currentCapacityUsd, targetUsd, solUsd, ticker }) {
+async function topupSubForDeposit({ kp, currentCapacityUsd, targetUsd, solUsd, ticker, token = null }) {
   if (!DEPOSIT_TOPUP_ENABLED || DEPOSIT_TOPUP_MAX_USD <= 0) {
-    console.warn(`[deposit-topup] ${ticker} skip: disabled`);
+    keeperLog(token, "warn", `[deposit-topup] ${ticker} skip: disabled`);
     return false;
   }
-  if (!kp) { console.warn(`[deposit-topup] ${ticker} skip: no sub-wallet kp`); return false; }
-  if (kp.publicKey.equals(tre().publicKey)) { console.warn(`[deposit-topup] ${ticker} skip: kp == master`); return false; }
-  if (!Number(solUsd) || solUsd <= 0) { console.warn(`[deposit-topup] ${ticker} skip: solUsd=${solUsd}`); return false; }
+  if (!kp) { keeperLog(token, "warn", `[deposit-topup] ${ticker} skip: no sub-wallet kp`); return false; }
+  if (kp.publicKey.equals(tre().publicKey)) { keeperLog(token, "warn", `[deposit-topup] ${ticker} skip: kp == master`); return false; }
+  if (!Number(solUsd) || solUsd <= 0) { keeperLog(token, "warn", `[deposit-topup] ${ticker} skip: solUsd=${solUsd}`); return false; }
   const needUsd = Math.max(0, targetUsd + DEPOSIT_TOPUP_BUFFER_USD - currentCapacityUsd);
-  console.log(`[deposit-topup] ${ticker} consider: cap=$${currentCapacityUsd.toFixed(2)} target=$${targetUsd.toFixed(2)} need=$${needUsd.toFixed(2)} cap=$${DEPOSIT_TOPUP_MAX_USD}`);
+  keeperLog(token, "info", `[deposit-topup] ${ticker} consider: cap=$${currentCapacityUsd.toFixed(2)} target=$${targetUsd.toFixed(2)} need=$${needUsd.toFixed(2)} cap=$${DEPOSIT_TOPUP_MAX_USD}`);
   if (needUsd <= 0) return true;
   const sendUsd = Math.min(needUsd, DEPOSIT_TOPUP_MAX_USD);
   const sendSol = sendUsd / solUsd;
@@ -423,7 +427,7 @@ async function topupSubForDeposit({ kp, currentCapacityUsd, targetUsd, solUsd, t
   // Make sure master has it (leave 0.05 SOL master reserve for fees/rent).
   const masterSol = await solUiFor(tre().publicKey);
   if (masterSol - sendSol < 0.05) {
-    console.warn(`[deposit-topup] ${ticker} master SOL ${masterSol.toFixed(4)} too low to send ${sendSol.toFixed(4)}`);
+    keeperLog(token, "warn", `[deposit-topup] ${ticker} master SOL ${masterSol.toFixed(4)} too low to send ${sendSol.toFixed(4)}`);
     return false;
   }
 
@@ -436,12 +440,14 @@ async function topupSubForDeposit({ kp, currentCapacityUsd, targetUsd, solUsd, t
       }),
     );
     const sig = await sendAndConfirmTransaction(conn(), tx, [tre()], { commitment: "confirmed" });
-    console.log(
+    keeperLog(
+      token,
+      "info",
       `[deposit-topup] ${ticker} master -> sub +${sendSol.toFixed(4)} SOL ($${sendUsd.toFixed(2)}) sig=${sig.slice(0, 16)}…`,
     );
     return true;
   } catch (e) {
-    console.warn(`[deposit-topup] ${ticker} failed:`, e.message);
+    keeperLog(token, "warn", `[deposit-topup] ${ticker} failed: ${e.message}`);
     return false;
   }
 }
@@ -461,6 +467,7 @@ async function skimTreasuryShare({
   isSubWallet,
   kp,
   ticker,
+  token = null,
   events,
   pendingObligationUsd = 0,
 }) {
@@ -529,7 +536,9 @@ async function skimTreasuryShare({
       const sig = await sendAndConfirmTransaction(conn(), tx, [kp], { commitment: "confirmed" });
       const sentSol = sendable / 1e9;
       const sentUsd = sentSol * solUsd;
-      console.log(
+      keeperLog(
+        token,
+        "info",
         `[treasury-skim] ${ticker} sent ${sentSol.toFixed(6)} SOL ($${sentUsd.toFixed(2)}) -> master sig=${sig.slice(0, 16)}… (reserved $${pendingObligationUsd.toFixed(2)} for pending deposits)`,
       );
       events.push({
@@ -541,11 +550,13 @@ async function skimTreasuryShare({
       return { done: true, treasurySolDelta: -sentSol };
     }
 
-    console.log(
+    keeperLog(
+      token,
+      "info",
       `[treasury-skim] ${ticker} skip: sendable ${(sendable / 1e9).toFixed(6)} SOL < min (want $${holdUsd.toFixed(2)}, sub balance ${(lamports / 1e9).toFixed(6)} SOL, reserved $${pendingObligationUsd.toFixed(2)} obligation + $${OPERATING_FLOOR_USD.toFixed(2)} operating floor)`,
     );
   } catch (e) {
-    console.warn(`[treasury-skim] ${ticker} failed:`, e.message);
+    keeperLog(token, "warn", `[treasury-skim] ${ticker} failed: ${e.message}`);
     events.push({ kind: "tick", note: `treasury skim err: ${e.message.slice(0, 160)}` });
   }
 
@@ -744,7 +755,9 @@ async function detectGraduationStep(ctx) {
       quoteMintAddress: t.quote_token === "USDC" ? USDC_MINT : null,
     });
     if (det?.graduated && det.graduatedPoolAddress) {
-      console.log(
+      keeperLog(
+        t,
+        "info",
         `[graduation] ${t.ticker} migrated. damm=${det.graduatedPoolAddress} progress=${det.progress}`,
       );
       ctx.patch.migration_status = "graduated";
@@ -806,7 +819,9 @@ export async function confirmPendingSigStep(ctx) {
   const wfBeforePendingCheck = workflowStateFromToken(t);
   if (ctx.pendingSig && ctx.wasOpen && wfBeforePendingCheck?.state === State.POSITION_OPEN) {
     ctx.patch.pending_drift_sig = null;
-    console.warn(
+    keeperLog(
+      t,
+      "warn",
       `[loop] ${t.ticker} clearing stale pending sig ${ctx.pendingSig.slice(0, 16)}… because workflow and DB both show a live open position`,
     );
     ctx.events.push({
@@ -834,7 +849,9 @@ export async function confirmPendingSigStep(ctx) {
         }),
       );
       if (status === "dropped") {
-        console.warn(
+        keeperLog(
+          t,
+          "warn",
           `[loop] ${t.ticker} pending sig ${ctx.pendingSig.slice(0, 16)}… dropped (not found on-chain); cleared to unblock topups`,
         );
       }
@@ -936,6 +953,7 @@ async function claimAndSplitFeesStep(ctx) {
       Number(t.buyback_reserve_usd || 0) +
       (config.buybackFromFeesRatio > 0 ? ctx.claimedSolUsd * config.buybackFromFeesRatio : 0);
     const skim = await skimTreasuryShare({
+      token: t,
       claimedSolUsd: ctx.claimedSolUsd,
       solUsd,
       isSubWallet: ctx.isSubWallet,
@@ -966,7 +984,9 @@ async function buybackDrainStep(ctx) {
   if (config.buybackFromFeesRatio > 0 && ctx.claimedSolUsd > 0 && (t.mint_address || t.external_mint)) {
     const earmarkUsd = ctx.claimedSolUsd * config.buybackFromFeesRatio;
     ctx.reserveDelta += earmarkUsd;
-    console.log(
+    keeperLog(
+      t,
+      "info",
       `[buyback] accrue token=${t.ticker} +$${earmarkUsd.toFixed(4)} (ratio=${config.buybackFromFeesRatio}, graduated=${ctx.isGraduated})`,
     );
   }
@@ -1039,7 +1059,9 @@ async function buybackDrainStep(ctx) {
           payAmountBaseUnits = Math.floor(spendUsd * 1_000_000);
           payNote = `${spendUsd.toFixed(2)} USDC`;
         } else {
-          console.log(
+          keeperLog(
+            t,
+            "info",
             `[buyback] ${t.ticker} USDC balance $${usdcUi.toFixed(2)} < spend $${spendUsd.toFixed(2)}, falling back to SOL path`,
           );
         }
@@ -1051,7 +1073,9 @@ async function buybackDrainStep(ctx) {
       const masterSpendBudgetUsd = Math.max(0, ctx.reserveDelta);
       if (spendUsd > masterSpendBudgetUsd) {
         const cappedSpendUsd = Math.min(spendUsd, masterSpendBudgetUsd);
-        console.warn(
+        keeperLog(
+          t,
+          "warn",
           `[buyback] ${t.ticker} legacy master SOL spend capped: $${spendUsd.toFixed(2)} -> $${cappedSpendUsd.toFixed(2)} (new reserve only)`,
         );
         spendUsd = cappedSpendUsd;
@@ -1065,7 +1089,9 @@ async function buybackDrainStep(ctx) {
       const spendableUsd = (spendableLamports / 1_000_000_000) * solUsd;
       if (spendUsd > spendableUsd) {
         const cappedSpendUsd = Math.max(0, spendableUsd);
-        console.warn(
+        keeperLog(
+          t,
+          "warn",
           `[buyback] ${t.ticker} sub-wallet SOL spend capped: $${spendUsd.toFixed(2)} -> $${cappedSpendUsd.toFixed(2)} (keeps ${(MIN_SUB_SOL).toFixed(3)} SOL floor)`,
         );
         spendUsd = cappedSpendUsd;
@@ -1078,11 +1104,15 @@ async function buybackDrainStep(ctx) {
     // few cents and still send a swap. Skip and let the reserve carry to
     // the next tick until it crosses the floor again.
     if (spendUsd < config.minBuybackUsd) {
-      console.log(
+      keeperLog(
+        t,
+        "info",
         `[buyback] ${t.ticker} skip: spend $${spendUsd.toFixed(2)} below minBuybackUsd $${config.minBuybackUsd} after clamp; carrying reserve`,
       );
     } else {
-      console.log(
+      keeperLog(
+        t,
+        "info",
         `[buyback] drain token=${t.ticker} reserve=$${projectedReserve.toFixed(2)} spend=$${spendUsd.toFixed(2)} (cap=$${maxPerTickUsd}) input=${payNote}`,
       );
     }
@@ -1095,14 +1125,14 @@ async function buybackDrainStep(ctx) {
         // with "Transfer: insufficient lamports" and the reserve never
         // drains. Cheap (~0.012 SOL max) and idempotent.
         if (ctx.isSubWallet) {
-          try { await ensureSubWalletSol(ctx.kp); } catch (e) {
-            console.warn("[loop] ensureSubWalletSol(buyback):", e.message);
+          try { await ensureSubWalletSol(ctx.kp, t); } catch (e) {
+            keeperLog(t, "warn", `[loop] ensureSubWalletSol(buyback): ${e.message}`);
           }
         }
         try {
           await unwrapWsol(ctx.kp);
         } catch (e) {
-          console.warn("[loop] unwrapWsol:", e.message);
+          keeperLog(t, "warn", `[loop] unwrapWsol: ${e.message}`);
         }
         const r = await buybackAndBurn({
           mintAddress: ctx.buybackMint,
@@ -1150,7 +1180,9 @@ async function buybackDrainStep(ctx) {
           tx_sig: r.burnSig,
           note: `burned ${r.tokensBurned} tokens`,
         });
-        console.log(
+        keeperLog(
+          t,
+          "info",
           `[buyback] executed token=${t.ticker} input=${payNote} tokens=${r.tokensBurned} swap=${r.swapSig} burn=${r.burnSig}`,
         );
       } catch (e) {
@@ -1388,7 +1420,9 @@ async function imperialDepositStep(ctx) {
       if (budgetedParkedUsd >= IMPERIAL_MIN_COLLATERAL_USD) {
         ctx.imperialDepositedThisTickUsd = Math.floor(budgetedParkedUsd * 100) / 100;
         ctx.imperialFundingSource = "parked";
-        console.log(
+        keeperLog(
+          t,
+          "info",
           `[imperial:deposit] ${t.ticker} ${kind} reuse parked $${ctx.imperialDepositedThisTickUsd.toFixed(2)} of $${reusableParkedUsd.toFixed(2)} in profile ${t.imperial_profile_index} (src=${parkedSource}); skipping deposit`,
         );
         ctx.events.push({
@@ -1399,7 +1433,9 @@ async function imperialDepositStep(ctx) {
         // Louder diagnostic: log what Imperial reports vs what the keeper
         // wants, so stuck profiles (e.g. HYPU pyHh1Y... with $3k on-chain
         // but $0 reported) are visible at [info] level.
-        console.log(
+        keeperLog(
+          t,
+          "info",
           `[imperial:deposit] ${t.ticker} pre-check: profile ${t.imperial_profile_index} pda=${prof.profilePda ?? "?"} reports $${prof.usdcUi.toFixed(4)} api+on-chain=$${parkedUi.toFixed(4)} (need $${requestedUsd.toFixed(2)})`,
         );
       }
@@ -1429,9 +1465,11 @@ async function imperialDepositStep(ctx) {
     const gateToken = { ...t, fees_accrued_usd: ctx.perpFundingBudgetUsd };
     const gate = gateImperialFunding({ token: gateToken, kind, requestedUsd });
     if (!gate.allow) {
-      console.log(`[imperial:deposit] ${t.ticker} ${kind} skip: ${gate.reason}`);
+      keeperLog(t, "info", `[imperial:deposit] ${t.ticker} ${kind} skip: ${gate.reason}`);
     } else if (config.imperial.depositMode === "shadow") {
-      console.log(
+      keeperLog(
+        t,
+        "info",
         `[imperial:deposit:shadow] ${t.ticker} ${kind} would deposit $${gate.allowedUsd.toFixed(2)} -> profile ${t.imperial_profile_index}`,
       );
       ctx.events.push({
@@ -1461,6 +1499,7 @@ async function imperialDepositStep(ctx) {
         // Bounded by DEPOSIT_TOPUP_MAX_USD and capped by gate.allowedUsd.
         if (capacityUsd < finalUsd) {
           const toppedUp = await topupSubForDeposit({
+            token: t,
             kp: ctx.kp,
             currentCapacityUsd: capacityUsd,
             targetUsd: finalUsd,
@@ -1473,7 +1512,9 @@ async function imperialDepositStep(ctx) {
         }
         if (capacityUsd < finalUsd) {
           if (capacityUsd < floor) {
-            console.log(
+            keeperLog(
+              t,
+              "info",
               `[imperial:deposit] ${t.ticker} ${kind} skip: wallet capacity $${capacityUsd.toFixed(2)} < floor $${floor} (fees $${gate.fees.toFixed(2)})`,
             );
             ctx.events.push({
@@ -1482,7 +1523,9 @@ async function imperialDepositStep(ctx) {
             });
             finalUsd = 0;
           } else {
-            console.log(
+            keeperLog(
+              t,
+              "info",
               `[imperial:deposit] ${t.ticker} ${kind} partial: cap $${finalUsd.toFixed(2)} -> wallet capacity $${capacityUsd.toFixed(2)}`,
             );
             finalUsd = Math.floor(capacityUsd * 100) / 100;
@@ -1507,7 +1550,9 @@ async function imperialDepositStep(ctx) {
           });
           ctx.imperialDepositedThisTickUsd = r.depositedUsd;
           ctx.imperialFundingSource = "fresh";
-          console.log(
+          keeperLog(
+            t,
+            "info",
             `[imperial:deposit] ${t.ticker} ${kind} deposited $${r.depositedUsd.toFixed(2)} -> profile ${t.imperial_profile_index} sig=${r.signature.slice(0, 16)}…`,
           );
           ctx.txLog.push(
@@ -1632,7 +1677,9 @@ async function openPositionStep(ctx) {
               next_retry_at: new Date(Date.now() + OPEN_PENDING_STALE_MS).toISOString(),
             });
           } catch (e) {
-            console.warn(
+            keeperLog(
+              t,
+              "warn",
               `[3b] ${t.ticker} pre-open pending marker failed (proceeding): ${e.message}`,
             );
           }
@@ -1684,7 +1731,9 @@ async function openPositionStep(ctx) {
             const drained = Math.max(0, preUsdcUi - postUsdcUi);
             verifiedAttached = drained >= openColl * 0.5;
             if (!verifiedAttached) {
-              console.warn(
+              keeperLog(
+                t,
+                "warn",
                 `[imperial:open] ${t.ticker} REFUND DETECTED: profile USDC ${preUsdcUi.toFixed(2)} -> ${postUsdcUi.toFixed(2)} (expected drain ~$${openColl.toFixed(2)}, got $${drained.toFixed(2)}). Order signed but venue refunded; NOT writing optimistic state. sig=${res.signature?.slice(0, 16)}…`,
               );
               ctx.events.push({
@@ -1713,7 +1762,9 @@ async function openPositionStep(ctx) {
               // fallback). Next tick reconciles from the live readback
               // once Imperial surfaces the position.
               if (!verifiedPos && config.hedgeMode !== "simulate") {
-                console.warn(
+                keeperLog(
+                  t,
+                  "warn",
                   `[imperial:open] ${t.ticker} OPTIMISTIC WRITE: drain verified ($${(preUsdcUi - postUsdcUi).toFixed(2)}) but /positions not indexed yet; writing requested coll=$${openColl.toFixed(2)} size=$${sizeUsd.toFixed(2)}. sig=${res.signature?.slice(0, 16)}…`,
                 );
               }
@@ -1865,7 +1916,9 @@ export async function topUpAndRepairStep(ctx) {
       Number(ctx.imperialDepositedThisTickUsd || 0),
       Number(liveImperialFreeTopupUsd || 0),
     ) * 100) / 100;
-    console.log(
+    keeperLog(
+      t,
+      "info",
       `[imperial:topup] ${t.ticker} availableImperialTopup=$${availableImperialTopupUsd.toFixed(2)} depositedThisTick=$${Number(ctx.imperialDepositedThisTickUsd || 0).toFixed(2)} liveProfileUsdc=$${liveImperialProfileUsdcUsd.toFixed(2)} freeProfileUsdc=$${liveImperialFreeTopupUsd.toFixed(2)} repair=${needsImperialSizeRepair ? "yes" : "no"}`,
     );
     // If the live position has drifted below target leverage, DO NOT
@@ -1928,7 +1981,9 @@ export async function topUpAndRepairStep(ctx) {
           ? 0
           : Math.min(rawAddSize, SIZE_ADD_MAX_PER_TICK_USD, atomicCollateralSizeCap));
     if ((sizeRepairForceOnly || sizeOnlyRepairMode) && rawAddSize > addSize + 0.01) {
-      console.log(
+      keeperLog(
+        t,
+        "info",
         `[imperial:repair] ${t.ticker} ${ctx.underlying} ${ctx.side} targetGap=$${rawAddSize.toFixed(2)} cappedAddSize=$${addSize.toFixed(2)} addColl=$${addColl.toFixed(2)} leverage=${baseLeverage.toFixed(2)}x sizeOnly=${sizeOnlyRepairMode ? "yes" : "no"}`,
       );
     }
@@ -1947,7 +2002,9 @@ export async function topUpAndRepairStep(ctx) {
       const canSizeOnlyRepair = sizeOnlyRepairMode && addSize > 0;
       if (!canPairedTopup && !canSizeOnlyRepair) {
         if (needsImperialSizeRepair) {
-          console.log(
+          keeperLog(
+            t,
+            "info",
             `[imperial:repair] ${t.ticker} ${ctx.underlying} ${ctx.side} DEFERRED: need parked USDC >= $${IMPERIAL_MIN_COLLATERAL_USD.toFixed(2)} or size cushion (have parked $${availableImperialTopupUsd.toFixed(2)}, cushion gap $${Math.max(0, collateralUsdNow * baseLeverage - sizeUsdNow).toFixed(2)}).`,
           );
         }
@@ -2044,7 +2101,9 @@ export async function topUpAndRepairStep(ctx) {
             const drained = Math.max(0, preUsdcUi - postUsdcUi);
             verifiedAttached = drained >= addColl * 0.5;
             if (!verifiedAttached) {
-              console.warn(
+              keeperLog(
+                t,
+                "warn",
                 `[imperial:topup] ${t.ticker} REFUND DETECTED: profile USDC ${preUsdcUi.toFixed(2)} -> ${postUsdcUi.toFixed(2)} (expected drain ~$${addColl.toFixed(2)}, got $${drained.toFixed(2)}). Order signed but venue refunded; NOT writing optimistic state. sig=${res.signature?.slice(0, 16)}…`,
               );
               ctx.events.push({
@@ -2066,7 +2125,9 @@ export async function topUpAndRepairStep(ctx) {
               });
             }
             if (false && !(Number(verifiedPos?.sizeUsd ?? 0) > sizeUsdNow + 0.01)) {
-              console.warn(
+              keeperLog(
+                t,
+                "warn",
                 `[imperial:topup] ${t.ticker} size repair signed but size did not increase yet; NOT writing optimistic size. sig=${res.signature?.slice(0, 16)}…`,
               );
               ctx.events.push({
@@ -2079,7 +2140,9 @@ export async function topUpAndRepairStep(ctx) {
               // truth. Always write optimistic state and reconcile next
               // tick from the live readback.
               if (!verifiedPos && config.hedgeMode !== "simulate") {
-                console.warn(
+                keeperLog(
+                  t,
+                  "warn",
                   `[imperial:topup] ${t.ticker} OPTIMISTIC WRITE: drain verified ($${(preUsdcUi - postUsdcUi).toFixed(2)}) but /positions not indexed yet; writing addColl=$${addColl.toFixed(2)} addSize=$${addSize.toFixed(2)}. sig=${res.signature?.slice(0, 16)}…`,
                 );
               }
@@ -2169,7 +2232,9 @@ export async function topUpAndRepairStep(ctx) {
                       tx_sig: bindRes.signature,
                     });
                   } else {
-                    console.warn(
+                    keeperLog(
+                      t,
+                      "warn",
                       `[imperial:topup] ${t.ticker} attach-only fallback signed but profile USDC unchanged (${preBindUi.toFixed(2)} -> ${postBindUi.toFixed(2)}); venue refunded.`,
                     );
                   }
@@ -2458,7 +2523,7 @@ export async function tick() {
       headers: { "x-keeper-secret": config.keeperSecret },
     });
   } catch (e) {
-    console.warn(`[loop] reconcile-launches failed: ${e.message}`);
+    keeperLog(null, "warn", `[loop] reconcile-launches failed: ${e.message}`);
   }
 
   let tickClaimedUsd = 0;
@@ -2472,7 +2537,9 @@ export async function tick() {
   if (KEEPER_MINT_ALLOWLIST.length) {
     const skipped = all.length - tokens.length;
     if (skipped > 0)
-      console.log(
+      keeperLog(
+        null,
+        "info",
         `[loop] allowlist active: processing ${tokens.length}/${all.length} tokens (skipped ${skipped})`,
       );
   }
@@ -2488,7 +2555,7 @@ export async function tick() {
     tokens = tokens.filter((t) => !shouldSkipColdTick(t, nowMs));
     const skipped = beforeCadence - tokens.length;
     if (skipped > 0)
-      console.log(`[loop] cadence: skipped ${skipped} cold/deferred token(s), processing ${tokens.length}`);
+      keeperLog(null, "info", `[loop] cadence: skipped ${skipped} cold/deferred token(s), processing ${tokens.length}`);
     if (!tokens.length) return { processed: 0, skipped: "all_tokens_cold" };
   }
 
@@ -2498,11 +2565,11 @@ export async function tick() {
     const before = tokens.length;
     tokens = tokens.filter((t) => locked.has(t.id));
     if (tokens.length < before) {
-      console.log(`[loop] workflow locks: processing ${tokens.length}/${before} tokens owner=${lockOwner}`);
+      keeperLog(null, "info", `[loop] workflow locks: processing ${tokens.length}/${before} tokens owner=${lockOwner}`);
     }
     if (!tokens.length) return { processed: 0, skipped: "all_tokens_locked" };
   } catch (e) {
-    console.warn(`[loop] workflow lock acquisition failed; continuing without locks: ${e.message}`);
+    keeperLog(null, "warn", `[loop] workflow lock acquisition failed; continuing without locks: ${e.message}`);
   }
 
   // Cold/idle tokens were already dropped by the 4b cadence filter above, so
@@ -2542,7 +2609,7 @@ export async function tick() {
   try {
     solUsd = await getSolUsd();
   } catch (e) {
-    console.error("[loop] SOL price unavailable, skipping tick:", e.message);
+    keeperLog(null, "error", `[loop] SOL price unavailable, skipping tick: ${e.message}`);
     return { processed: 0, error: "no_sol_price" };
   }
 
@@ -2559,7 +2626,9 @@ export async function tick() {
   const treasurySolNow = await treasurySolUi();
   const _treasuryDeltaSol = _lastTreasurySol === null ? 0 : treasurySolNow - _lastTreasurySol;
   if (Math.abs(_treasuryDeltaSol) > 0.0001) {
-    console.log(
+    keeperLog(
+      null,
+      "info",
       `[loop] treasury SOL delta ${_treasuryDeltaSol.toFixed(6)} SOL (` +
         `$${(_treasuryDeltaSol * solUsd).toFixed(2)}) - NOT credited to fees`,
     );
@@ -2803,7 +2872,7 @@ export async function adminForceOpen(tokenId, overrides = {}) {
   try {
     await sendReport([patch]);
   } catch (e) {
-    console.warn("[force-open] report failed:", e.message);
+    keeperLog(t, "warn", `[force-open] report failed: ${e.message}`);
   }
 
   return {
