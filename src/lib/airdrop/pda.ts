@@ -1,10 +1,13 @@
-// Kamino Merkle Distributor PDA derivation. The program is deployed by Kamino
-// at the same address on ALL clusters; we never deploy it.
+// Kamino Merkle Distributor PDA derivation. The program is deployed by Kamino on
+// MAINNET ONLY (program id below) — it is NOT on devnet/testnet (verified via
+// getAccountInfo: value:null on both). We never deploy it. To test against it,
+// clone the mainnet program into a local validator:
+//   solana-test-validator --clone-upgradeable-program <id> --url mainnet-beta
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import { u64ToLeBytes } from "./merkle";
 
-/** Kamino Merkle Distributor program id (same on every cluster). */
+/** Kamino Merkle Distributor program id (mainnet-beta; absent on devnet/testnet). */
 export const DISTRIBUTOR_PROGRAM_ID = new PublicKey(
   "KdisqEcXbXKaTrBFqeDLhMmBvymLTwj9GmhDcdJyGat",
 );
