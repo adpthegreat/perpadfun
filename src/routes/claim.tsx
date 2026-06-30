@@ -39,8 +39,10 @@ type Status =
   | "error";
 
 const SYMBOL = "PERP";
-/** below this the wallet likely can't cover ClaimStatus rent + ATA + fee. */
-const MIN_SOL_LAMPORTS = 3_000_000; // ~0.003 SOL
+/** First-time claim cost ≈ 3.66M lamports: ClaimStatus rent (~1,566,000) + ATA
+ *  rent (~2,039,280) + base fee (5,000) + priority (~50,000). Since $PERPAD does
+ *  not exist before launch, nearly every claimer is first-time — gate with margin. */
+const MIN_SOL_LAMPORTS = 4_200_000; // ~0.0042 SOL
 
 function formatAmount(baseUnits: string): string {
   const n = Number(baseUnits) / 10 ** TOKEN_DECIMALS;
@@ -274,13 +276,14 @@ function ClaimPage() {
                 <>
                   {lowSol && (
                     <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-amber-400">
-                      Low SOL balance — you need a little SOL for rent + fees to claim.
+                      Low SOL balance — you need ~0.0042 SOL for account rent + fees.
+                      Top up, then reconnect.
                     </p>
                   )}
                   <Button
                     size="lg"
                     onClick={onClaim}
-                    disabled={inFlight || !finalized}
+                    disabled={inFlight || !finalized || lowSol}
                     className="w-full rounded-none font-mono text-[11px] uppercase tracking-[0.2em]"
                   >
                     {inFlight && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
