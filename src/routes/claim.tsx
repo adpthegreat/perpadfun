@@ -110,6 +110,10 @@ function ClaimPage() {
 
   async function onClaim() {
     if (!publicKey || !signTransaction || !claim) return;
+    if (!finalized) {
+      toast.message("The distributor is not live yet. Check back soon.");
+      return;
+    }
     try {
       setStatus("preparing");
       const ixs = await buildClaimInstructions(
@@ -276,11 +280,11 @@ function ClaimPage() {
                   <Button
                     size="lg"
                     onClick={onClaim}
-                    disabled={inFlight}
+                    disabled={inFlight || !finalized}
                     className="w-full rounded-none font-mono text-[11px] uppercase tracking-[0.2em]"
                   >
                     {inFlight && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                    {buttonLabel}
+                    {finalized ? buttonLabel : "NOT YET LIVE"}
                   </Button>
                 </>
               )}
