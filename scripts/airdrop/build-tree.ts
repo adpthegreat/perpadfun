@@ -9,9 +9,11 @@
 //      (claims only; distributor + mint are PLACEHOLDERS until
 //      create-distributor.ts injects the real values).
 //
-// RUN:  bun run scripts/airdrop/build-tree.ts [inputCsv] [outDir]
-//   defaults: scripts/airdrop/allocation.csv  ->  scripts/airdrop/ (+ proof-map
-//   written to src/lib/airdrop/proof-map.json)
+// RUN:  bun run scripts/airdrop/build-tree.ts <inputCsv> [outDir]
+//   inputCsv is REQUIRED (no default) so the committed 3-wallet sample can never
+//   ship by accident. For the real airdrop:
+//     bun run scripts/airdrop/build-tree.ts ~/Downloads/PERPAD_AIRDROP_ALLOCATION.csv
+//   outDir defaults to scripts/airdrop/; proof-map -> src/lib/airdrop/proof-map.json
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { PublicKey } from "@solana/web3.js";
@@ -66,7 +68,14 @@ function parseCsv(raw: string): Row[] {
 }
 
 function main() {
-  const inputCsv = process.argv[2] ?? path.resolve(__dirname, "allocation.csv");
+  const inputCsv = process.argv[2];
+  if (!inputCsv) {
+    throw new Error(
+      "build-tree.ts requires an explicit <inputCsv> path (no default — prevents " +
+        "accidentally building the committed 3-wallet sample). Real airdrop:\n" +
+        "  bun run scripts/airdrop/build-tree.ts ~/Downloads/PERPAD_AIRDROP_ALLOCATION.csv",
+    );
+  }
   const outDir = process.argv[3] ?? path.resolve(__dirname);
   const proofMapPath = path.resolve(__dirname, "../../src/lib/airdrop/proof-map.json");
 
