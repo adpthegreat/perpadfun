@@ -54,3 +54,6 @@ test/live/imperial-bug-report.md
 
 # perpspad CLI local launch log (tokenIds for sweeping)
 perpspad-cli/.launches.log
+
+# Throwaway localnet airdrop E2E (keypairs, agave binaries, drivers, logs)
+scratch-localnet/
