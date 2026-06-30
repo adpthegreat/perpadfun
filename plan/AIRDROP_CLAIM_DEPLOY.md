@@ -10,6 +10,44 @@ Branch: `feat/airdrop-claim`. All paths below are repo-relative.
 
 ---
 
+## 0a. POST-AUDIT HARDENED FLOW (2026-06-30) — READ FIRST
+
+A multi-agent security audit (**`plan/AIRDROP_AUDIT.md`**, decision **GO-WITH-FIXES**) found the scripts as-written had **NO launch-time gate** (anyone could claim the instant the vault was funded) plus several ops footguns. The scripts are now **hardened**, enforce the safe path automatically, and were verified end-to-end on localnet against the real Kamino program (gated claim reverts `ClaimingIsNotStarted` 0x1782, no ClaimStatus lockout; opens via `set_enable_slot`; claim succeeds; replay reverts — no double-spend).
+
+**The only on-chain claim gate is `enable_slot`** — `new_claim` reverts `ClaimingIsNotStarted` (0x1782) unless `enable_slot <= current_slot`. `create-distributor.ts` now defaults to a far-future SENTINEL `enable_slot`, so **claims are IMPOSSIBLE until you deliberately open them at T**. The frontend "NOT YET LIVE" banner is cosmetic (the proof-map ships in the public JS bundle) — the gate MUST be on-chain.
+
+Authoritative env-driven sequence:
+
+```bash
+# 1. BEFORE T — build the tree from the REAL CSV (explicit path now REQUIRED; no sample default)
+bun run scripts/airdrop/build-tree.ts ~/Downloads/PERPAD_AIRDROP_ALLOCATION.csv
+#    -> verify: 380 wallets, maxTotalClaim 775960887398266, root 37798572…53e7a69a
+
+# 2. BEFORE T — create + hand over (admin->multisig) + fund. Claims stay SHUT (sentinel enable_slot).
+MINT=<legacy-SPL 6dp mint> \
+MULTISIG=<squads vault pubkey> \
+EXPECT_NODES=380 EXPECT_TOTAL=775960887398266 \
+ADMIN_KEYPAIR=~/.config/solana/id.json RPC_URL=https://api.mainnet-beta.solana.com \
+bun run scripts/airdrop/create-distributor.ts
+#    auto-enforces: mint is legacy-SPL + 6dp; tree == EXPECT_*; admin ATA >= maxTotalClaim;
+#    base keypair persisted (idempotent, no double-spend); clawback_receiver = multisig ATA;
+#    set_admin -> multisig BEFORE funding; read-back asserts incl. enableSlot.
+
+# 3. step 2 injects distributor+mint into proof-map.json -> build + test + deploy the app
+npm run build && npm run test && <deploy>   # banner shows NOT-YET-LIVE; the real gate is on-chain
+
+# 4. AT T — the multisig opens claims (prints the set_enable_slot ix to wrap in Squads):
+MINT=<mint> RPC_URL=<rpc> bun run scripts/airdrop/open-claims.ts
+```
+
+**Autonomous alternative (no multisig tx at T):** add `LAUNCH_TS=<unix seconds>` to step 2 — `enable_slot` is derived from T via the 400ms/slot floor so claims auto-open AT-OR-AFTER T (never before); skip step 4.
+
+**Localnet testing:** add `SKIP_HANDOVER=1` to step 2 (admin stays the deployer so a test can flip `enable_slot` directly); `MULTISIG` not required.
+
+The detailed steps in §0–§6 below remain the reference; the commands above are the authoritative sequence.
+
+---
+
 ## 0. Preconditions — verify BEFORE running anything (a miss here loses funds)
 
 1. **$PERPAD mint is the LEGACY SPL Token program** (`Tokenkeg…`), **NOT
