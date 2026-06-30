@@ -57,3 +57,6 @@ perpspad-cli/.launches.log
 
 # Throwaway localnet airdrop E2E (keypairs, agave binaries, drivers, logs)
 scratch-localnet/
+
+# Persisted distributor base keypair (idempotency for create-distributor.ts) — never commit
+scripts/airdrop/.distributor-base.json
