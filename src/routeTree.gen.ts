@@ -16,6 +16,7 @@ import { Route as PaperRouteImport } from './routes/paper'
 import { Route as LaunchRouteImport } from './routes/launch'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as DocsRouteImport } from './routes/docs'
+import { Route as ClaimRouteImport } from './routes/claim'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TokenIdRouteImport } from './routes/token.$id'
 import { Route as RouteFeesClaimTokenRouteImport } from './routes/route-fees.$claimToken'
@@ -75,6 +76,11 @@ const HomeRoute = HomeRouteImport.update({
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
   path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClaimRoute = ClaimRouteImport.update({
+  id: '/claim',
+  path: '/claim',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -214,6 +220,7 @@ const ApiV1LaunchTokenIdMetadataRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/claim': typeof ClaimRoute
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
@@ -248,6 +255,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/claim': typeof ClaimRoute
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
@@ -283,6 +291,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/claim': typeof ClaimRoute
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
@@ -319,6 +328,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/claim'
     | '/docs'
     | '/home'
     | '/launch'
@@ -353,6 +363,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/claim'
     | '/docs'
     | '/home'
     | '/launch'
@@ -387,6 +398,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/claim'
     | '/docs'
     | '/home'
     | '/launch'
@@ -422,6 +434,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClaimRoute: typeof ClaimRoute
   DocsRoute: typeof DocsRoute
   HomeRoute: typeof HomeRoute
   LaunchRoute: typeof LaunchRoute
@@ -501,6 +514,13 @@ declare module '@tanstack/react-router' {
       path: '/docs'
       fullPath: '/docs'
       preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/claim': {
+      id: '/claim'
+      path: '/claim'
+      fullPath: '/claim'
+      preLoaderRoute: typeof ClaimRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -718,6 +738,7 @@ const ApiV1LaunchRouteWithChildren = ApiV1LaunchRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClaimRoute: ClaimRoute,
   DocsRoute: DocsRoute,
   HomeRoute: HomeRoute,
   LaunchRoute: LaunchRoute,
