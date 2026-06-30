@@ -7,10 +7,31 @@ import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import { u64ToLeBytes } from "./merkle";
 
-/** Kamino Merkle Distributor program id (mainnet-beta; absent on devnet/testnet). */
-export const DISTRIBUTOR_PROGRAM_ID = new PublicKey(
-  "KdisqEcXbXKaTrBFqeDLhMmBvymLTwj9GmhDcdJyGat",
-);
+/** Mainnet-beta Kamino distributor — the default (the program is absent on devnet/testnet). */
+const MAINNET_DISTRIBUTOR_PROGRAM_ID = "KdisqEcXbXKaTrBFqeDLhMmBvymLTwj9GmhDcdJyGat";
+
+/**
+ * Resolve the distributor program id. Defaults to mainnet; overridable for
+ * devnet/test deploys (where a COPY of the program is deployed under a new id —
+ * see plan/AIRDROP_DEVNET_TEST.md):
+ *   - ops scripts (node/bun):  DISTRIBUTOR_PROGRAM_ID env
+ *   - client/Worker build:     VITE_DISTRIBUTOR_PROGRAM_ID (baked at build time)
+ */
+function resolveDistributorProgramId(): string {
+  if (typeof process !== "undefined" && process.env?.DISTRIBUTOR_PROGRAM_ID) {
+    return process.env.DISTRIBUTOR_PROGRAM_ID;
+  }
+  try {
+    const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+    if (env?.VITE_DISTRIBUTOR_PROGRAM_ID) return env.VITE_DISTRIBUTOR_PROGRAM_ID;
+  } catch {
+    /* import.meta.env unavailable (non-Vite runtime) */
+  }
+  return MAINNET_DISTRIBUTOR_PROGRAM_ID;
+}
+
+/** Kamino Merkle Distributor program id (mainnet default; env-overridable for devnet). */
+export const DISTRIBUTOR_PROGRAM_ID = new PublicKey(resolveDistributorProgramId());
 
 /**
  * Distributor PDA seeds: ["MerkleDistributor", base[32], mint[32], version u64-LE].
