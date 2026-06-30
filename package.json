@@ -22,8 +22,10 @@
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
+    "@coral-xyz/anchor": "^0.28.0",
     "@drift-labs/sdk": "^2.163.0-beta.13",
     "@hookform/resolvers": "^5.2.2",
+    "@kamino-finance/distributor-sdk": "^0.4.0",
     "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
     "@metaplex-foundation/umi-bundle-defaults": "^1.5.1",
     "@metaplex-foundation/umi-signer-wallet-adapters": "^1.5.1",
