@@ -22,7 +22,7 @@ export const Route = createFileRoute("/onboarding")({
       {
         name: "description",
         content:
-          "Join the founding community of perpspad. 1,000 early community partner codes for early access and an exclusive $PERPSPAD token allocation.",
+          "Join the founding community of perpspad. 500 early community partner codes for early access and an exclusive $PERPSPAD token allocation.",
       },
     ],
   }),
@@ -81,7 +81,7 @@ function OnboardingPage() {
     refetchInterval: 15000,
   });
 
-  const counts = status.data?.counts ?? { claimed: 0, remaining: 1000, total: 1000 };
+  const counts = status.data?.counts ?? { claimed: 0, remaining: 500, total: 500 };
   const state = status.data?.state;
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -168,7 +168,7 @@ function OnboardingPage() {
       if (!signed) return;
       const res = await claimFn({ data: { wallet: address, ...signed } });
       if (!res.ok) return toast.error(res.error ?? "Claim failed");
-      if (res.waitlisted) toast("All 1,000 codes are claimed — you're on the waitlist.");
+      if (res.waitlisted) toast("All 500 codes are claimed — you're on the waitlist.");
       else toast.success("Code claimed!");
       status.refetch();
     } catch (e) {
@@ -245,7 +245,7 @@ function OnboardingPage() {
               <div className="leading-none">
                 <div className="font-sans text-6xl font-semibold tracking-tight md:text-7xl">
                   <span className="bg-gradient-to-br from-[#c79bff] via-foreground to-[#16e0a3] bg-clip-text text-transparent">
-                    1,000
+                    500
                   </span>
                 </div>
                 <div className="mt-2 font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
@@ -258,7 +258,7 @@ function OnboardingPage() {
               </span>
             </div>
             <p className="mt-6 border-t border-white/5 pt-6 text-[15px] leading-relaxed text-foreground/85">
-              The first 1,000 collaborators to follow us on X, join Telegram, and connect a Solana
+              The first 500 collaborators to follow us on X, join Telegram, and connect a Solana
               wallet receive an invite code and an exclusive{" "}
               <span className="font-semibold text-[#9d4eff]">$PERPSPAD</span> allocation — reserved
               for the people here first.
@@ -284,7 +284,7 @@ function OnboardingPage() {
                   waitlisted
                 </div>
                 <p className="mt-2 text-[14px] text-foreground/85">
-                  All 1,000 codes are claimed. You're on the waitlist — we'll reach out if more open up.
+                  All 500 codes are claimed. You're on the waitlist — we'll reach out if more open up.
                 </p>
               </div>
             ) : (
@@ -365,17 +365,11 @@ function OnboardingPage() {
                 earn more
               </span>
             </div>
-            <div className="mt-6 grid gap-px overflow-hidden rounded-xl border border-white/5 bg-white/5 sm:grid-cols-2">
+            <div className="mt-6 grid gap-px overflow-hidden rounded-xl border border-white/5 bg-white/5">
               <div className="bg-card/80 p-5">
                 <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#16e0a3]">points / xp</div>
                 <p className="mt-2.5 text-[14px] leading-relaxed text-foreground/85">
                   Earn by trading, holding, referring friends, and completing campaigns.
-                </p>
-              </div>
-              <div className="bg-card/80 p-5">
-                <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9d4eff]">stake $PERPSPAD</div>
-                <p className="mt-2.5 text-[14px] leading-relaxed text-foreground/85">
-                  Stake to earn platform fees, bonus XP, and additional rewards.
                 </p>
               </div>
             </div>
