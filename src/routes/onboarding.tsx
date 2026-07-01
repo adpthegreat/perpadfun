@@ -2,10 +2,9 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useWallet as useSolanaAdapterWallet } from "@solana/wallet-adapter-react";
-import bs58 from "bs58";
+import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
-import { useWallet, truncateAddress, type SolanaWalletName } from "@/lib/wallet/WalletContext";
+import { truncateAddress } from "@/lib/wallet/WalletContext";
 import {
   getCollabStatus,
   verifyWallet,
@@ -62,12 +61,9 @@ const TICKERS: Ticker[] = [
 
 const reveal = (delay: number): CSSProperties => ({ "--reveal-delay": `${delay}ms` } as CSSProperties);
 
-const WALLET_OPTIONS: SolanaWalletName[] = ["Phantom", "Solflare", "Backpack"];
-
 function OnboardingPage() {
-  const { wallet, connectSolanaWith } = useWallet();
-  const { publicKey, signMessage } = useSolanaAdapterWallet();
-  const address = wallet?.address ?? null;
+  const [address, setAddress] = useState<string | null>(null); // submitted + validated wallet
+  const [walletInput, setWalletInput] = useState("");
 
   const statusFn = useServerFn(getCollabStatus);
   const verifyWalletFn = useServerFn(verifyWallet);
@@ -85,40 +81,22 @@ function OnboardingPage() {
   const state = status.data?.state;
   const [busy, setBusy] = useState<string | null>(null);
 
-  // Sign a message bound to (action, wallet) so the server can prove ownership.
-  const sign = useCallback(
-    async (action: string): Promise<{ message: string; signature: string } | null> => {
-      if (!publicKey || !signMessage) {
-        toast.error("Connect a wallet that supports message signing");
-        return null;
-      }
-      const message = `perpspad-collab:${action}:${publicKey.toBase58()}:ts:${Date.now()}`;
-      const sigBytes = await signMessage(new TextEncoder().encode(message));
-      return { message, signature: bs58.encode(sigBytes) };
-    },
-    [publicKey, signMessage],
-  );
-
-  async function handleConnect(name: SolanaWalletName) {
+  async function handleSubmitWallet() {
+    const w = walletInput.trim();
     try {
-      await connectSolanaWith(name);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to connect");
+      new PublicKey(w); // client-side format check
+    } catch {
+      return toast.error("Enter a valid Solana address");
     }
-  }
-
-  async function handleVerifyWallet() {
-    if (!address) return;
     setBusy("wallet");
     try {
-      const signed = await sign("wallet");
-      if (!signed) return;
-      const res = await verifyWalletFn({ data: { wallet: address, ...signed } });
-      if (!res.ok) return toast.error(res.error ?? "Verification failed");
-      toast.success("Wallet verified");
+      const res = await verifyWalletFn({ data: { wallet: w } });
+      if (!res.ok) return toast.error(res.error ?? "Submit failed");
+      setAddress(w);
+      toast.success("Wallet submitted");
       status.refetch();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Verification failed");
+      toast.error(e instanceof Error ? e.message : "Submit failed");
     } finally {
       setBusy(null);
     }
@@ -129,9 +107,7 @@ function OnboardingPage() {
     window.open(X_URL, "_blank", "noopener");
     setBusy("x");
     try {
-      const signed = await sign("x-follow");
-      if (!signed) return;
-      const res = await confirmXFn({ data: { wallet: address, ...signed } });
+      const res = await confirmXFn({ data: { wallet: address } });
       if (!res.ok) return toast.error(res.error ?? "Could not confirm");
       toast.success("X follow confirmed");
       status.refetch();
@@ -164,9 +140,7 @@ function OnboardingPage() {
     if (!address) return;
     setBusy("claim");
     try {
-      const signed = await sign("claim");
-      if (!signed) return;
-      const res = await claimFn({ data: { wallet: address, ...signed } });
+      const res = await claimFn({ data: { wallet: address } });
       if (!res.ok) return toast.error(res.error ?? "Claim failed");
       if (res.waitlisted) toast(`All ${counts.total} codes are claimed — you're on the waitlist.`);
       else toast.success("Code claimed!");
@@ -289,28 +263,26 @@ function OnboardingPage() {
               </div>
             ) : (
               <div className="mt-6 space-y-2.5">
-                {/* step 1 — connect + verify wallet */}
-                <TaskRow n={1} label="Connect & verify your Solana wallet" done={walletVerified}>
-                  {!address ? (
-                    <div className="flex flex-wrap gap-2">
-                      {WALLET_OPTIONS.map((name) => (
-                        <button
-                          key={name}
-                          onClick={() => handleConnect(name)}
-                          className={pillBtn}
-                        >
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  ) : walletVerified ? (
+                {/* step 1 — submit wallet address */}
+                <TaskRow n={1} label="Submit your Solana wallet" done={walletVerified}>
+                  {walletVerified && address ? (
                     <span className="font-mono text-[11px] text-muted-foreground">
                       {truncateAddress(address)}
                     </span>
                   ) : (
-                    <button onClick={handleVerifyWallet} disabled={busy === "wallet"} className={pillBtnPrimary}>
-                      {busy === "wallet" ? "signing…" : "verify (sign)"}
-                    </button>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <input
+                        value={walletInput}
+                        onChange={(e) => setWalletInput(e.target.value.trim())}
+                        onKeyDown={(e) => e.key === "Enter" && handleSubmitWallet()}
+                        placeholder="paste your Solana address"
+                        spellCheck={false}
+                        className="w-[210px] rounded-full border border-border bg-card/60 px-4 py-2 font-mono text-[11px] outline-none focus:border-[#9d4eff]"
+                      />
+                      <button onClick={handleSubmitWallet} disabled={busy === "wallet"} className={pillBtnPrimary}>
+                        {busy === "wallet" ? "submitting…" : "submit"}
+                      </button>
+                    </div>
                   )}
                 </TaskRow>
 

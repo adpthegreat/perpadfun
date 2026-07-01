@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import bs58 from "bs58";
-import nacl from "tweetnacl";
+import { PublicKey } from "@solana/web3.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
@@ -29,38 +28,19 @@ type SignupRow = {
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-function verifyWalletSignature(wallet: string, message: string, signatureB58: string): boolean {
+// Wallet ownership is NOT signature-proven — the campaign's sybil gate is the
+// Telegram HMAC + unique(tg_user_id). The wallet here is just the payout address,
+// so we only validate it's a well-formed Solana public key.
+function isValidSolanaAddress(wallet: string): boolean {
   try {
-    const sig = bs58.decode(signatureB58);
-    const msg = new TextEncoder().encode(message);
-    const pub = bs58.decode(wallet);
-    return nacl.sign.detached.verify(msg, sig, pub);
+    new PublicKey(wallet);
+    return true;
   } catch {
     return false;
   }
 }
 
-// Reject signatures older than 5 minutes to prevent replay.
-function isFreshMessage(message: string): boolean {
-  const m = message.match(/ts:(\d+)/);
-  if (!m) return false;
-  return Date.now() - Number(m[1]) < 5 * 60 * 1000;
-}
-
-// Bind the signed message to (action, wallet) so a signature for one step or
-// wallet can't be replayed for another.
-function checkSig(action: string, wallet: string, message: string, signature: string): boolean {
-  if (!isFreshMessage(message)) return false;
-  if (!message.startsWith(`perpspad-collab:${action}:${wallet}:`)) return false;
-  return verifyWalletSignature(wallet, message, signature);
-}
-
 const walletSchema = z.string().min(32).max(48);
-const signedSchema = {
-  wallet: walletSchema,
-  message: z.string().min(8).max(200),
-  signature: z.string().min(40).max(200),
-};
 
 async function getSignup(wallet: string): Promise<SignupRow | null> {
   const { data } = await db
@@ -120,14 +100,12 @@ export const getCollabStatus = createServerFn({ method: "GET" })
     return { counts, state: publicState(row), xHandle: X_HANDLE };
   });
 
-// ── task 1: prove wallet ownership (the anchor for every other task) ─────────
+// ── task 1: submit wallet address (the anchor for every other task) ──────────
 export const verifyWallet = createServerFn({ method: "POST" })
-  .inputValidator((d: { wallet: string; message: string; signature: string }) =>
-    z.object(signedSchema).parse(d),
-  )
+  .inputValidator((d: { wallet: string }) => z.object({ wallet: walletSchema }).parse(d))
   .handler(async ({ data }) => {
-    if (!checkSig("wallet", data.wallet, data.message, data.signature)) {
-      return { ok: false as const, error: "Invalid or stale signature", state: publicState(null) };
+    if (!isValidSolanaAddress(data.wallet)) {
+      return { ok: false as const, error: "Not a valid Solana address", state: publicState(null) };
     }
     await ensureSignup(data.wallet);
     const { data: updated, error } = await db
@@ -145,16 +123,13 @@ export const verifyWallet = createServerFn({ method: "POST" })
 // Adding one later means swapping this body for a real follow lookup — the
 // table, the signature binding, and the frontend all stay the same.
 export const confirmXFollow = createServerFn({ method: "POST" })
-  .inputValidator((d: { wallet: string; message: string; signature: string; handle?: string }) =>
-    z.object({ ...signedSchema, handle: z.string().max(40).optional() }).parse(d),
+  .inputValidator((d: { wallet: string; handle?: string }) =>
+    z.object({ wallet: walletSchema, handle: z.string().max(40).optional() }).parse(d),
   )
   .handler(async ({ data }) => {
-    if (!checkSig("x-follow", data.wallet, data.message, data.signature)) {
-      return { ok: false as const, error: "Invalid or stale signature", state: publicState(null) };
-    }
     const signup = await getSignup(data.wallet);
     if (!signup?.wallet_verified) {
-      return { ok: false as const, error: "Verify your wallet first", state: publicState(signup) };
+      return { ok: false as const, error: "Submit your wallet first", state: publicState(signup) };
     }
     const { data: updated, error } = await db
       .from("collab_signups")
@@ -192,7 +167,7 @@ export const verifyTelegram = createServerFn({ method: "POST" })
 
     const signup = await getSignup(data.wallet);
     if (!signup?.wallet_verified) {
-      return { ok: false as const, error: "Verify your wallet first", state: publicState(signup) };
+      return { ok: false as const, error: "Submit your wallet first", state: publicState(signup) };
     }
 
     if (!verifyTelegramAuth(data.auth, botToken)) {
@@ -237,14 +212,8 @@ export const verifyTelegram = createServerFn({ method: "POST" })
 
 // ── claim: atomic code assignment (or waitlist when the pool is empty) ───────
 export const claimCode = createServerFn({ method: "POST" })
-  .inputValidator((d: { wallet: string; message: string; signature: string }) =>
-    z.object(signedSchema).parse(d),
-  )
+  .inputValidator((d: { wallet: string }) => z.object({ wallet: walletSchema }).parse(d))
   .handler(async ({ data }) => {
-    if (!checkSig("claim", data.wallet, data.message, data.signature)) {
-      return { ok: false as const, error: "Invalid or stale signature", code: null, waitlisted: false };
-    }
-
     const { data: code, error } = await db.rpc("claim_collab_code", { p_wallet: data.wallet });
 
     if (error) {
