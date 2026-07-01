@@ -1,15 +1,15 @@
--- Collab onboarding campaign: 1,000 invite codes for the first 1,000 community
+-- Collab onboarding campaign: 500 invite codes for the first 500 community
 -- collaborators who follow X, join Telegram, and prove a Solana wallet.
 --
 -- Two tables:
---   collab_codes   — the fixed pool of 1,000 pre-generated unique codes.
+--   collab_codes   — the fixed pool of 500 pre-generated unique codes.
 --   collab_signups — one row per wallet, tracking task completion + assignment.
 --
 -- Assignment is done through claim_collab_code() which uses FOR UPDATE SKIP
 -- LOCKED so concurrent claimers can never be handed the same code, and the pool
 -- can never be over-drawn (overflow signups are flagged waitlisted instead).
 
-create extension if not exists pgcrypto;
+-- (no extensions needed — codes use built-in md5(random()); ids are bigserial)
 
 -- ── code pool ────────────────────────────────────────────────────────────────
 create table if not exists public.collab_codes (
@@ -59,21 +59,21 @@ create trigger collab_signups_touch
   before update on public.collab_signups
   for each row execute function public.touch_collab_signup_updated_at();
 
--- ── seed 1,000 unique, non-sequential codes (PERP-XXXXXXXX) ───────────────────
+-- ── seed 500 unique, non-sequential codes (PERP-XXXXXXXX) ─────────────────────
 -- Idempotent: only seeds when the pool is empty. Overshoots then trims so that
--- random collisions (dropped by the UNIQUE constraint) still leave exactly 1000.
+-- random collisions (dropped by the UNIQUE constraint) still leave exactly 500.
 do $$
 declare existing int;
 begin
   select count(*) into existing from public.collab_codes;
   if existing = 0 then
     insert into public.collab_codes (code)
-    select 'PERP-' || upper(encode(gen_random_bytes(4), 'hex'))
-    from generate_series(1, 1500)
+    select 'PERP-' || upper(substr(md5(random()::text || g::text), 1, 8))
+    from generate_series(1, 750) as g
     on conflict (code) do nothing;
 
     delete from public.collab_codes
-    where id not in (select id from public.collab_codes order by id limit 1000);
+    where id not in (select id from public.collab_codes order by id limit 500);
   end if;
 end $$;
 

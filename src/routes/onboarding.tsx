@@ -168,7 +168,7 @@ function OnboardingPage() {
       if (!signed) return;
       const res = await claimFn({ data: { wallet: address, ...signed } });
       if (!res.ok) return toast.error(res.error ?? "Claim failed");
-      if (res.waitlisted) toast("All 500 codes are claimed — you're on the waitlist.");
+      if (res.waitlisted) toast(`All ${counts.total} codes are claimed — you're on the waitlist.`);
       else toast.success("Code claimed!");
       status.refetch();
     } catch (e) {

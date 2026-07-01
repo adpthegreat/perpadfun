@@ -14,7 +14,6 @@ import {
 // view of the admin client for them. Rows are typed locally below.
 const db = supabaseAdmin as unknown as SupabaseClient;
 
-const TOTAL_CODES = 1000;
 const X_HANDLE = "perpspadfun";
 
 type SignupRow = {
@@ -75,13 +74,16 @@ async function getSignup(wallet: string): Promise<SignupRow | null> {
 async function ensureSignup(wallet: string): Promise<SignupRow> {
   const existing = await getSignup(wallet);
   if (existing) return existing;
-  const { data, error } = await db
+  // Upsert with ignoreDuplicates so two simultaneous first-verifies can't 500 on
+  // the wallet_address unique constraint — whichever insert lands, we re-read the
+  // row afterward.
+  const { error } = await db
     .from("collab_signups")
-    .insert({ wallet_address: wallet })
-    .select("*")
-    .single();
+    .upsert({ wallet_address: wallet }, { onConflict: "wallet_address", ignoreDuplicates: true });
   if (error) throw new Error(error.message);
-  return data as SignupRow;
+  const row = await getSignup(wallet);
+  if (!row) throw new Error("Failed to create signup");
+  return row;
 }
 
 function publicState(row: SignupRow | null) {
@@ -96,12 +98,15 @@ function publicState(row: SignupRow | null) {
 }
 
 async function getCounts() {
-  const { count } = await db
-    .from("collab_codes")
-    .select("*", { count: "exact", head: true })
-    .eq("assigned", true);
-  const claimed = count ?? 0;
-  return { claimed, remaining: Math.max(0, TOTAL_CODES - claimed), total: TOTAL_CODES };
+  // Read the real pool size so the counter tracks the seeded total (500) and
+  // survives any future pool resize — no hardcoded magic number.
+  const [{ count: totalCount }, { count: claimedCount }] = await Promise.all([
+    db.from("collab_codes").select("*", { count: "exact", head: true }),
+    db.from("collab_codes").select("*", { count: "exact", head: true }).eq("assigned", true),
+  ]);
+  const total = totalCount ?? 0;
+  const claimed = claimedCount ?? 0;
+  return { claimed, remaining: Math.max(0, total - claimed), total };
 }
 
 // ── status: live counts + (optional) this wallet's task state ────────────────
