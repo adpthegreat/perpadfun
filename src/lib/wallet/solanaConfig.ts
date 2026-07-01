@@ -12,7 +12,12 @@ const isProxiedHost =
   (window.location.hostname.endsWith("lovableproject.com") ||
     window.location.hostname.endsWith("lovable.app") ||
     window.location.hostname === "perpspad.fun" ||
-    window.location.hostname === "www.perpspad.fun");
+    window.location.hostname === "www.perpspad.fun" ||
+    // Local dev: route through the same-origin proxy (the dev server handles
+    // /api/public/solana/rpc → real SOLANA_RPC_URL) so localhost doesn't fall back
+    // to the public RPC, which 403s browser dApp calls.
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
 
 export const SOLANA_RPC_URL =
   configuredRpcUrl ||

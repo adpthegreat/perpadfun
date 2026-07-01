@@ -21,6 +21,7 @@ function isAllowedPreviewOrigin(origin: string | null) {
     const { hostname } = new URL(origin);
     return (
       hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
       hostname.endsWith("lovableproject.com") ||
       hostname.endsWith("lovable.app") ||
       hostname === "perpspad.fun" ||
