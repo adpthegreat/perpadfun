@@ -35,7 +35,7 @@ function PaperPage() {
       <Header />
       <article className="mx-auto max-w-2xl px-6 py-16">
         <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">whitepaper v1, June 2026</div>
-        <h1 className="font-display mt-2 text-4xl leading-[1.05] tracking-tight">Perpspad. coins backed by a live perp.</h1>
+        <h1 className="font-display mt-2 text-4xl leading-[1.05] tracking-tight">perpspad. coins backed by a live perp.</h1>
         <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
           Perpspad is a Solana launchpad where every coin runs a real leveraged perpetual, traded exclusively on the Phoenix CLOB through Imperial, owned by that coin's onchain sub-wallet. Trading fees feed the position, a slice of every fee buys back and burns supply, and the position stays open for the life of the token.
         </p>
@@ -109,7 +109,7 @@ function PaperPage() {
             <ul className="mt-3 list-disc space-y-2 pl-5 text-muted-foreground">
               <li><span className="text-foreground">50% to the perp.</span> Counts toward the open gate, then feeds collateral top-ups on the live position.</li>
               <li><span className="text-foreground">25% to buyback and burn.</span> Accrues in a per-token reserve. Once the reserve crosses $10, the keeper swaps that SOL to the coin on Jupiter and burns it onchain. Smaller amounts wait in the reserve until they cross the floor.</li>
-              <li><span className="text-foreground">25% to the treasury reserve.</span> Stays as SOL in the sub-wallet as a runway buffer for tx fees, rent, and future top-ups.</li>
+              <li><span className="text-foreground">25% to $PERPSPAD buyback and burn.</span> Accrues in a per-token $PERPSPAD reserve. Once it crosses $25, the keeper swaps that SOL to $PERPSPAD on Jupiter and burns it. Every coin on the launchpad feeds this same flywheel, so every trade on every perpspad coin tightens $PERPSPAD supply.</li>
             </ul>
           </section>
 
@@ -151,13 +151,35 @@ function PaperPage() {
             <p className="mt-3 text-muted-foreground">
               Burns leave circulation through two independent paths, both signed by the coin's sub-wallet:
             </p>
-            <p className="mt-3 font-mono text-xs text-foreground/80">
-              fees claimed, 25% reserve, $10 floor, Jupiter swap to coin, onchain burn tx
-            </p>
-            <p className="mt-3 font-mono text-xs text-foreground/80">
-              fees claimed, 50% perp margin, floating PnL climbs +25% of collateral over the last lock-in, slice closed via Imperial, Jupiter swap to coin, onchain burn tx
-            </p>
-            <p className="mt-3 text-muted-foreground">
+            <div className="mt-4 space-y-3">
+              <div className="rounded-xl border border-border bg-card/50 p-4">
+                <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#16e0a3]">
+                  path 1 · fee burn — every fee, win or lose
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+                  {["fees claimed", "25% reserve", "$10 floor", "Jupiter swap → coin", "onchain burn tx"].map((step, i, arr) => (
+                    <span key={step} className="flex items-center gap-2">
+                      <span className="rounded-md border border-border bg-secondary/40 px-2.5 py-1 text-foreground/90">{step}</span>
+                      {i < arr.length - 1 && <span className="text-muted-foreground/50">→</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-card/50 p-4">
+                <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9d4eff]">
+                  path 2 · profit burn — when the perp prints
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+                  {["fees claimed", "50% perp margin", "PnL climbs +25% of collateral over the last lock-in", "slice closed via Imperial", "Jupiter swap → coin", "onchain burn tx"].map((step, i, arr) => (
+                    <span key={step} className="flex items-center gap-2">
+                      <span className="rounded-md border border-border bg-secondary/40 px-2.5 py-1 text-foreground/90">{step}</span>
+                      {i < arr.length - 1 && <span className="text-muted-foreground/50">→</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="mt-4 text-muted-foreground">
               The first path burns from every fee, win or lose. The second path adds burns on top whenever the perp prints profit. Every step in either chain is a public Solana transaction.
             </p>
           </section>
