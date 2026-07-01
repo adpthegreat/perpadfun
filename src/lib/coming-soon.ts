@@ -5,7 +5,7 @@
 // This does NOT affect /api/* (server routes are handled separately), so the
 // platform token can still be launched + read through the API while the UI is
 // gated, and /token/$id stays live to view it.
-export const COMING_SOON = true;
+export const COMING_SOON = true; // TEMP local-only for review — do NOT commit
 
 export function isUIRouteAllowed(pathname: string): boolean {
   if (!COMING_SOON) return true;
@@ -13,6 +13,7 @@ export function isUIRouteAllowed(pathname: string): boolean {
   if (pathname.startsWith("/token/")) return true; // token detail pages stay live
   if (pathname === "/paper") return true; // whitepaper stays live
   if (pathname === "/onboarding") return true; // community onboarding stays live
+  if (pathname.startsWith("/admin/keeper-logs")) return true; // keeper logs (secret-gated) stay live
   if (pathname.startsWith("/api/")) return true; // never gate API routes
   return false;
 }

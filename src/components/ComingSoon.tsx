@@ -81,11 +81,19 @@ export function ComingSoon() {
             </span>
           </div>
           <span className="font-mono text-sm tracking-[0.3em] text-foreground md:text-base">
-            29 / 06 / 2026
+            7 / 2 / 2026
           </span>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+          <Link
+            to="/onboarding"
+            className="inline-flex items-center gap-2 rounded-full border border-[#9d4eff]/70 bg-gradient-to-r from-[#9d4eff]/25 to-[#16e0a3]/25 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.18em] text-foreground backdrop-blur transition-colors hover:border-[#16e0a3] hover:from-[#9d4eff]/40 hover:to-[#16e0a3]/40"
+          >
+            claim a founding code →
+          </Link>
+          {/* X + TG buttons hidden — the "claim a founding code" onboarding flow already
+              walks users through following X and joining Telegram.
           <a
             href={X_URL}
             target="_blank"
@@ -102,6 +110,7 @@ export function ComingSoon() {
           >
             join TG →
           </a>
+          */}
           <Link
             to="/paper"
             className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.18em] backdrop-blur transition-colors hover:border-foreground hover:text-foreground"
