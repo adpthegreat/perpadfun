@@ -4,6 +4,7 @@
 // CORS-friendly for client use; if that ever changes, proxy these two fetches
 // through a createServerFn and keep signing in the browser.
 
+import { ensureBufferPolyfill } from "./buffer-polyfill";
 import {
   PublicKey,
   TransactionInstruction,
@@ -13,6 +14,10 @@ import {
   type AddressLookupTableAccount,
   type Connection,
 } from "@solana/web3.js";
+
+// toIx below uses Buffer.from; ensure Buffer exists in the browser (explicit call
+// so it survives tree-shaking under package.json "sideEffects").
+ensureBufferPolyfill();
 
 export const SOL_MINT = "So11111111111111111111111111111111111111112";
 export const FEE_BPS = 100; // 1% perpspad fee, added as a SOL transfer inside the swap tx

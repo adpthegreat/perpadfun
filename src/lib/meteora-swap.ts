@@ -6,8 +6,14 @@
 // bundle). The 1% perpspad fee is appended as a SOL transfer in the same tx the
 // user signs (see meteoraSwapTx). Pool addresses come from the token record
 // (dbc_pool_address / graduated_pool_address).
+import { ensureBufferPolyfill } from "./buffer-polyfill";
 import { Connection, PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import BN from "bn.js";
+
+// The Meteora SDKs (+ web3.js / bn.js) reference Node's Buffer; make sure it
+// exists in the browser before any of them run. Explicit call so it can't be
+// tree-shaken under package.json "sideEffects".
+ensureBufferPolyfill();
 
 export const WSOL = "So11111111111111111111111111111111111111112";
 const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
