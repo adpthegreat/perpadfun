@@ -3,18 +3,15 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
-import { ArrowDownUp, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getToken, getMyBalance } from "@/lib/tokens.functions";
-import { useOnChainTrade } from "@/hooks/useOnChain";
+import { getToken } from "@/lib/tokens.functions";
 import { BirdeyeChart } from "@/components/BirdeyeChart";
 import { refreshPoolState } from "@/lib/meteora/dbc.functions";
 import { formatUsd } from "@/lib/tokens";
 
-import { useWallet } from "@/lib/wallet/WalletContext";
 import { toast } from "sonner";
 
 import { usePerpMid } from "@/hooks/usePerpMid";
@@ -22,6 +19,7 @@ import { SeedPoolPanel } from "@/components/SeedPoolPanel";
 import { TreasuryPanel } from "@/components/TreasuryPanel";
 import { SubWalletPanel } from "@/components/SubWalletPanel";
 import { OnChainProofPanel } from "@/components/OnChainProofPanel";
+import { TradeWidget } from "@/components/TradeWidget";
 
 export const Route = createFileRoute("/token/$id")({
   component: TokenPage,
@@ -50,12 +48,9 @@ export const Route = createFileRoute("/token/$id")({
 
 function TokenPage() {
   const { token: initial } = Route.useLoaderData();
-  const { wallet } = useWallet();
   const qc = useQueryClient();
 
   const getTokenFn = useServerFn(getToken);
-  const { trade, status: tradeStatus } = useOnChainTrade();
-  const balanceFn = useServerFn(getMyBalance);
   const refreshPoolFn = useServerFn(refreshPoolState);
 
   const tokenQuery = useQuery({
@@ -79,16 +74,6 @@ function TokenPage() {
     return () => { cancelled = true; clearInterval(t); };
   }, [initial.id, refreshPoolFn, qc]);
 
-  const balanceQuery = useQuery({
-    queryKey: ["balance", token.id, wallet?.address],
-    queryFn: () => (wallet ? balanceFn({ data: { tokenId: token.id, address: wallet.address } }) : Promise.resolve({ balance: 0 })),
-    enabled: !!wallet,
-    refetchInterval: 12000,
-  });
-
-  const [side, setSide] = useState<"buy" | "sell">("buy");
-  const [amount, setAmount] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   const mintAddress = ((token as any).mintAddress as string | null) ?? ((token as any).externalMint as string | null);
   const shortCA = mintAddress ? `${mintAddress.slice(0, 4)}…${mintAddress.slice(-4)}` : null;
@@ -141,55 +126,6 @@ function TokenPage() {
 
 
 
-
-  // est receive (accounts for 2% trade fee on the USDC notional)
-  const TRADE_FEE = 0.02;
-  const estReceive = (() => {
-    const a = parseFloat(amount);
-    if (!a || a <= 0) return 0;
-    if (side === "buy") {
-      // Input is total USDC out; curve sees a / (1 + fee)
-      const net = a / (1 + TRADE_FEE);
-      return net / token.priceUsd;
-    }
-    // Sell: input is tokens; receive notional minus fee
-    const gross = a * token.priceUsd;
-    return gross * (1 - TRADE_FEE);
-  })();
-
-  async function onTrade() {
-    if (!wallet) {
-      toast.error("Connect a wallet first");
-      return;
-    }
-    const a = parseFloat(amount);
-    if (!a || a <= 0) {
-      toast.error("Enter an amount");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      toast.message("Approve the transaction in your wallet…");
-      // On buy, user input is total USDC out (curve + 2% fee). Server applies
-      // fee on top of the curve amount, so divide here to keep total = input.
-      const curveAmount = side === "buy" ? a / (1 + TRADE_FEE) : a;
-      const res = await trade({ tokenId: token.id, side, amount: curveAmount });
-      toast.success(
-        side === "buy"
-          ? `Bought ${res.amountTokens.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${token.ticker}`
-          : `Sold for $${res.amountUsdc.toFixed(2)}`,
-      );
-      setAmount("");
-      qc.invalidateQueries({ queryKey: ["token", token.id] });
-      qc.invalidateQueries({ queryKey: ["trades", token.id] });
-      qc.invalidateQueries({ queryKey: ["balance", token.id] });
-      if (res.graduated) toast.success("🎓 Token graduated!");
-    } catch (err: any) {
-      toast.error(err?.message ?? "Trade failed");
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -309,6 +245,19 @@ function TokenPage() {
                   ? ((token as any).externalMint as string | null)
                   : null
               }
+            />
+
+            <TradeWidget
+              token={{
+                id: token.id,
+                ticker: token.ticker,
+                mintAddress: token.mintAddress ?? ((token as any).externalMint as string | null) ?? null,
+                priceUsd: token.priceUsd,
+                graduated: token.graduated,
+                externalPlatform: ((token as any).externalPlatform as string | null) ?? null,
+                dbcPoolAddress: ((token as any).dbcPoolAddress as string | null) ?? null,
+                graduatedPoolAddress: ((token as any).graduatedPoolAddress as string | null) ?? null,
+              }}
             />
 
             <OnChainProofPanel

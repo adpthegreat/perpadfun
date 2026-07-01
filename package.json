@@ -27,6 +27,7 @@
     "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
     "@metaplex-foundation/umi-bundle-defaults": "^1.5.1",
     "@metaplex-foundation/umi-signer-wallet-adapters": "^1.5.1",
+    "@meteora-ag/cp-amm-sdk": "^1.4.4",
     "@meteora-ag/dynamic-bonding-curve-sdk": "^1.5.7",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
