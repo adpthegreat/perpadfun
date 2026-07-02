@@ -1,5 +1,11 @@
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
+
+// Launch target: 3 July 2026, 14:00 UTC.
+const LAUNCH_TARGET_UTC = "2026-07-03T14:00:00Z";
+const DAY = 86_400_000;
+const HOUR = 3_600_000;
+const MIN = 60_000;
 
 // perpspad coming-soon landing: the spinning donut (hero-bg.mp4) centered behind
 // the wordmark, brand purple→teal gradient layered over it, ambient perp tickers
@@ -31,6 +37,27 @@ const TICKERS: Ticker[] = [
 ];
 
 export function ComingSoon() {
+  // Tick only after mount so SSR + first client render match (no hydration
+  // mismatch on the digits).
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const target = new Date(LAUNCH_TARGET_UTC).getTime();
+  const diff = now == null ? null : Math.max(0, target - now);
+  const cells: [string, number | undefined][] =
+    diff == null
+      ? [["days", undefined], ["hrs", undefined], ["min", undefined], ["sec", undefined]]
+      : [
+          ["days", Math.floor(diff / DAY)],
+          ["hrs", Math.floor((diff % DAY) / HOUR)],
+          ["min", Math.floor((diff % HOUR) / MIN)],
+          ["sec", Math.floor((diff % MIN) / 1000)],
+        ];
+
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background text-foreground">
       {/* spinning donut */}
@@ -73,15 +100,31 @@ export function ComingSoon() {
           coins with a <em className="text-foreground">heartbeat</em>.
         </p>
 
-        <div className="mt-1 flex flex-col items-center gap-2">
-          <div className="flex items-center gap-2.5">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#23e3a0]" />
-            <span className="font-mono text-xs uppercase tracking-[0.24em] text-muted-foreground">
-              coming soon
-            </span>
+        <div className="mt-1 flex flex-col items-center gap-3">
+          <span className="font-mono text-xs font-semibold uppercase tracking-[0.24em] text-foreground md:text-sm">
+            launch &amp; <span className="text-[#16e0a3]">$PERPSPAD</span> TGE
+          </span>
+          <div className="flex items-start gap-2 md:gap-4">
+            {cells.map(([label, val], i) => (
+              <div key={label} className="flex items-start gap-2 md:gap-4">
+                <div className="flex min-w-[58px] flex-col items-center md:min-w-[80px]">
+                  <span className="font-mono text-4xl font-bold tabular-nums md:text-6xl">
+                    {val == null ? "––" : String(val).padStart(2, "0")}
+                  </span>
+                  <span className="mt-2 font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                    {label}
+                  </span>
+                </div>
+                {i < cells.length - 1 && (
+                  <span className="font-mono text-3xl font-bold text-muted-foreground/40 md:text-5xl">
+                    :
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
-          <span className="font-mono text-sm tracking-[0.3em] text-foreground md:text-base">
-            7 / 2 / 2026
+          <span className="font-mono text-sm font-bold tracking-[0.2em] text-foreground md:text-base">
+            3 July 2026 · 14:00 UTC
           </span>
         </div>
 

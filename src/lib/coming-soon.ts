@@ -13,8 +13,9 @@ export function isUIRouteAllowed(pathname: string): boolean {
   if (pathname.startsWith("/token/")) return true; // token detail pages stay live
   if (pathname === "/paper") return true; // whitepaper stays live
   if (pathname === "/onboarding") return true; // community onboarding stays live
-  if (pathname === "/countdown") return true; // launch countdown stays live
-  if (pathname.startsWith("/admin/keeper-logs")) return true; // keeper logs (secret-gated) stay live
+  // if (pathname === "/launch") return true; // token launch page stays live
+  // if (pathname.startsWith("/route-fees")) return true; // fee routing (route-fees) stays live
+  if (pathname.startsWith("/admin")) return true; // admin cockpit + keeper logs (secret-gated) stay live
   if (pathname.startsWith("/api/")) return true; // never gate API routes
   return false;
 }
