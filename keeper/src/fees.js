@@ -46,6 +46,8 @@ const POOL_COOLDOWN_MS = Number(process.env.CLAIM_POOL_COOLDOWN_MS ?? '300000');
 
 // in-memory cooldown map: poolAddress -> epoch ms until which we skip claims
 const _poolCooldownUntil = new Map();
+// DBC pools whose one-off migration fee we've already tried to sweep this process.
+const _migrationFeeSwept = new Set();
 function poolOnCooldown(addr) {
   const until = _poolCooldownUntil.get(addr);
   if (!until) return false;
@@ -372,6 +374,39 @@ export async function claimDbcFees({ dbcPoolAddress, solUsd = 0, kp: kpArg = nul
         console.log(`[claimDbcFees] creator claimed expectedQuote=${creatorQuoteUi}`);
       } catch (e) {
         console.error("[fees] creator claim SEND failed:", e?.message ?? e);
+      }
+    }
+  }
+
+  // ---- one-off DBC fees folded in: pool-creation ("launch") + migration ----
+  // Both land in the sub-wallet (kp), alongside the trading fees above, and run
+  // regardless of whether trading fees were claimed (before the early return).
+  // Launch fee is idempotent via the on-chain poolCreationFeeHasBeenClaimed flag;
+  // the migration fee is one-off and guarded by _migrationFeeSwept for this process.
+  if (poolStateBefore && poolStateBefore.poolCreationFeeHasBeenClaimed === false) {
+    try {
+      const tx = await dbc().partner.claimPartnerPoolCreationFee({ virtualPool: pool, feeReceiver: kp.publicKey });
+      if (tx && (!tx.instructions || tx.instructions.length > 0)) {
+        const sig = await sendAndConfirm(tx, 'dbc-launch-fee', kp);
+        if (sig) console.log(`[claimDbcFees] launch fee -> sub-wallet pool=${dbcPoolAddress.slice(0, 8)}… sig=${String(sig).slice(0, 16)}…`);
+      }
+    } catch (e) {
+      console.warn(`[claimDbcFees] launch-fee skip: ${e?.message ?? e}`);
+    }
+  }
+  if (poolStateBefore?.isMigrated && !_migrationFeeSwept.has(dbcPoolAddress)) {
+    _migrationFeeSwept.add(dbcPoolAddress);
+    for (const side of ['partner', 'creator']) {
+      try {
+        const tx = side === 'partner'
+          ? await dbc().partner.partnerWithdrawMigrationFee({ virtualPool: pool, sender: kp.publicKey })
+          : await dbc().creator.creatorWithdrawMigrationFee({ virtualPool: pool, sender: kp.publicKey });
+        if (tx && (!tx.instructions || tx.instructions.length > 0)) {
+          const sig = await sendAndConfirm(tx, `dbc-migration-fee-${side}`, kp);
+          if (sig) console.log(`[claimDbcFees] migration fee (${side}) -> sub-wallet pool=${dbcPoolAddress.slice(0, 8)}… sig=${String(sig).slice(0, 16)}…`);
+        }
+      } catch (e) {
+        console.warn(`[claimDbcFees] migration-fee ${side} skip: ${e?.message ?? e}`);
       }
     }
   }
