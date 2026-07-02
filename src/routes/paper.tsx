@@ -54,7 +54,7 @@ function PaperPage() {
               Trading happens against a Meteora Dynamic Bonding Curve quoted in native SOL. Buys and sells are normal Solana swaps, routable through Jupiter, Axiom, Phantom, or any aggregator. perpspad never custodies user balances.
             </p>
             <p className="mt-3 text-muted-foreground">
-              The trade fee starts at 3% and decays to 1% over the first 24 hours. 100% of fees route to the coin's own sub-wallet (see below). Once the curve fills, the pool migrates to a Meteora DAMM v2 pool and fees keep flowing to the same sub-wallet.
+              The trade fee starts at 4% and decays to 2.5% over the first 24 hours. 100% of fees route to the coin's own sub-wallet (see below). Once the curve fills, the pool migrates to a Meteora DAMM v2 pool and fees keep flowing to the same sub-wallet.
             </p>
           </section>
 
@@ -108,7 +108,7 @@ function PaperPage() {
             </p>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-muted-foreground">
               <li><span className="text-foreground">50% to the perp.</span> Counts toward the open gate, then feeds collateral top-ups on the live position.</li>
-              <li><span className="text-foreground">25% to buyback and burn.</span> Accrues in a per-token reserve. Once the reserve crosses $10, the keeper swaps that SOL to the coin on Jupiter and burns it onchain. Smaller amounts wait in the reserve until they cross the floor.</li>
+              <li><span className="text-foreground">25% to buyback and burn.</span> Accrues in a per-token reserve. Once the reserve crosses $25, the keeper swaps that SOL to the coin on Jupiter and burns it onchain. Smaller amounts wait in the reserve until they cross the floor.</li>
               <li><span className="text-foreground">25% to $PERPSPAD buyback and burn.</span> Accrues in a per-token $PERPSPAD reserve. Once it crosses $25, the keeper swaps that SOL to $PERPSPAD on Jupiter and burns it. Every coin on the launchpad feeds this same flywheel, so every trade on every perpspad coin tightens $PERPSPAD supply.</li>
             </ul>
           </section>
@@ -157,7 +157,7 @@ function PaperPage() {
                   path 1 · fee burn — every fee, win or lose
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[11px]">
-                  {["fees claimed", "25% reserve", "$10 floor", "Jupiter swap → coin", "onchain burn tx"].map((step, i, arr) => (
+                  {["fees claimed", "25% reserve", "$25 floor", "Jupiter swap → coin", "onchain burn tx"].map((step, i, arr) => (
                     <span key={step} className="flex items-center gap-2">
                       <span className="rounded-md border border-border bg-secondary/40 px-2.5 py-1 text-foreground/90">{step}</span>
                       {i < arr.length - 1 && <span className="text-muted-foreground/50">→</span>}
