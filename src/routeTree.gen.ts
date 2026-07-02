@@ -17,7 +17,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LaunchRouteImport } from './routes/launch'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as DocsRouteImport } from './routes/docs'
-import { Route as CountdownRouteImport } from './routes/countdown'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TokenIdRouteImport } from './routes/token.$id'
 import { Route as RouteFeesClaimTokenRouteImport } from './routes/route-fees.$claimToken'
@@ -38,6 +38,7 @@ import { Route as ApiPublicKeeperWorkflowLocksRouteImport } from './routes/api/p
 import { Route as ApiPublicKeeperTokensRouteImport } from './routes/api/public/keeper/tokens'
 import { Route as ApiPublicKeeperStuckTokensRouteImport } from './routes/api/public/keeper/stuck-tokens'
 import { Route as ApiPublicKeeperReportRouteImport } from './routes/api/public/keeper/report'
+import { Route as ApiPublicKeeperOverviewRouteImport } from './routes/api/public/keeper/overview'
 import { Route as ApiPublicKeeperLogsRouteImport } from './routes/api/public/keeper/logs'
 import { Route as ApiPublicKeeperExternalSweepReportRouteImport } from './routes/api/public/keeper/external-sweep-report'
 import { Route as ApiPublicKeeperExternalRoutersRouteImport } from './routes/api/public/keeper/external-routers'
@@ -84,9 +85,9 @@ const DocsRoute = DocsRouteImport.update({
   path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CountdownRoute = CountdownRouteImport.update({
-  id: '/countdown',
-  path: '/countdown',
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -110,14 +111,14 @@ const ApiDocsRoute = ApiDocsRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLogsRoute = AdminLogsRouteImport.update({
-  id: '/admin/logs',
-  path: '/admin/logs',
-  getParentRoute: () => rootRouteImport,
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminKeeperLogsRoute = AdminKeeperLogsRouteImport.update({
-  id: '/admin/keeper-logs',
-  path: '/admin/keeper-logs',
-  getParentRoute: () => rootRouteImport,
+  id: '/keeper-logs',
+  path: '/keeper-logs',
+  getParentRoute: () => AdminRoute,
 } as any)
 const ApiV1OpenapiRoute = ApiV1OpenapiRouteImport.update({
   id: '/api/v1/openapi',
@@ -141,14 +142,14 @@ const ApiAdminReconcileLaunchesRoute =
     getParentRoute: () => rootRouteImport,
   } as any)
 const AdminLogsTokenIdRoute = AdminLogsTokenIdRouteImport.update({
-  id: '/admin/logs_/$tokenId',
-  path: '/admin/logs/$tokenId',
-  getParentRoute: () => rootRouteImport,
+  id: '/logs_/$tokenId',
+  path: '/logs/$tokenId',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminKeeperLogsTokenIdRoute = AdminKeeperLogsTokenIdRouteImport.update({
-  id: '/admin/keeper-logs_/$tokenId',
-  path: '/admin/keeper-logs/$tokenId',
-  getParentRoute: () => rootRouteImport,
+  id: '/keeper-logs_/$tokenId',
+  path: '/keeper-logs/$tokenId',
+  getParentRoute: () => AdminRoute,
 } as any)
 const ApiV1LaunchTokenIdRoute = ApiV1LaunchTokenIdRouteImport.update({
   id: '/$tokenId',
@@ -194,6 +195,11 @@ const ApiPublicKeeperReportRoute = ApiPublicKeeperReportRouteImport.update({
   path: '/api/public/keeper/report',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicKeeperOverviewRoute = ApiPublicKeeperOverviewRouteImport.update({
+  id: '/api/public/keeper/overview',
+  path: '/api/public/keeper/overview',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicKeeperLogsRoute = ApiPublicKeeperLogsRouteImport.update({
   id: '/api/public/keeper/logs',
   path: '/api/public/keeper/logs',
@@ -226,7 +232,7 @@ const ApiV1LaunchTokenIdMetadataRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/countdown': typeof CountdownRoute
+  '/admin': typeof AdminRouteWithChildren
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
@@ -250,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/api/public/keeper/external-routers': typeof ApiPublicKeeperExternalRoutersRoute
   '/api/public/keeper/external-sweep-report': typeof ApiPublicKeeperExternalSweepReportRoute
   '/api/public/keeper/logs': typeof ApiPublicKeeperLogsRoute
+  '/api/public/keeper/overview': typeof ApiPublicKeeperOverviewRoute
   '/api/public/keeper/report': typeof ApiPublicKeeperReportRoute
   '/api/public/keeper/stuck-tokens': typeof ApiPublicKeeperStuckTokensRoute
   '/api/public/keeper/tokens': typeof ApiPublicKeeperTokensRoute
@@ -262,7 +269,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/countdown': typeof CountdownRoute
+  '/admin': typeof AdminRouteWithChildren
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
@@ -286,6 +293,7 @@ export interface FileRoutesByTo {
   '/api/public/keeper/external-routers': typeof ApiPublicKeeperExternalRoutersRoute
   '/api/public/keeper/external-sweep-report': typeof ApiPublicKeeperExternalSweepReportRoute
   '/api/public/keeper/logs': typeof ApiPublicKeeperLogsRoute
+  '/api/public/keeper/overview': typeof ApiPublicKeeperOverviewRoute
   '/api/public/keeper/report': typeof ApiPublicKeeperReportRoute
   '/api/public/keeper/stuck-tokens': typeof ApiPublicKeeperStuckTokensRoute
   '/api/public/keeper/tokens': typeof ApiPublicKeeperTokensRoute
@@ -299,7 +307,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/countdown': typeof CountdownRoute
+  '/admin': typeof AdminRouteWithChildren
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
@@ -323,6 +331,7 @@ export interface FileRoutesById {
   '/api/public/keeper/external-routers': typeof ApiPublicKeeperExternalRoutersRoute
   '/api/public/keeper/external-sweep-report': typeof ApiPublicKeeperExternalSweepReportRoute
   '/api/public/keeper/logs': typeof ApiPublicKeeperLogsRoute
+  '/api/public/keeper/overview': typeof ApiPublicKeeperOverviewRoute
   '/api/public/keeper/report': typeof ApiPublicKeeperReportRoute
   '/api/public/keeper/stuck-tokens': typeof ApiPublicKeeperStuckTokensRoute
   '/api/public/keeper/tokens': typeof ApiPublicKeeperTokensRoute
@@ -337,7 +346,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/countdown'
+    | '/admin'
     | '/docs'
     | '/home'
     | '/launch'
@@ -361,6 +370,7 @@ export interface FileRouteTypes {
     | '/api/public/keeper/external-routers'
     | '/api/public/keeper/external-sweep-report'
     | '/api/public/keeper/logs'
+    | '/api/public/keeper/overview'
     | '/api/public/keeper/report'
     | '/api/public/keeper/stuck-tokens'
     | '/api/public/keeper/tokens'
@@ -373,7 +383,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/countdown'
+    | '/admin'
     | '/docs'
     | '/home'
     | '/launch'
@@ -397,6 +407,7 @@ export interface FileRouteTypes {
     | '/api/public/keeper/external-routers'
     | '/api/public/keeper/external-sweep-report'
     | '/api/public/keeper/logs'
+    | '/api/public/keeper/overview'
     | '/api/public/keeper/report'
     | '/api/public/keeper/stuck-tokens'
     | '/api/public/keeper/tokens'
@@ -409,7 +420,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/countdown'
+    | '/admin'
     | '/docs'
     | '/home'
     | '/launch'
@@ -433,6 +444,7 @@ export interface FileRouteTypes {
     | '/api/public/keeper/external-routers'
     | '/api/public/keeper/external-sweep-report'
     | '/api/public/keeper/logs'
+    | '/api/public/keeper/overview'
     | '/api/public/keeper/report'
     | '/api/public/keeper/stuck-tokens'
     | '/api/public/keeper/tokens'
@@ -446,7 +458,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CountdownRoute: typeof CountdownRoute
+  AdminRoute: typeof AdminRouteWithChildren
   DocsRoute: typeof DocsRoute
   HomeRoute: typeof HomeRoute
   LaunchRoute: typeof LaunchRoute
@@ -455,12 +467,8 @@ export interface RootRouteChildren {
   RouteFeesRoute: typeof RouteFeesRouteWithChildren
   StatsRoute: typeof StatsRoute
   TokensRoute: typeof TokensRoute
-  AdminKeeperLogsRoute: typeof AdminKeeperLogsRoute
-  AdminLogsRoute: typeof AdminLogsRoute
   ApiDocsRoute: typeof ApiDocsRoute
   TokenIdRoute: typeof TokenIdRoute
-  AdminKeeperLogsTokenIdRoute: typeof AdminKeeperLogsTokenIdRoute
-  AdminLogsTokenIdRoute: typeof AdminLogsTokenIdRoute
   ApiAdminReconcileLaunchesRoute: typeof ApiAdminReconcileLaunchesRoute
   ApiV1LaunchRoute: typeof ApiV1LaunchRouteWithChildren
   ApiV1MarketsRoute: typeof ApiV1MarketsRoute
@@ -469,6 +477,7 @@ export interface RootRouteChildren {
   ApiPublicKeeperExternalRoutersRoute: typeof ApiPublicKeeperExternalRoutersRoute
   ApiPublicKeeperExternalSweepReportRoute: typeof ApiPublicKeeperExternalSweepReportRoute
   ApiPublicKeeperLogsRoute: typeof ApiPublicKeeperLogsRoute
+  ApiPublicKeeperOverviewRoute: typeof ApiPublicKeeperOverviewRoute
   ApiPublicKeeperReportRoute: typeof ApiPublicKeeperReportRoute
   ApiPublicKeeperStuckTokensRoute: typeof ApiPublicKeeperStuckTokensRoute
   ApiPublicKeeperTokensRoute: typeof ApiPublicKeeperTokensRoute
@@ -536,11 +545,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/countdown': {
-      id: '/countdown'
-      path: '/countdown'
-      fullPath: '/countdown'
-      preLoaderRoute: typeof CountdownRouteImport
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -573,17 +582,17 @@ declare module '@tanstack/react-router' {
     }
     '/admin/logs': {
       id: '/admin/logs'
-      path: '/admin/logs'
+      path: '/logs'
       fullPath: '/admin/logs'
       preLoaderRoute: typeof AdminLogsRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/keeper-logs': {
       id: '/admin/keeper-logs'
-      path: '/admin/keeper-logs'
+      path: '/keeper-logs'
       fullPath: '/admin/keeper-logs'
       preLoaderRoute: typeof AdminKeeperLogsRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/api/v1/openapi': {
       id: '/api/v1/openapi'
@@ -615,17 +624,17 @@ declare module '@tanstack/react-router' {
     }
     '/admin/logs_/$tokenId': {
       id: '/admin/logs_/$tokenId'
-      path: '/admin/logs/$tokenId'
+      path: '/logs/$tokenId'
       fullPath: '/admin/logs/$tokenId'
       preLoaderRoute: typeof AdminLogsTokenIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/keeper-logs_/$tokenId': {
       id: '/admin/keeper-logs_/$tokenId'
-      path: '/admin/keeper-logs/$tokenId'
+      path: '/keeper-logs/$tokenId'
       fullPath: '/admin/keeper-logs/$tokenId'
       preLoaderRoute: typeof AdminKeeperLogsTokenIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/api/v1/launch/$tokenId': {
       id: '/api/v1/launch/$tokenId'
@@ -683,6 +692,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicKeeperReportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/keeper/overview': {
+      id: '/api/public/keeper/overview'
+      path: '/api/public/keeper/overview'
+      fullPath: '/api/public/keeper/overview'
+      preLoaderRoute: typeof ApiPublicKeeperOverviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/keeper/logs': {
       id: '/api/public/keeper/logs'
       path: '/api/public/keeper/logs'
@@ -721,6 +737,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminKeeperLogsRoute: typeof AdminKeeperLogsRoute
+  AdminLogsRoute: typeof AdminLogsRoute
+  AdminKeeperLogsTokenIdRoute: typeof AdminKeeperLogsTokenIdRoute
+  AdminLogsTokenIdRoute: typeof AdminLogsTokenIdRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminKeeperLogsRoute: AdminKeeperLogsRoute,
+  AdminLogsRoute: AdminLogsRoute,
+  AdminKeeperLogsTokenIdRoute: AdminKeeperLogsTokenIdRoute,
+  AdminLogsTokenIdRoute: AdminLogsTokenIdRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 interface RouteFeesRouteChildren {
   RouteFeesClaimTokenRoute: typeof RouteFeesClaimTokenRoute
 }
@@ -758,7 +790,7 @@ const ApiV1LaunchRouteWithChildren = ApiV1LaunchRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CountdownRoute: CountdownRoute,
+  AdminRoute: AdminRouteWithChildren,
   DocsRoute: DocsRoute,
   HomeRoute: HomeRoute,
   LaunchRoute: LaunchRoute,
@@ -767,12 +799,8 @@ const rootRouteChildren: RootRouteChildren = {
   RouteFeesRoute: RouteFeesRouteWithChildren,
   StatsRoute: StatsRoute,
   TokensRoute: TokensRoute,
-  AdminKeeperLogsRoute: AdminKeeperLogsRoute,
-  AdminLogsRoute: AdminLogsRoute,
   ApiDocsRoute: ApiDocsRoute,
   TokenIdRoute: TokenIdRoute,
-  AdminKeeperLogsTokenIdRoute: AdminKeeperLogsTokenIdRoute,
-  AdminLogsTokenIdRoute: AdminLogsTokenIdRoute,
   ApiAdminReconcileLaunchesRoute: ApiAdminReconcileLaunchesRoute,
   ApiV1LaunchRoute: ApiV1LaunchRouteWithChildren,
   ApiV1MarketsRoute: ApiV1MarketsRoute,
@@ -783,6 +811,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicKeeperExternalSweepReportRoute:
     ApiPublicKeeperExternalSweepReportRoute,
   ApiPublicKeeperLogsRoute: ApiPublicKeeperLogsRoute,
+  ApiPublicKeeperOverviewRoute: ApiPublicKeeperOverviewRoute,
   ApiPublicKeeperReportRoute: ApiPublicKeeperReportRoute,
   ApiPublicKeeperStuckTokensRoute: ApiPublicKeeperStuckTokensRoute,
   ApiPublicKeeperTokensRoute: ApiPublicKeeperTokensRoute,
