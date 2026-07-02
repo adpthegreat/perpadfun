@@ -17,6 +17,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LaunchRouteImport } from './routes/launch'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as DocsRouteImport } from './routes/docs'
+import { Route as CountdownRouteImport } from './routes/countdown'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TokenIdRouteImport } from './routes/token.$id'
 import { Route as RouteFeesClaimTokenRouteImport } from './routes/route-fees.$claimToken'
@@ -81,6 +82,11 @@ const HomeRoute = HomeRouteImport.update({
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
   path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CountdownRoute = CountdownRouteImport.update({
+  id: '/countdown',
+  path: '/countdown',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -220,6 +226,7 @@ const ApiV1LaunchTokenIdMetadataRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/countdown': typeof CountdownRoute
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
@@ -255,6 +262,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/countdown': typeof CountdownRoute
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
@@ -291,6 +299,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/countdown': typeof CountdownRoute
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
   '/launch': typeof LaunchRoute
@@ -328,6 +337,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/countdown'
     | '/docs'
     | '/home'
     | '/launch'
@@ -363,6 +373,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/countdown'
     | '/docs'
     | '/home'
     | '/launch'
@@ -398,6 +409,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/countdown'
     | '/docs'
     | '/home'
     | '/launch'
@@ -434,6 +446,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CountdownRoute: typeof CountdownRoute
   DocsRoute: typeof DocsRoute
   HomeRoute: typeof HomeRoute
   LaunchRoute: typeof LaunchRoute
@@ -521,6 +534,13 @@ declare module '@tanstack/react-router' {
       path: '/docs'
       fullPath: '/docs'
       preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/countdown': {
+      id: '/countdown'
+      path: '/countdown'
+      fullPath: '/countdown'
+      preLoaderRoute: typeof CountdownRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -738,6 +758,7 @@ const ApiV1LaunchRouteWithChildren = ApiV1LaunchRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CountdownRoute: CountdownRoute,
   DocsRoute: DocsRoute,
   HomeRoute: HomeRoute,
   LaunchRoute: LaunchRoute,
