@@ -714,8 +714,8 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
           baseFeeParams: {
             baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
             feeSchedulerParam: {
-              startingFeeBps: 300,
-              endingFeeBps: 100,
+              startingFeeBps: 400,
+              endingFeeBps: 250,
               numberOfPeriod: 24,
               totalDuration: 216_000,
             },
@@ -723,13 +723,13 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
           dynamicFeeEnabled: true,
           collectFeeMode: CollectFeeMode.QuoteToken,
           creatorTradingFeePercentage: 0,
-          poolCreationFee: 0,
+          poolCreationFee: 0.001,
           enableFirstSwapWithMinFee: false,
         },
         migration: {
           migrationOption: MigrationOption.MET_DAMM_V2,
           migrationFeeOption: MigrationFeeOption.FixedBps100,
-          migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
+          migrationFee: { feePercentage: 0.01, creatorFeePercentage: 0 },
         },
         liquidityDistribution: {
           partnerPermanentLockedLiquidityPercentage: 50,
