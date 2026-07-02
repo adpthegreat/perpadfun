@@ -29,19 +29,6 @@ export const Route = createFileRoute("/onboarding")({
 
 const X_URL = "https://x.com/perpspadfun";
 const TG_URL = "https://t.me/+Uq5NsdlR0So1YWNk";
-const TG_BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME as string | undefined;
-
-// Telegram Login Widget payload (client side mirror of the server type).
-type TelegramAuth = {
-  id: number;
-  first_name?: string;
-  last_name?: string;
-  username?: string;
-  photo_url?: string;
-  auth_date: number;
-  hash: string;
-};
-
 // Ambient perp tickers drifting around the screen — same system as the landing
 // page. Fixed (not random) so SSR + client markup match.
 type Ticker = { s: string; l: number; d: "LONG" | "SHORT"; top: string; left: string; dur: string; delay: string; hot?: boolean };
@@ -118,23 +105,21 @@ function OnboardingPage() {
     }
   }
 
-  const handleTelegramAuth = useCallback(
-    async (auth: TelegramAuth) => {
-      if (!address) return;
-      setBusy("tg");
-      try {
-        const res = await verifyTgFn({ data: { wallet: address, auth } });
-        if (!res.ok) return toast.error(res.error ?? "Telegram verification failed");
-        toast.success("Telegram verified");
-        status.refetch();
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Telegram verification failed");
-      } finally {
-        setBusy(null);
-      }
-    },
-    [address, verifyTgFn, status],
-  );
+  async function handleConfirmTelegram() {
+    if (!address) return;
+    window.open(TG_URL, "_blank", "noopener");
+    setBusy("tg");
+    try {
+      const res = await verifyTgFn({ data: { wallet: address } });
+      if (!res.ok) return toast.error(res.error ?? "Could not confirm");
+      toast.success("Telegram join confirmed");
+      status.refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not confirm");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function handleClaim() {
     if (!address) return;
@@ -301,12 +286,14 @@ function OnboardingPage() {
 
                 {/* step 3 — join Telegram */}
                 <TaskRow n={3} label="Join the Telegram channel" done={tgJoined} locked={!walletVerified}>
-                  {tgJoined ? null : walletVerified && TG_BOT_USERNAME ? (
-                    <TelegramLoginButton botUsername={TG_BOT_USERNAME} onAuth={handleTelegramAuth} />
-                  ) : (
-                    <a href={TG_URL} target="_blank" rel="noreferrer" className={pillBtn}>
-                      open telegram →
-                    </a>
+                  {tgJoined ? null : (
+                    <button
+                      onClick={handleConfirmTelegram}
+                      disabled={!walletVerified || busy === "tg"}
+                      className={pillBtn}
+                    >
+                      {busy === "tg" ? "confirming…" : "join → confirm"}
+                    </button>
                   )}
                 </TaskRow>
 
@@ -428,40 +415,3 @@ function ClaimedCard({ code }: { code: string }) {
   );
 }
 
-// Telegram Login Widget. Renders Telegram's own button; on success it calls
-// onAuth with the signed payload, which the server verifies with the bot token.
-function TelegramLoginButton({
-  botUsername,
-  onAuth,
-}: {
-  botUsername: string;
-  onAuth: (auth: TelegramAuth) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const cb = useRef(onAuth);
-  cb.current = onAuth;
-
-  useEffect(() => {
-    const host = ref.current;
-    if (!host) return;
-    const w = window as unknown as { __perpspadTgAuth?: (u: TelegramAuth) => void };
-    w.__perpspadTgAuth = (u) => cb.current(u);
-
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.async = true;
-    script.setAttribute("data-telegram-login", botUsername);
-    script.setAttribute("data-size", "medium");
-    script.setAttribute("data-userpic", "false");
-    script.setAttribute("data-request-access", "write");
-    script.setAttribute("data-onauth", "__perpspadTgAuth(user)");
-    host.innerHTML = "";
-    host.appendChild(script);
-
-    return () => {
-      host.innerHTML = "";
-    };
-  }, [botUsername]);
-
-  return <div ref={ref} className="flex justify-center sm:justify-end" />;
-}

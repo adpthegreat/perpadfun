@@ -3,11 +3,6 @@ import { z } from "zod";
 import { PublicKey } from "@solana/web3.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import {
-  verifyTelegramAuth,
-  checkTelegramMembership,
-  type TelegramAuth,
-} from "@/lib/collab/telegram.server";
 
 // The collab tables aren't in the generated Database types yet, so use a loose
 // view of the admin client for them. Rows are typed locally below.
@@ -141,72 +136,24 @@ export const confirmXFollow = createServerFn({ method: "POST" })
     return { ok: true as const, error: null, state: publicState(updated as SignupRow) };
   });
 
-// ── task 3: verify Telegram (real — HMAC + bot membership check) ─────────────
+// ── task 3: confirm Telegram join (honor-system, like the X follow) ──────────
+// No OAuth / HMAC — just mark tg_joined once the wallet is submitted. NOTE: this
+// removes the anti-sybil gate (unique tg_user_id); the flow now has no real
+// uniqueness check.
 export const verifyTelegram = createServerFn({ method: "POST" })
-  .inputValidator((d: { wallet: string; auth: TelegramAuth }) =>
-    z
-      .object({
-        wallet: walletSchema,
-        auth: z.object({
-          id: z.number(),
-          first_name: z.string().optional(),
-          last_name: z.string().optional(),
-          username: z.string().optional(),
-          photo_url: z.string().optional(),
-          auth_date: z.number(),
-          hash: z.string(),
-        }),
-      })
-      .parse(d),
-  )
+  .inputValidator((d: { wallet: string }) => z.object({ wallet: walletSchema }).parse(d))
   .handler(async ({ data }) => {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    if (!botToken) {
-      return { ok: false as const, error: "Telegram not configured", state: publicState(null) };
-    }
-
     const signup = await getSignup(data.wallet);
     if (!signup?.wallet_verified) {
       return { ok: false as const, error: "Submit your wallet first", state: publicState(signup) };
     }
-
-    if (!verifyTelegramAuth(data.auth, botToken)) {
-      return { ok: false as const, error: "Telegram verification failed", state: publicState(signup) };
-    }
-
-    // If a channel/group is configured, require real membership.
-    const chatId = process.env.TELEGRAM_CHAT_ID;
-    if (chatId) {
-      const isMember = await checkTelegramMembership(data.auth.id, botToken, chatId);
-      if (!isMember) {
-        return {
-          ok: false as const,
-          error: "Join the Telegram channel first, then retry",
-          state: publicState(signup),
-        };
-      }
-    }
-
     const { data: updated, error } = await db
       .from("collab_signups")
-      .update({
-        tg_joined: true,
-        tg_user_id: data.auth.id,
-        tg_username: data.auth.username ?? null,
-      })
+      .update({ tg_joined: true })
       .eq("wallet_address", data.wallet)
       .select("*")
       .single();
-
-    // Unique-violation on tg_user_id => this Telegram account already claimed elsewhere.
-    if (error) {
-      const dup = error.code === "23505";
-      return {
-        ok: false as const,
-        error: dup ? "This Telegram account is already linked to another wallet" : error.message,
-        state: publicState(signup),
-      };
-    }
+    if (error) return { ok: false as const, error: error.message, state: publicState(null) };
     return { ok: true as const, error: null, state: publicState(updated as SignupRow) };
   });
 
