@@ -32,7 +32,7 @@ export const Route = createFileRoute("/checker")({
       { title: "$PERPAD airdrop checker" },
       {
         name: "description",
-        content: "Check if you're eligible for the $PERPAD airdrop as a former PerpsPad holder.",
+        content: "Check if you're eligible for the $PERPAD airdrop as a former Perpad holder.",
       },
     ],
   }),
@@ -218,7 +218,7 @@ function CheckerPage() {
           style={reveal(0)}
         >
           <span className="h-1 w-1 animate-pulse rounded-full bg-[#16e0a3]" />
-          {eligibleTotal ? `${eligibleTotal} eligible wallets` : "former perpspad holders"}
+          {eligibleTotal ? `${eligibleTotal} eligible wallets` : "former perpad holders"}
         </span>
 
         <div className="reveal-up flex flex-col items-center gap-3" style={reveal(80)}>
@@ -246,7 +246,7 @@ function CheckerPage() {
 
             <p className="mt-4 text-[15px] leading-relaxed text-foreground/85">
               Paste your Solana wallet or connect it. If you held{" "}
-              <span className="font-semibold text-[#9d4eff]">$PERPAD</span> back on PerpsPad, you
+              <span className="font-semibold text-[#9d4eff]">$PERPAD</span> back on Perpad, you
               already earned an allocation.
             </p>
 
@@ -430,7 +430,7 @@ function CheckerPage() {
             </div>
 
             <p className="mt-5 text-[15px] leading-relaxed text-foreground/85">
-              The $PERPAD airdrop rewards the people who held $PERPAD back on PerpsPad. If you were a
+              The $PERPAD airdrop rewards the people who held $PERPAD back on Perpad. If you were a
               holder, you already earned an allocation — just check your wallet above to see it.
             </p>
 
@@ -438,7 +438,7 @@ function CheckerPage() {
               <li className="flex gap-3">
                 <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
                 <span>
-                  You held $PERPAD on PerpsPad during the snapshot period.{" "}
+                  You held $PERPAD on Perpad during the snapshot period.{" "}
                   <span className="text-muted-foreground/60">(snapshot window — to be confirmed)</span>
                 </span>
               </li>
