@@ -5,7 +5,7 @@
 // This does NOT affect /api/* (server routes are handled separately), so the
 // platform token can still be launched + read through the API while the UI is
 // gated, and /token/$id stays live to view it.
-export const COMING_SOON = false; // TEMP local-only for review — do NOT commit
+export const COMING_SOON = true; // gated for launch
 
 export function isUIRouteAllowed(pathname: string): boolean {
   if (!COMING_SOON) return true;
