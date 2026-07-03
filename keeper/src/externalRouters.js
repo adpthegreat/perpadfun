@@ -41,7 +41,7 @@ function isUnderlyingSupportedForRouter(router, sym) {
   return SUPPORTED_SYMBOLS.has(u);
 }
 import { getUsdPriceFor } from './prices.js';
-import { claimPumpFunCreatorFees, claimPumpAmmCoinCreatorFees } from './pumpfunClaim.js';
+import { claimPumpFunCreatorFees, claimPumpAmmCoinCreatorFees, readPumpfunCreator } from './pumpfunClaim.js';
 import { withRetry } from './rateLimiter.js';
 
 export const SWEEP_THRESHOLD_USD = Number(process.env.EXTERNAL_SWEEP_THRESHOLD_USD ?? 25);
@@ -516,12 +516,18 @@ export async function sweepExternalRouters() {
       const solUi = lamports / LAMPORTS_PER_SOL;
       const walletUsd = solUsd > 0 ? solUi * solUsd : 0;
 
-      // Stamp first_fee_routed_at as soon as fees are routing to this token —
-      // either SOL already in the sub-wallet OR a non-zero creator-vault balance
-      // observed during the claim probe (fees accrued but still below the $100
-      // claim gate). Keying off only the claimed sub-wallet balance left routed
-      // tokens hidden until $100 accrued. See plan/EXTERNAL_ROUTER_VISIBILITY.md.
-      if (lamports > 0 || vaultClaimableSol > 0) seenTokenIds.push(r.id);
+      // Stamp first_fee_routed_at (= "connected", visible on the site + holds the
+      // mint lock) ONLY when the coin's on-chain creator-fee recipient IS this
+      // router's sub-wallet. Only the coin's true creator can set that on pump.fun,
+      // so this is an unspoofable ownership proof — unlike a SOL/vault balance,
+      // which anyone can inflate by sending funds to squat a coin they don't own.
+      // See plan/FEE_ROUTING_AND_MINT_INDEX.md §6.
+      if (r.external_platform === 'pump_fun' && r.external_mint && !r.mint_pending) {
+        const onchainRecipient = await readPumpfunCreator(r.external_mint);
+        if (onchainRecipient && onchainRecipient === sub.publicKey.toBase58()) {
+          seenTokenIds.push(r.id);
+        }
+      }
 
 
       if (solUsd > 0) {

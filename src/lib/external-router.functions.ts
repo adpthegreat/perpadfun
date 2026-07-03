@@ -75,15 +75,21 @@ export const createExternalRouter = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    // Only a *connected* router (fees actually routed on-chain, first_fee_routed_at
+    // stamped) locks a mint — NOT a pending reservation. This lets the true owner
+    // reserve their own router with their own params even if a squatter already
+    // reserved the mint; only the owner can make fees route on-chain, so only their
+    // router ever connects and wins the lock. See plan/FEE_ROUTING_AND_MINT_INDEX.md §6.
     const { data: existing } = await supabaseAdmin
       .from("tokens")
       .select("id")
       .eq("external_mint", data.externalMint)
+      .not("first_fee_routed_at", "is", null)
       .maybeSingle();
     if (existing) {
       return {
         ok: false as const,
-        error: "This mint already has a fee router. Each token can only be routed once.",
+        error: "This coin is already actively routed (fees are flowing to a connected router).",
         tokenId: null,
         address: null,
         claimToken: null,
@@ -128,8 +134,8 @@ export const createExternalRouter = createServerFn({ method: "POST" })
     });
 
     if (error) {
-      const msg = /tokens_external_mint_unique/i.test(error.message)
-        ? "This mint already has a fee router. Each token can only be routed once."
+      const msg = /tokens_external_mint/i.test(error.message)
+        ? "This coin is already actively routed (fees are flowing to a connected router)."
         : error.message;
       return { ok: false as const, error: msg, tokenId: null, address: null, claimToken: null };
     }
@@ -256,9 +262,12 @@ export const linkMintToRouter = createServerFn({ method: "POST" })
       .select("id")
       .eq("external_mint", data.externalMint)
       .neq("id", row.id)
+      // only a *connected* router locks the mint — pending reservations don't
+      // (see plan/FEE_ROUTING_AND_MINT_INDEX.md §6).
+      .not("first_fee_routed_at", "is", null)
       .maybeSingle();
     if (collision) {
-      return { ok: false as const, error: "This mint already has a fee router. Each token can only be routed once." };
+      return { ok: false as const, error: "This coin is already actively routed (fees are flowing to a connected router)." };
     }
 
     let ticker = data.externalMint.slice(0, 8).toUpperCase();
@@ -285,8 +294,8 @@ export const linkMintToRouter = createServerFn({ method: "POST" })
       })
       .eq("id", row.id);
     if (updErr) {
-      const msg = /tokens_external_mint_unique/i.test(updErr.message)
-        ? "This mint already has a fee router. Each token can only be routed once."
+      const msg = /tokens_external_mint/i.test(updErr.message)
+        ? "This coin is already actively routed (fees are flowing to a connected router)."
         : /tokens_ticker/i.test(updErr.message)
         ? "A token with that ticker is already registered. Contact support."
         : updErr.message;
@@ -330,9 +339,12 @@ export const linkMintByAddress = createServerFn({ method: "POST" })
       .select("id")
       .eq("external_mint", data.externalMint)
       .neq("id", row.id)
+      // only a *connected* router locks the mint — pending reservations don't
+      // (see plan/FEE_ROUTING_AND_MINT_INDEX.md §6).
+      .not("first_fee_routed_at", "is", null)
       .maybeSingle();
     if (collision) {
-      return { ok: false as const, error: "This mint already has a fee router. Each token can only be routed once.", claimToken: null };
+      return { ok: false as const, error: "This coin is already actively routed (fees are flowing to a connected router).", claimToken: null };
     }
 
     let ticker = data.externalMint.slice(0, 8).toUpperCase();
@@ -359,8 +371,8 @@ export const linkMintByAddress = createServerFn({ method: "POST" })
       })
       .eq("id", row.id);
     if (updErr) {
-      const msg = /tokens_external_mint_unique/i.test(updErr.message)
-        ? "This mint already has a fee router. Each token can only be routed once."
+      const msg = /tokens_external_mint/i.test(updErr.message)
+        ? "This coin is already actively routed (fees are flowing to a connected router)."
         : updErr.message;
       return { ok: false as const, error: msg, claimToken: null };
     }

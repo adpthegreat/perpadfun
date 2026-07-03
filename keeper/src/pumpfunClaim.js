@@ -116,6 +116,24 @@ async function fetchBondingCurveCreator(c, bondingCurvePk) {
   return new PublicKey(acct.data.slice(49, 49 + 32));
 }
 
+// Unspoofable ownership signal for external fee routers: read the coin's on-chain
+// creator-fee recipient (bonding_curve.creator) for `mint`. Only the coin's real
+// creator can set this on pump.fun, so `readPumpfunCreator(mint) === subWallet`
+// proves the true owner routed fees to our sub-wallet — unlike any SOL/vault
+// balance, which anyone can inflate by sending. Returns the base58 recipient, or
+// null if the bonding curve can't be read (network error / not a pump.fun coin).
+// The bonding-curve account persists after graduation (marked complete), so this
+// covers post-grad coins too. See plan/FEE_ROUTING_AND_MINT_INDEX.md §6.
+export async function readPumpfunCreator(mint) {
+  try {
+    const bondingCurve = deriveBondingCurve(new PublicKey(mint));
+    const creator = await fetchBondingCurveCreator(conn(), bondingCurve);
+    return creator.toBase58();
+  } catch {
+    return null;
+  }
+}
+
 function buildDistributeIx({
   payer,
   mint,

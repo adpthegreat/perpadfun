@@ -64,11 +64,12 @@ export const Route = createFileRoute("/api/public/keeper/external-router-seen")(
           );
         }
 
-        const { error, count } = await supabaseAdmin
+        const { data: stamped, error } = await supabaseAdmin
           .from("tokens")
-          .update({ first_fee_routed_at: new Date().toISOString() }, { count: "exact" })
+          .update({ first_fee_routed_at: new Date().toISOString() })
           .in("id", parsed.data.token_ids)
-          .is("first_fee_routed_at", null);
+          .is("first_fee_routed_at", null)
+          .select("id, external_mint, source");
 
         if (error) {
           return new Response(JSON.stringify({ ok: false, error: error.message }), {
@@ -77,7 +78,41 @@ export const Route = createFileRoute("/api/public/keeper/external-router-seen")(
           });
         }
 
-        return Response.json({ ok: true, stamped: count ?? 0 });
+        // GC: evict the LOSING pending reservations for any mint that is now
+        // CONNECTED — duplicate/squatter rows that reserved params but never
+        // became the on-chain recipient. Only one connected router per mint is
+        // possible (partial unique index), so the pending siblings can never win.
+        //
+        // Keyed to "this mint is connected" (queried among the posted ids), NOT to
+        // "just stamped this call" — so it's IDEMPOTENT and RETRIES: the keeper
+        // re-posts a connected router's id every tick (the on-chain recipient still
+        // matches), so if a delete fails once, the next tick re-runs it. Once the
+        // siblings are gone the delete simply matches nothing.
+        // See plan/FEE_ROUTING_AND_MINT_INDEX.md §6.
+        let evicted = 0;
+        const { data: connectedRows } = await supabaseAdmin
+          .from("tokens")
+          .select("external_mint")
+          .in("id", parsed.data.token_ids)
+          .eq("source", "external")
+          .not("external_mint", "is", null)
+          .not("first_fee_routed_at", "is", null);
+        const connectedMints = [
+          ...new Set((connectedRows ?? []).map((r) => r.external_mint as string)),
+        ];
+        if (connectedMints.length > 0) {
+          const { data: removed, error: gcErr } = await supabaseAdmin
+            .from("tokens")
+            .delete()
+            .eq("source", "external")
+            .in("external_mint", connectedMints)
+            .is("first_fee_routed_at", null) // spares the connected winner
+            .select("id");
+          // Non-fatal: the stamp already succeeded; a failed GC is retried next tick.
+          if (!gcErr) evicted = removed?.length ?? 0;
+        }
+
+        return Response.json({ ok: true, stamped: stamped?.length ?? 0, evicted });
       },
     },
   },
