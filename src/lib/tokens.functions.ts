@@ -234,6 +234,9 @@ export const listTokens = createServerFn({ method: "GET" })
           source: (t.source ?? "perpspad") as "perpspad" | "external",
           externalPlatform: t.external_platform as string | null,
           externalMint: t.external_mint as string | null,
+          // Native DBC mint — exposed so the market search can match a pasted
+          // mint address for perpspad-native coins too (external uses externalMint).
+          mint: (t.mint_address ?? null) as string | null,
           router: (String(t.router ?? "imperial").toLowerCase() === "imperial"
             ? "imperial"
             : "jupiter") as "imperial" | "jupiter",
@@ -266,6 +269,109 @@ export const listTokens = createServerFn({ method: "GET" })
   });
 
 export type EnrichedToken = Awaited<ReturnType<typeof listTokens>>["tokens"][number];
+
+// ---------- resolve a token by mint (search fallback) ----------
+// The market search filters the visible feed (limited/tabbed), so a pasted mint
+// for a CONNECTED coin that isn't on the current page would find nothing. This
+// resolves such a coin directly and surfaces it as a clickable card.
+//
+// CONNECTED-ONLY, on purpose (FEE_ROUTING_AND_MINT_INDEX.md §6): we apply the
+// exact same visibility gate as the public feed — native by mint_address, external
+// only once first_fee_routed_at is stamped (i.e. the on-chain creator-fee
+// recipient matched the sub-wallet). This hides PENDING reservations, so a
+// squatter's phantom router for a mint they don't own never shows in search, and
+// the row we return is always the on-chain-recipient-matched one (the partial
+// unique index guarantees at most one connected router per mint). Un-connected
+// diagnostics live in the admin router-status panel, not public search.
+export const findTokenByMint = createServerFn({ method: "GET" })
+  .inputValidator((d: { mint: string }) =>
+    z.object({ mint: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, "Invalid mint") }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const mint = data.mint.trim();
+    const { data: rows } = await supabaseAdmin
+      .from("tokens")
+      .select(
+        "id, ticker, name, image_url, underlying, leverage, direction, source, external_platform, external_mint, mint_address, mint_pending, first_fee_routed_at",
+      )
+      .not("status", "in", HIDDEN_STATUS_PG_LIST)
+      // Same gate as listTokens: native (mint_address) OR a CONNECTED external
+      // router (first_fee_routed_at stamped). Pending reservations are excluded.
+      .or(`mint_address.eq.${mint},and(external_mint.eq.${mint},mint_pending.eq.false,first_fee_routed_at.not.is.null)`)
+      .limit(1);
+
+    const t = rows?.[0];
+    if (!t) return { found: false as const, token: null };
+
+    return {
+      found: true as const,
+      token: {
+        id: t.id,
+        ticker: t.ticker,
+        name: t.name,
+        imageUrl: t.image_url as string | null,
+        underlying: t.underlying,
+        leverage: Number(t.leverage),
+        direction: t.direction as "long" | "short",
+        source: (t.source ?? "perpspad") as "perpspad" | "external",
+        externalPlatform: t.external_platform as string | null,
+      },
+    };
+  });
+
+// ---------- typeahead search (header auto-suggest) ----------
+// Lightweight top-N matches for the global header search dropdown. Matches
+// ticker / name (substring) OR an exact mint paste (external_mint / mint_address),
+// under the SAME public visibility gate as the feed (native by mint, external only
+// once connected). Returns just what a suggestion row needs.
+export type TokenSuggestion = {
+  id: string;
+  ticker: string;
+  name: string;
+  imageUrl: string | null;
+  source: "perpspad" | "external";
+  externalPlatform: string | null;
+};
+
+export const searchTokens = createServerFn({ method: "GET" })
+  .inputValidator((d: { q: string }) =>
+    z.object({ q: z.string().trim().min(1).max(48) }).parse(d),
+  )
+  .handler(async ({ data }): Promise<{ results: TokenSuggestion[] }> => {
+    // Sanitize for the PostgREST or-filter grammar (commas/parens/star are
+    // delimiters/wildcards). Leaves ticker/name/mint chars intact.
+    const q = data.q.replace(/[,()*%]/g, "").trim();
+    if (!q) return { results: [] };
+
+    const { data: rows, error } = await supabaseAdmin
+      .from("tokens")
+      .select("id, ticker, name, image_url, source, external_platform")
+      .not("status", "in", HIDDEN_STATUS_PG_LIST)
+      // visibility gate (same as listTokens / findTokenByMint)
+      .or("mint_address.not.is.null,and(external_mint.not.is.null,mint_pending.eq.false,first_fee_routed_at.not.is.null)")
+      // match: ticker/name substring OR exact mint paste
+      .or(`ticker.ilike.*${q}*,name.ilike.*${q}*,external_mint.eq.${q},mint_address.eq.${q}`)
+      .limit(8);
+
+    if (error) return { results: [] };
+
+    const results: TokenSuggestion[] = (rows ?? []).map((t) => ({
+      id: t.id,
+      ticker: t.ticker,
+      name: t.name,
+      imageUrl: t.image_url as string | null,
+      source: (t.source ?? "perpspad") as "perpspad" | "external",
+      externalPlatform: t.external_platform as string | null,
+    }));
+    // Rank exact-ish ticker prefix matches first, then the rest.
+    const ql = q.toLowerCase();
+    results.sort((a, b) => {
+      const ap = a.ticker?.toLowerCase().startsWith(ql) ? 0 : 1;
+      const bp = b.ticker?.toLowerCase().startsWith(ql) ? 0 : 1;
+      return ap - bp;
+    });
+    return { results };
+  });
 
 // ---------- get one ----------
 export const getToken = createServerFn({ method: "GET" })
