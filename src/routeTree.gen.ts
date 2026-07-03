@@ -37,6 +37,7 @@ import { Route as ApiPublicKeeperWorkflowReportRouteImport } from './routes/api/
 import { Route as ApiPublicKeeperWorkflowLocksRouteImport } from './routes/api/public/keeper/workflow-locks'
 import { Route as ApiPublicKeeperTokensRouteImport } from './routes/api/public/keeper/tokens'
 import { Route as ApiPublicKeeperStuckTokensRouteImport } from './routes/api/public/keeper/stuck-tokens'
+import { Route as ApiPublicKeeperRouterStatusRouteImport } from './routes/api/public/keeper/router-status'
 import { Route as ApiPublicKeeperReportRouteImport } from './routes/api/public/keeper/report'
 import { Route as ApiPublicKeeperOverviewRouteImport } from './routes/api/public/keeper/overview'
 import { Route as ApiPublicKeeperLogsRouteImport } from './routes/api/public/keeper/logs'
@@ -190,6 +191,12 @@ const ApiPublicKeeperStuckTokensRoute =
     path: '/api/public/keeper/stuck-tokens',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicKeeperRouterStatusRoute =
+  ApiPublicKeeperRouterStatusRouteImport.update({
+    id: '/api/public/keeper/router-status',
+    path: '/api/public/keeper/router-status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicKeeperReportRoute = ApiPublicKeeperReportRouteImport.update({
   id: '/api/public/keeper/report',
   path: '/api/public/keeper/report',
@@ -258,6 +265,7 @@ export interface FileRoutesByFullPath {
   '/api/public/keeper/logs': typeof ApiPublicKeeperLogsRoute
   '/api/public/keeper/overview': typeof ApiPublicKeeperOverviewRoute
   '/api/public/keeper/report': typeof ApiPublicKeeperReportRoute
+  '/api/public/keeper/router-status': typeof ApiPublicKeeperRouterStatusRoute
   '/api/public/keeper/stuck-tokens': typeof ApiPublicKeeperStuckTokensRoute
   '/api/public/keeper/tokens': typeof ApiPublicKeeperTokensRoute
   '/api/public/keeper/workflow-locks': typeof ApiPublicKeeperWorkflowLocksRoute
@@ -295,6 +303,7 @@ export interface FileRoutesByTo {
   '/api/public/keeper/logs': typeof ApiPublicKeeperLogsRoute
   '/api/public/keeper/overview': typeof ApiPublicKeeperOverviewRoute
   '/api/public/keeper/report': typeof ApiPublicKeeperReportRoute
+  '/api/public/keeper/router-status': typeof ApiPublicKeeperRouterStatusRoute
   '/api/public/keeper/stuck-tokens': typeof ApiPublicKeeperStuckTokensRoute
   '/api/public/keeper/tokens': typeof ApiPublicKeeperTokensRoute
   '/api/public/keeper/workflow-locks': typeof ApiPublicKeeperWorkflowLocksRoute
@@ -333,6 +342,7 @@ export interface FileRoutesById {
   '/api/public/keeper/logs': typeof ApiPublicKeeperLogsRoute
   '/api/public/keeper/overview': typeof ApiPublicKeeperOverviewRoute
   '/api/public/keeper/report': typeof ApiPublicKeeperReportRoute
+  '/api/public/keeper/router-status': typeof ApiPublicKeeperRouterStatusRoute
   '/api/public/keeper/stuck-tokens': typeof ApiPublicKeeperStuckTokensRoute
   '/api/public/keeper/tokens': typeof ApiPublicKeeperTokensRoute
   '/api/public/keeper/workflow-locks': typeof ApiPublicKeeperWorkflowLocksRoute
@@ -372,6 +382,7 @@ export interface FileRouteTypes {
     | '/api/public/keeper/logs'
     | '/api/public/keeper/overview'
     | '/api/public/keeper/report'
+    | '/api/public/keeper/router-status'
     | '/api/public/keeper/stuck-tokens'
     | '/api/public/keeper/tokens'
     | '/api/public/keeper/workflow-locks'
@@ -409,6 +420,7 @@ export interface FileRouteTypes {
     | '/api/public/keeper/logs'
     | '/api/public/keeper/overview'
     | '/api/public/keeper/report'
+    | '/api/public/keeper/router-status'
     | '/api/public/keeper/stuck-tokens'
     | '/api/public/keeper/tokens'
     | '/api/public/keeper/workflow-locks'
@@ -446,6 +458,7 @@ export interface FileRouteTypes {
     | '/api/public/keeper/logs'
     | '/api/public/keeper/overview'
     | '/api/public/keeper/report'
+    | '/api/public/keeper/router-status'
     | '/api/public/keeper/stuck-tokens'
     | '/api/public/keeper/tokens'
     | '/api/public/keeper/workflow-locks'
@@ -479,6 +492,7 @@ export interface RootRouteChildren {
   ApiPublicKeeperLogsRoute: typeof ApiPublicKeeperLogsRoute
   ApiPublicKeeperOverviewRoute: typeof ApiPublicKeeperOverviewRoute
   ApiPublicKeeperReportRoute: typeof ApiPublicKeeperReportRoute
+  ApiPublicKeeperRouterStatusRoute: typeof ApiPublicKeeperRouterStatusRoute
   ApiPublicKeeperStuckTokensRoute: typeof ApiPublicKeeperStuckTokensRoute
   ApiPublicKeeperTokensRoute: typeof ApiPublicKeeperTokensRoute
   ApiPublicKeeperWorkflowLocksRoute: typeof ApiPublicKeeperWorkflowLocksRoute
@@ -685,6 +699,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicKeeperStuckTokensRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/keeper/router-status': {
+      id: '/api/public/keeper/router-status'
+      path: '/api/public/keeper/router-status'
+      fullPath: '/api/public/keeper/router-status'
+      preLoaderRoute: typeof ApiPublicKeeperRouterStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/keeper/report': {
       id: '/api/public/keeper/report'
       path: '/api/public/keeper/report'
@@ -813,6 +834,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicKeeperLogsRoute: ApiPublicKeeperLogsRoute,
   ApiPublicKeeperOverviewRoute: ApiPublicKeeperOverviewRoute,
   ApiPublicKeeperReportRoute: ApiPublicKeeperReportRoute,
+  ApiPublicKeeperRouterStatusRoute: ApiPublicKeeperRouterStatusRoute,
   ApiPublicKeeperStuckTokensRoute: ApiPublicKeeperStuckTokensRoute,
   ApiPublicKeeperTokensRoute: ApiPublicKeeperTokensRoute,
   ApiPublicKeeperWorkflowLocksRoute: ApiPublicKeeperWorkflowLocksRoute,

@@ -19,6 +19,7 @@ import {
   listKeeperTokens,
   listStuckTokens,
   getOverview,
+  getRouterStatus,
   workflowOf,
 } from "@/lib/admin-overview.api";
 import { getPlatformStats } from "@/lib/stats.functions";
@@ -61,10 +62,29 @@ function Panel({
   );
 }
 
+// Verdict → tone for the router-lookup card.
+function verdictTone(verdict: string): string {
+  if (verdict.startsWith("connected") || verdict.startsWith("native — listed"))
+    return "text-emerald-500";
+  if (verdict.startsWith("routing")) return "text-amber-500";
+  if (verdict === "not found") return "text-muted-foreground";
+  return "text-red-500";
+}
+
 function AdminCockpit() {
   const [adminKey, setAdminKeyState] = useState<string>(() => getAdminKey());
   const enabled = !!adminKey;
   const statsFn = useServerFn(getPlatformStats);
+
+  // Router / mint-status lookup (FEE_ROUTING_AND_MINT_INDEX.md §3).
+  const [mintInput, setMintInput] = useState("");
+  const [lookupMint, setLookupMint] = useState("");
+  const routerQ = useQuery({
+    queryKey: ["admin-router-status", adminKey, lookupMint],
+    queryFn: () => getRouterStatus(lookupMint),
+    enabled: enabled && !!lookupMint,
+    retry: false,
+  });
 
   const tokensQ = useQuery({
     queryKey: ["admin-tokens", adminKey],
@@ -331,6 +351,164 @@ function AdminCockpit() {
             )}
           </Panel>
         </div>
+
+        {/* ── Router / mint-status lookup (diagnose stuck external routers) ── */}
+        <Panel
+          title="Router lookup"
+          hint="paste a mint → routing status (finds hidden/stuck routers)"
+          className="mb-4"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="w-[420px] max-w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-xs"
+              placeholder="mint address (external pump.fun mint or native DBC mint)"
+              value={mintInput}
+              onChange={(e) => setMintInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") setLookupMint(mintInput.trim());
+              }}
+            />
+            <Button size="sm" variant="outline" onClick={() => setLookupMint(mintInput.trim())}>
+              look up
+            </Button>
+            {lookupMint && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setMintInput("");
+                  setLookupMint("");
+                }}
+              >
+                clear
+              </Button>
+            )}
+          </div>
+
+          {lookupMint && (
+            <div className="mt-3">
+              {routerQ.isLoading && (
+                <p className="text-xs text-muted-foreground">resolving {short(lookupMint)}…</p>
+              )}
+              {routerQ.isError && (
+                <p className="text-xs text-destructive">
+                  {(routerQ.error as Error)?.message ?? "lookup failed"}
+                </p>
+              )}
+              {routerQ.data && (
+                <div className="rounded border border-border bg-muted/10 p-3">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className={`text-sm font-semibold ${verdictTone(routerQ.data.verdict)}`}>
+                      {routerQ.data.verdict}
+                    </span>
+                    {routerQ.data.token && (
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {routerQ.data.token.ticker ?? "?"} · {routerQ.data.token.source} ·{" "}
+                        {routerQ.data.token.status ?? "?"}
+                      </span>
+                    )}
+                    {routerQ.data.listedOnSite != null && (
+                      <span
+                        className={`font-mono text-[11px] ${
+                          routerQ.data.listedOnSite ? "text-emerald-500" : "text-amber-500"
+                        }`}
+                      >
+                        {routerQ.data.listedOnSite ? "listed on site" : "hidden"}
+                      </span>
+                    )}
+                    {routerQ.data.duplicate && (
+                      <span className="font-mono text-[11px] text-amber-500">
+                        ⚠ multiple rows match
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-1.5 text-xs text-foreground/90">{routerQ.data.detail}</p>
+                  <p className="mt-1 text-xs">
+                    <span className="text-muted-foreground">next: </span>
+                    {routerQ.data.nextAction}
+                  </p>
+
+                  {routerQ.data.token && (
+                    <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                      <Stat
+                        label="sub-wallet SOL"
+                        value={
+                          routerQ.data.subWalletBalanceSol != null
+                            ? `${routerQ.data.subWalletBalanceSol.toFixed(4)}`
+                            : "·"
+                        }
+                        tone={
+                          (routerQ.data.subWalletBalanceSol ?? 0) > 0 ? "good" : undefined
+                        }
+                      />
+                      <Stat
+                        label="first fee routed"
+                        value={
+                          routerQ.data.token.firstFeeRoutedAt
+                            ? relativeTime(routerQ.data.token.firstFeeRoutedAt)
+                            : "never"
+                        }
+                        tone={routerQ.data.token.firstFeeRoutedAt ? "good" : "bad"}
+                      />
+                      <Stat label="created" value={relativeTime(routerQ.data.token.createdAt)} />
+                      <Stat
+                        label="sub-wallet"
+                        value={
+                          routerQ.data.token.subWallet ? short(routerQ.data.token.subWallet) : "·"
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {routerQ.data.token && (
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                      <Link
+                        to="/token/$id"
+                        params={{ id: routerQ.data.token.id }}
+                        className="text-primary hover:underline"
+                      >
+                        open token →
+                      </Link>
+                      <Link
+                        to="/admin/keeper-logs/$tokenId"
+                        params={{ tokenId: routerQ.data.token.id }}
+                        className="text-primary hover:underline"
+                      >
+                        keeper logs →
+                      </Link>
+                    </div>
+                  )}
+
+                  {routerQ.data.events && routerQ.data.events.length > 0 && (
+                    <div className="mt-3 border-t border-border pt-2">
+                      <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+                        recent events
+                      </div>
+                      <div className="overflow-auto">
+                        <table className="w-max min-w-full text-xs">
+                          <tbody>
+                            {routerQ.data.events.map((ev, i) => (
+                              <tr key={i} className="border-t border-border/40">
+                                <td className="whitespace-nowrap px-2 py-1 font-mono text-muted-foreground">
+                                  {relativeTime(ev.createdAt)}
+                                </td>
+                                <td className="whitespace-nowrap px-2 py-1 font-mono">{ev.kind}</td>
+                                <td className="whitespace-nowrap px-2 py-1 font-mono">
+                                  {ev.solAmount ? `${ev.solAmount.toFixed(4)} SOL` : "·"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </Panel>
 
         {/* ── Token activity table ── */}
         <Panel

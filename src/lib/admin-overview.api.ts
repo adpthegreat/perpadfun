@@ -90,3 +90,37 @@ export async function getOverview(): Promise<Overview> {
     series: body.series ?? [],
   };
 }
+
+// ── mint-status index (FEE_ROUTING_AND_MINT_INDEX.md §3) ──────────────────────
+export type RouterStatus = {
+  found: boolean;
+  mint: string;
+  matchedColumn?: "external_mint" | "mint_address";
+  duplicate?: boolean;
+  token?: {
+    id: string;
+    ticker: string | null;
+    name: string | null;
+    source: string;
+    status: string | null;
+    externalPlatform: string | null;
+    externalMint: string | null;
+    mintAddress: string | null;
+    subWallet: string | null;
+    mintPending: boolean;
+    firstFeeRoutedAt: string | null;
+    createdAt: string | null;
+  };
+  subWalletBalanceSol?: number | null;
+  balanceError?: string | null;
+  listedOnSite?: boolean;
+  events?: { kind: string; solAmount: number; txSig: string | null; createdAt: string | null }[];
+  verdict: string;
+  detail: string;
+  nextAction: string;
+};
+
+export async function getRouterStatus(mint: string): Promise<RouterStatus> {
+  const body = await getJson(`/api/public/keeper/router-status?mint=${encodeURIComponent(mint)}`);
+  return body as RouterStatus;
+}
