@@ -10,14 +10,10 @@ export const COMING_SOON = true; // gated for launch
 export function isUIRouteAllowed(pathname: string): boolean {
   if (!COMING_SOON) return true;
   if (pathname === "/") return true;
-  if (pathname.startsWith("/token/")) return true; // token detail pages stay live
-  if (pathname === "/paper") return true; // whitepaper stays live
-  if (pathname === "/checker") return true; // airdrop eligibility checker
-  if (pathname === "/onboarding") return true; // community onboarding stays live
-  // if (pathname === "/launch") return true; // token launch page stays live
-  if (pathname === "/tokens") return true; // market list + search (paste-a-mint) stays live
-  if (pathname.startsWith("/route-fees")) return true; // fee routing (route-fees) stays live
-  if (pathname.startsWith("/admin")) return true; // admin cockpit + keeper logs (secret-gated) stay live
+  if (pathname === "/checker") return true; // airdrop eligibility checker — the only public page
+  // Everything else is blocked for launch: /launch, /tokens, /route-fees, /paper,
+  // /onboarding, /token/* all redirect to "/".
+  if (pathname.startsWith("/admin")) return true; // admin cockpit + keeper logs (secret-gated) — ops only
   if (pathname.startsWith("/api/")) return true; // never gate API routes
   return false;
 }

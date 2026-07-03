@@ -410,66 +410,24 @@ function CheckerPage() {
           </div>
         </div>
 
-        {/* who qualifies (informational) — DRAFT copy, flagged for review */}
+        {/* context note */}
         <div
           className="reveal-up w-full rounded-[2rem] bg-white/[0.04] p-1.5 ring-1 ring-white/10"
           style={reveal(240)}
         >
           <div className="rounded-[calc(2rem-0.375rem)] bg-card/70 p-7 text-left shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] backdrop-blur-xl md:p-9">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#9d4eff]" />
-                <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-                  who qualifies
-                </span>
-              </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#9d4eff]/40 bg-[#9d4eff]/10 px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.2em] text-[#c79bff]">
-                <span className="h-1 w-1 rounded-full bg-[#9d4eff]" />
-                draft · pending review
+            <div className="flex items-center gap-2.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#9d4eff]" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+                note
               </span>
             </div>
 
             <p className="mt-5 text-[15px] leading-relaxed text-foreground/85">
-              The $PERPAD airdrop rewards the people who held $PERPAD back on Perpad. If you were a
-              holder, you already earned an allocation — just check your wallet above to see it.
-            </p>
-
-            <ul className="mt-5 space-y-3 text-[14px] leading-relaxed text-foreground/80">
-              <li className="flex gap-3">
-                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
-                <span>
-                  You held $PERPAD on Perpad during the snapshot period.{" "}
-                  <span className="text-muted-foreground/60">(snapshot window — to be confirmed)</span>
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
-                <span>
-                  Your allocation has two parts: a 1:1 base match of your held $PERPAD balance, plus
-                  a holding-time bonus that grows the longer you held.
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
-                <span>
-                  The longer you held and the larger your balance, the bigger your allocation.
-                </span>
-              </li>
-              <li className="flex gap-3">
-                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
-                <span>
-                  This tool checks a fixed snapshot of eligible former holders. If your address
-                  isn&apos;t listed, it wasn&apos;t captured in the snapshot — nothing to sign up for
-                  and nothing to buy now.
-                </span>
-              </li>
-            </ul>
-
-            <p className="mt-6 border-t border-white/5 pt-5 font-mono text-[11px] leading-relaxed text-muted-foreground/70">
-              Draft criteria — exact minimum balance, snapshot dates, and the &quot;former
-              holder&quot; definition to be confirmed by the team. Note for review: allocations shown
-              here follow the final snapshot data (base is a 1:1 match of held balance); an earlier
-              methodology draft described a 1:10 base — copy tracks the shipped data.
+              Tested with a dummy launch to see how the anti snipe mechanism and supply control works
+              and how it plays out on the new PERPSPAD platform and made a decoy launch so the chart
+              doesn&apos;t get fucked, no CA has been posted, clearly there was no dev buy and supply
+              control on this launch, more details will be shared.
             </p>
           </div>
         </div>
