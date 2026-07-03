@@ -1,0 +1,3042 @@
+{
+  "13H846xTBgtimSPNu7sPVgySFJuPadbWti7ZedoBN7mE": {
+    "amountBaseUnits": "2270572177538",
+    "amountUi": 2270572.177538,
+    "perpadBalance": 2104511.812267,
+    "holdDays": 26.75,
+    "base1to1": 2104511.812267,
+    "daysBonus": 166060.365271
+  },
+  "27EhBdHnjcarUHAMkLrGKcw8545xLtrzjyuQpVMugC77": {
+    "amountBaseUnits": "103315246372",
+    "amountUi": 103315.246372,
+    "perpadBalance": 1692.51069,
+    "holdDays": 16.37,
+    "base1to1": 1692.51069,
+    "daysBonus": 101622.735682
+  },
+  "2BG7EFZS59SzVnHFzPAVTNG35bLDRp1VYgzB8En3hQdr": {
+    "amountBaseUnits": "2700425638106",
+    "amountUi": 2700425.638106,
+    "perpadBalance": 2518969.769812,
+    "holdDays": 29.23,
+    "base1to1": 2518969.769812,
+    "daysBonus": 181455.868294
+  },
+  "2C1seTEXRx564T4CK8D5nhid4Hg1pgePWPWMncm6vBW6": {
+    "amountBaseUnits": "177779511370",
+    "amountUi": 177779.51137,
+    "perpadBalance": 3586.844099,
+    "holdDays": 28.06,
+    "base1to1": 3586.844099,
+    "daysBonus": 174192.667271
+  },
+  "2DGf7MXfsHmBYHuvEXbxDg76Ur9sEnreLUquCVLhx7sq": {
+    "amountBaseUnits": "241523877780",
+    "amountUi": 241523.87778,
+    "perpadBalance": 67144.974585,
+    "holdDays": 28.09,
+    "base1to1": 67144.974585,
+    "daysBonus": 174378.903195
+  },
+  "2ELzxgcsxwb89asd5qJFu4WF9CQctFJuUuPQpwQ69D1w": {
+    "amountBaseUnits": "174835073270",
+    "amountUi": 174835.07327,
+    "perpadBalance": 2691.001159,
+    "holdDays": 27.73,
+    "base1to1": 2691.001159,
+    "daysBonus": 172144.072111
+  },
+  "2Fast4uUABWcrab6LevwhTx5xx84mwahhV2bLJFTYgN4": {
+    "amountBaseUnits": "172021709726",
+    "amountUi": 172021.709726,
+    "perpadBalance": 63.873539,
+    "holdDays": 27.7,
+    "base1to1": 63.873539,
+    "daysBonus": 171957.836187
+  },
+  "2JuNypJosjxuR2HSdqXwr7hChCBVSyKdiyQ1PMfg4WS4": {
+    "amountBaseUnits": "169772022543",
+    "amountUi": 169772.022543,
+    "perpadBalance": 111.096081,
+    "holdDays": 27.33,
+    "base1to1": 111.096081,
+    "daysBonus": 169660.926462
+  },
+  "2JudFqaxKngAkNFbgUXG6L2gHPrRJ1YyCCXsQ7qCzP8X": {
+    "amountBaseUnits": "2913089062835",
+    "amountUi": 2913089.062835,
+    "perpadBalance": 2722818.027487,
+    "holdDays": 30.65,
+    "base1to1": 2722818.027487,
+    "daysBonus": 190271.035348
+  },
+  "2K9XkeLxkMyNcTjMpwdcTKmKhKUJFj3Vv2Nzt6k9q69A": {
+    "amountBaseUnits": "33341708340748",
+    "amountUi": 33341708.340748,
+    "perpadBalance": 33298936.156946,
+    "holdDays": 6.89,
+    "base1to1": 33298936.156946,
+    "daysBonus": 42772.183802
+  },
+  "2MgLLDXkg43uMAzDWsvx6h5Az865hPaYw88JkZi7Bb42": {
+    "amountBaseUnits": "161052262677",
+    "amountUi": 161052.262677,
+    "perpadBalance": 96242.161241,
+    "holdDays": 10.44,
+    "base1to1": 96242.161241,
+    "daysBonus": 64810.101436
+  },
+  "2PZm9R85hmCvgpbaR6QhcAVn3E7zCPNbJrSn4AdnEHw6": {
+    "amountBaseUnits": "249656833163",
+    "amountUi": 249656.833163,
+    "perpadBalance": 41693.385067,
+    "holdDays": 33.5,
+    "base1to1": 41693.385067,
+    "daysBonus": 207963.448096
+  },
+  "2Ph11RECXHT9oWScfSB4prP4gYvfbExVB1kTf8yxywGo": {
+    "amountBaseUnits": "1612565675522",
+    "amountUi": 1612565.675522,
+    "perpadBalance": 1521185.915642,
+    "holdDays": 14.72,
+    "base1to1": 1521185.915642,
+    "daysBonus": 91379.75988
+  },
+  "2QfBNK2WDwSLoUQRb1zAnp3KM12N9hQ8q6ApwUMnWW2T": {
+    "amountBaseUnits": "201892341289",
+    "amountUi": 201892.341289,
+    "perpadBalance": 509.229163,
+    "holdDays": 32.44,
+    "base1to1": 509.229163,
+    "daysBonus": 201383.112126
+  },
+  "2Ri3zD9vDnQzkQpwmzzrebi8An4ckYuna7SQCjVtsjav": {
+    "amountBaseUnits": "208167911551",
+    "amountUi": 208167.911551,
+    "perpadBalance": 150000.224725,
+    "holdDays": 9.37,
+    "base1to1": 150000.224725,
+    "daysBonus": 58167.686826
+  },
+  "2T87GB9p7JM56JrtSjFqDNc76pTUrDwRXvMt6t6xiNgj": {
+    "amountBaseUnits": "174421191719",
+    "amountUi": 174421.191719,
+    "perpadBalance": 42.288524,
+    "holdDays": 28.09,
+    "base1to1": 42.288524,
+    "daysBonus": 174378.903195
+  },
+  "2UcnGjjW6UhanYa1sv7qRuQFdFvHvEtAMGAS4NVGDAP1": {
+    "amountBaseUnits": "3942693872538",
+    "amountUi": 3942693.872538,
+    "perpadBalance": 3767570.025649,
+    "holdDays": 28.21,
+    "base1to1": 3767570.025649,
+    "daysBonus": 175123.846889
+  },
+  "2VJWZvBW8pvLP5zFVPJTzs7Zo6tApDeFkSgL9sfQkUn1": {
+    "amountBaseUnits": "160697391241",
+    "amountUi": 160697.391241,
+    "perpadBalance": 65034.205117,
+    "holdDays": 15.41,
+    "base1to1": 65034.205117,
+    "daysBonus": 95663.186124
+  },
+  "2ZsZZXuX3kNKuiWNBx7MPiKc1HNsi7VNBxNdmTo9BM5q": {
+    "amountBaseUnits": "130520541796",
+    "amountUi": 130520.541796,
+    "perpadBalance": 6239.102068,
+    "holdDays": 20.02,
+    "base1to1": 6239.102068,
+    "daysBonus": 124281.439728
+  },
+  "2awCtXZKFaDvn951si9wFsGSRQvaP93VXLVBVT87eqGW": {
+    "amountBaseUnits": "114532213366",
+    "amountUi": 114532.213366,
+    "perpadBalance": 7756.950463,
+    "holdDays": 17.2,
+    "base1to1": 7756.950463,
+    "daysBonus": 106775.262903
+  },
+  "2e4oXYwD1ZSJd7kaJFAvcxDR7bYnySnbhjaANgsk7H3P": {
+    "amountBaseUnits": "201193001190",
+    "amountUi": 201193.00119,
+    "perpadBalance": 27186.569843,
+    "holdDays": 28.03,
+    "base1to1": 27186.569843,
+    "daysBonus": 174006.431347
+  },
+  "2ee6oLqkEUqfcNSYcAGEZVrTsBpbMGGioYfjsgxyYH8h": {
+    "amountBaseUnits": "184871193561",
+    "amountUi": 184871.193561,
+    "perpadBalance": 1,
+    "holdDays": 29.78,
+    "base1to1": 1,
+    "daysBonus": 184870.193561
+  },
+  "2gugjNw6QY2DdiwAGZ9HBSffN6SnpYnH1b3pfg7QrkGp": {
+    "amountBaseUnits": "865651791900",
+    "amountUi": 865651.7919,
+    "perpadBalance": 748943.946401,
+    "holdDays": 18.8,
+    "base1to1": 748943.946401,
+    "daysBonus": 116707.845499
+  },
+  "2h7Ns9w2grSeQ9mE9WggJZvxMKKLNADJrKTSLucrbmzB": {
+    "amountBaseUnits": "689650248935",
+    "amountUi": 689650.248935,
+    "perpadBalance": 500000,
+    "holdDays": 30.55,
+    "base1to1": 500000,
+    "daysBonus": 189650.248935
+  },
+  "2hxtukzoA7MG2KUeW86nSd8D1Qf367K8WvmtbJEPLRA8": {
+    "amountBaseUnits": "93298957301",
+    "amountUi": 93298.957301,
+    "perpadBalance": 21598.126689,
+    "holdDays": 11.55,
+    "base1to1": 21598.126689,
+    "daysBonus": 71700.830612
+  },
+  "2nCjr61STDXMvnY25xALEhjRYbqttVLNHVPW7BLVUDre": {
+    "amountBaseUnits": "99477456736",
+    "amountUi": 99477.456736,
+    "perpadBalance": 29949.378567,
+    "holdDays": 11.2,
+    "base1to1": 29949.378567,
+    "daysBonus": 69528.078169
+  },
+  "2nsXqjRuJD1iSCgVzWjf1pApbw8y6p2FLQn6cfdZPVxX": {
+    "amountBaseUnits": "161990064998",
+    "amountUi": 161990.064998,
+    "perpadBalance": 88.968689,
+    "holdDays": 26.08,
+    "base1to1": 88.968689,
+    "daysBonus": 161901.096309
+  },
+  "2pCAzckKN8gRupMNgSHvQabAcNrZE6g2fWetaGyX2WjP": {
+    "amountBaseUnits": "83436484874",
+    "amountUi": 83436.484874,
+    "perpadBalance": 623.577483,
+    "holdDays": 13.34,
+    "base1to1": 623.577483,
+    "daysBonus": 82812.907391
+  },
+  "2qdF7zZucwDBeLRBF1PV5cJ9EtvyZeASEwFmgvK5bgVS": {
+    "amountBaseUnits": "3781444235717",
+    "amountUi": 3781444.235717,
+    "perpadBalance": 3635186.956996,
+    "holdDays": 23.56,
+    "base1to1": 3635186.956996,
+    "daysBonus": 146257.278721
+  },
+  "2sAiEZiy1nN7QjEP2sPPGtWm8a58reCZYUFvneBW2QuW": {
+    "amountBaseUnits": "185475427991",
+    "amountUi": 185475.427991,
+    "perpadBalance": 13517.591804,
+    "holdDays": 27.7,
+    "base1to1": 13517.591804,
+    "daysBonus": 171957.836187
+  },
+  "2uo5WTUNYkKbRJPxuEUkQVcK2rfpuNpZbXi7cdsJiHYk": {
+    "amountBaseUnits": "629830540616",
+    "amountUi": 629830.540616,
+    "perpadBalance": 446015.683956,
+    "holdDays": 29.61,
+    "base1to1": 446015.683956,
+    "daysBonus": 183814.85666
+  },
+  "34FKjAdVcTax2DHqV2XnbXa9J3zmyKcFuFKWbcmgxjgm": {
+    "amountBaseUnits": "49770742154",
+    "amountUi": 49770.742154,
+    "perpadBalance": 169.907817,
+    "holdDays": 7.99,
+    "base1to1": 169.907817,
+    "daysBonus": 49600.834337
+  },
+  "36EHKsf4ceNaPo2kjWp5GXVncVGgS4nwmbkfVrJCFpUs": {
+    "amountBaseUnits": "208058634219",
+    "amountUi": 208058.634219,
+    "perpadBalance": 95.186123,
+    "holdDays": 33.5,
+    "base1to1": 95.186123,
+    "daysBonus": 207963.448096
+  },
+  "36kwScw2Nm3Jpt4XMN3HFt3pBExauVVfRz5846zp7KSz": {
+    "amountBaseUnits": "189805402671",
+    "amountUi": 189805.402671,
+    "perpadBalance": 19772.004362,
+    "holdDays": 27.39,
+    "base1to1": 19772.004362,
+    "daysBonus": 170033.398309
+  },
+  "37WcRCLrtdHc2hMrFpETmpY3mVARFLrFJgaB7Be85Mx2": {
+    "amountBaseUnits": "1403866745348",
+    "amountUi": 1403866.745348,
+    "perpadBalance": 1353024.338187,
+    "holdDays": 8.19,
+    "base1to1": 1353024.338187,
+    "daysBonus": 50842.407161
+  },
+  "37tWXfvtUYErWPhKV16fzvp9SgGTovNwwgH9aA2RwTzG": {
+    "amountBaseUnits": "6903764722983",
+    "amountUi": 6903764.722983,
+    "perpadBalance": 6854163.888646,
+    "holdDays": 7.99,
+    "base1to1": 6854163.888646,
+    "daysBonus": 49600.834337
+  },
+  "385xZZyPSbTL7tTnvEWtoJMXndwZ1HN9XffzUhVSekNK": {
+    "amountBaseUnits": "22034851631",
+    "amountUi": 22034.851631,
+    "perpadBalance": 3783.731112,
+    "holdDays": 2.94,
+    "base1to1": 3783.731112,
+    "daysBonus": 18251.120519
+  },
+  "3CgvbiM3op4vjrrjH2zcrQUwsqh5veNVRjFCB9N6sRoD": {
+    "amountBaseUnits": "231452093586",
+    "amountUi": 231452.093586,
+    "perpadBalance": 24109.431902,
+    "holdDays": 33.4,
+    "base1to1": 24109.431902,
+    "daysBonus": 207342.661684
+  },
+  "3D1cs6fjqi7U7b9i5oTe4HnrxgW8Mur7bZVZAeh7jMx7": {
+    "amountBaseUnits": "332003512181",
+    "amountUi": 332003.512181,
+    "perpadBalance": 164080.787674,
+    "holdDays": 27.05,
+    "base1to1": 164080.787674,
+    "daysBonus": 167922.724507
+  },
+  "3JTyC81v5gbzt5uJHPdHiC11Bs9HSS7HxtaFDoP9Pe49": {
+    "amountBaseUnits": "1078641923924",
+    "amountUi": 1078641.923924,
+    "perpadBalance": 912581.558653,
+    "holdDays": 26.75,
+    "base1to1": 912581.558653,
+    "daysBonus": 166060.365271
+  },
+  "3LoAYHuSd7Gh8d7RTFnhvYtiTiefdZ5ByamU42vkzd76": {
+    "amountBaseUnits": "243132261841",
+    "amountUi": 243132.261841,
+    "perpadBalance": 35541.285592,
+    "holdDays": 33.44,
+    "base1to1": 35541.285592,
+    "daysBonus": 207590.976249
+  },
+  "3VRoyctJuMUB2beheQMJdsfUGGXCtKtFTQCUYacfjRLU": {
+    "amountBaseUnits": "1081834931354",
+    "amountUi": 1081834.931354,
+    "perpadBalance": 1072026.506041,
+    "holdDays": 1.58,
+    "base1to1": 1072026.506041,
+    "daysBonus": 9808.425313
+  },
+  "3VguMNaHhdJaETUsu4nTeTbJh2Gn1Go7cfXRbRgmcJwD": {
+    "amountBaseUnits": "289188805508",
+    "amountUi": 289188.805508,
+    "perpadBalance": 118410.463504,
+    "holdDays": 27.51,
+    "base1to1": 118410.463504,
+    "daysBonus": 170778.342004
+  },
+  "3aFNyqHScNiTJ6f5xwPyS4ojWV75Sev2vRkeD7P5ZTzM": {
+    "amountBaseUnits": "512927518640",
+    "amountUi": 512927.51864,
+    "perpadBalance": 502684.542838,
+    "holdDays": 1.65,
+    "base1to1": 502684.542838,
+    "daysBonus": 10242.975802
+  },
+  "3eRbGnWhrxw8HHVL96kCywrvmZmQ61DaueHAbonssD4L": {
+    "amountBaseUnits": "211890351750",
+    "amountUi": 211890.35175,
+    "perpadBalance": 22240.102815,
+    "holdDays": 30.55,
+    "base1to1": 22240.102815,
+    "daysBonus": 189650.248935
+  },
+  "3fbWQgSAWvbuj1N1siX4hiF6MCEMFmYVwsYYo8yarea8": {
+    "amountBaseUnits": "182286678017",
+    "amountUi": 182286.678017,
+    "perpadBalance": 1017.045647,
+    "holdDays": 29.2,
+    "base1to1": 1017.045647,
+    "daysBonus": 181269.63237
+  },
+  "3gnY4TjXdvWFemstTsEexSnR3PEEMsoUSzQAVhNKbjvY": {
+    "amountBaseUnits": "2151808444038",
+    "amountUi": 2151808.444038,
+    "perpadBalance": 1985686.000126,
+    "holdDays": 26.76,
+    "base1to1": 1985686.000126,
+    "daysBonus": 166122.443912
+  },
+  "3iJu8KFfvX3acMFy9PDRrgx5VVCj9YdAFEPA1MUYx5ni": {
+    "amountBaseUnits": "519422848955",
+    "amountUi": 519422.848955,
+    "perpadBalance": 405446.46367,
+    "holdDays": 18.36,
+    "base1to1": 405446.46367,
+    "daysBonus": 113976.385285
+  },
+  "3mxDCNULFBMrntrddErhgCpkJdNyR6qjKAYtgFwRCqwa": {
+    "amountBaseUnits": "1099994168842",
+    "amountUi": 1099994.168842,
+    "perpadBalance": 1003648.117664,
+    "holdDays": 15.52,
+    "base1to1": 1003648.117664,
+    "daysBonus": 96346.051178
+  },
+  "3xcuo81s7479NyWh7WfD8JXa8piXiNgFUqLS1PS3VztB": {
+    "amountBaseUnits": "171902319690",
+    "amountUi": 171902.31969,
+    "perpadBalance": 6.562144,
+    "holdDays": 27.69,
+    "base1to1": 6.562144,
+    "daysBonus": 171895.757546
+  },
+  "3xz7WGRJ6s27wSKT42Ce7MdPFCJ2bD7tKZoR7Z6PtY3M": {
+    "amountBaseUnits": "67940228030",
+    "amountUi": 67940.22803,
+    "perpadBalance": 5613.272242,
+    "holdDays": 10.04,
+    "base1to1": 5613.272242,
+    "daysBonus": 62326.955788
+  },
+  "45zMCJZeSMRh66JSiSCqn98UMetG2woTAWo2EmSGMKmZ": {
+    "amountBaseUnits": "107551167015",
+    "amountUi": 107551.167015,
+    "perpadBalance": 589.668188,
+    "holdDays": 17.23,
+    "base1to1": 589.668188,
+    "daysBonus": 106961.498827
+  },
+  "4BQ6ATUt26GFdiYQfht23iwfKyYD9D7XbL5ATqNGk3xK": {
+    "amountBaseUnits": "95271581854",
+    "amountUi": 95271.581854,
+    "perpadBalance": 787.889913,
+    "holdDays": 15.22,
+    "base1to1": 787.889913,
+    "daysBonus": 94483.691941
+  },
+  "4CtiBZPWiRh8XjJxMyNRDHihuvyGHcYroFBWn9MsMHf5": {
+    "amountBaseUnits": "62165870142",
+    "amountUi": 62165.870142,
+    "perpadBalance": 25.150278,
+    "holdDays": 10.01,
+    "base1to1": 25.150278,
+    "daysBonus": 62140.719864
+  },
+  "4Fx3b67vYhkx4xLjTSU5KefMBLwcBMpSGEJcwxyvfz9r": {
+    "amountBaseUnits": "176436693330",
+    "amountUi": 176436.69333,
+    "perpadBalance": 79594.013023,
+    "holdDays": 15.6,
+    "base1to1": 79594.013023,
+    "daysBonus": 96842.680307
+  },
+  "4LmcPrg1HbAZU5c4a2HvLTAmi1q6ARyJFiNjCHzMkTvh": {
+    "amountBaseUnits": "182300756784",
+    "amountUi": 182300.756784,
+    "perpadBalance": 134562.281684,
+    "holdDays": 7.69,
+    "base1to1": 134562.281684,
+    "daysBonus": 47738.4751
+  },
+  "4PzC2GgMLK4LYacGGRzC6nRbyk49eR7bqKudtcP5xUf9": {
+    "amountBaseUnits": "344779166732",
+    "amountUi": 344779.166732,
+    "perpadBalance": 336833.100655,
+    "holdDays": 1.28,
+    "base1to1": 336833.100655,
+    "daysBonus": 7946.066077
+  },
+  "4UUXombicqvDWn2GP35JacNmaWEoETvBd3KraaSsp1bZ": {
+    "amountBaseUnits": "110900606040",
+    "amountUi": 110900.60604,
+    "perpadBalance": 2821.691671,
+    "holdDays": 17.41,
+    "base1to1": 2821.691671,
+    "daysBonus": 108078.914369
+  },
+  "4XVzX4YK9eb6iYoGvwyNXbpRwPhPTK11xaXNrauuN1EH": {
+    "amountBaseUnits": "100982736662",
+    "amountUi": 100982.736662,
+    "perpadBalance": 7368.145698,
+    "holdDays": 15.08,
+    "base1to1": 7368.145698,
+    "daysBonus": 93614.590964
+  },
+  "4aKxdo9g3p5uUqy7n4VhN2ykgixxepPpM2wkNJ5fhDFu": {
+    "amountBaseUnits": "68612886721",
+    "amountUi": 68612.886721,
+    "perpadBalance": 15.98817,
+    "holdDays": 11.05,
+    "base1to1": 15.98817,
+    "daysBonus": 68596.898551
+  },
+  "4gX7qHRYCCfzFcN7fa3JPL6dNYLbyGhiWdKyfdvpncCq": {
+    "amountBaseUnits": "126107621057",
+    "amountUi": 126107.621057,
+    "perpadBalance": 6854.551268,
+    "holdDays": 19.21,
+    "base1to1": 6854.551268,
+    "daysBonus": 119253.069789
+  },
+  "4jkL4dNkY2UbpYrTgLA3u5FqKwKs1LM46RcE6FQU3qXi": {
+    "amountBaseUnits": "223229136933",
+    "amountUi": 223229.136933,
+    "perpadBalance": 15389.846119,
+    "holdDays": 33.48,
+    "base1to1": 15389.846119,
+    "daysBonus": 207839.290814
+  },
+  "4mxmFTDypFoNyfMPQDbkCpDmRFm98vQ655zRDnBscfNd": {
+    "amountBaseUnits": "117914027440",
+    "amountUi": 117914.02744,
+    "perpadBalance": 4744.664491,
+    "holdDays": 18.23,
+    "base1to1": 4744.664491,
+    "daysBonus": 113169.362949
+  },
+  "4sXx37pjARUt41AAPgnavmDL9vqerysZdpTs4vxosh4K": {
+    "amountBaseUnits": "121779656531",
+    "amountUi": 121779.656531,
+    "perpadBalance": 27047.650025,
+    "holdDays": 15.26,
+    "base1to1": 27047.650025,
+    "daysBonus": 94732.006506
+  },
+  "4sbR6ioykxzRtDpxk3m9wdedUT74Y1WarMQ6n6RVRoZM": {
+    "amountBaseUnits": "173015580969",
+    "amountUi": 173015.580969,
+    "perpadBalance": 2.407881,
+    "holdDays": 27.87,
+    "base1to1": 2.407881,
+    "daysBonus": 173013.173088
+  },
+  "4tyvCr1xsqdVQe27bBDmXz4ZBFmPKdpE37n8s7AgVZMy": {
+    "amountBaseUnits": "95186633615",
+    "amountUi": 95186.633615,
+    "perpadBalance": 4303.502865,
+    "holdDays": 14.64,
+    "base1to1": 4303.502865,
+    "daysBonus": 90883.13075
+  },
+  "4udD26PNdH5dXrMy7y4yHXpwEXm2Rb5FfYJsQ7Hwox6P": {
+    "amountBaseUnits": "2213278275156",
+    "amountUi": 2213278.275156,
+    "perpadBalance": 2144929.69117,
+    "holdDays": 11.01,
+    "base1to1": 2144929.69117,
+    "daysBonus": 68348.583986
+  },
+  "4wJjSB4TfeT8E6JHeeLpy35fTktdJfPsKqYfPPAyQKut": {
+    "amountBaseUnits": "105178231452",
+    "amountUi": 105178.231452,
+    "perpadBalance": 88044.526475,
+    "holdDays": 2.76,
+    "base1to1": 88044.526475,
+    "daysBonus": 17133.704977
+  },
+  "4zS9WprqJSgXnsL3bm2w8Xv1vzWgNTuxjUy7WSsV1tbY": {
+    "amountBaseUnits": "439236302023",
+    "amountUi": 439236.302023,
+    "perpadBalance": 421978.439763,
+    "holdDays": 2.78,
+    "base1to1": 421978.439763,
+    "daysBonus": 17257.86226
+  },
+  "51AccHrfCRFAPrY3vfy9n5at4MdnN42yBgTrmmgbGNuG": {
+    "amountBaseUnits": "174914806188",
+    "amountUi": 174914.806188,
+    "perpadBalance": 908.374841,
+    "holdDays": 28.03,
+    "base1to1": 908.374841,
+    "daysBonus": 174006.431347
+  },
+  "52gqNnxixxc6E1rXt2VdZmyumCtLY1N4uaY3WeRTaCEw": {
+    "amountBaseUnits": "182505413202",
+    "amountUi": 182505.413202,
+    "perpadBalance": 8126.510007,
+    "holdDays": 28.09,
+    "base1to1": 8126.510007,
+    "daysBonus": 174378.903195
+  },
+  "52xXdiYj42hNp7JchePviCkM4rNCaWXyUWWgUwrwNoZE": {
+    "amountBaseUnits": "476153187597",
+    "amountUi": 476153.187597,
+    "perpadBalance": 289234.398875,
+    "holdDays": 30.11,
+    "base1to1": 289234.398875,
+    "daysBonus": 186918.788722
+  },
+  "58b3oQg64QbsPtv3tUeNErJtxDmtGxRvoFKRDstesiae": {
+    "amountBaseUnits": "571722407592",
+    "amountUi": 571722.407592,
+    "perpadBalance": 557506.398752,
+    "holdDays": 2.29,
+    "base1to1": 557506.398752,
+    "daysBonus": 14216.00884
+  },
+  "5BxootbxVKu7uYLRRusSD7GR5srM3iHFfBE6rr5eRXb4": {
+    "amountBaseUnits": "566932248664",
+    "amountUi": 566932.248664,
+    "perpadBalance": 452583.391532,
+    "holdDays": 18.42,
+    "base1to1": 452583.391532,
+    "daysBonus": 114348.857132
+  },
+  "5DwynVV18mjKYE3dwWPUnaDQ94SMEqo4HPmqwYiKXxSL": {
+    "amountBaseUnits": "169753262066",
+    "amountUi": 169753.262066,
+    "perpadBalance": 17474.355147,
+    "holdDays": 24.53,
+    "base1to1": 17474.355147,
+    "daysBonus": 152278.906919
+  },
+  "5FjJfrARoLM9rXYFHE8kCzNhfjJjY439ndoH5WFkfSd1": {
+    "amountBaseUnits": "172054761421",
+    "amountUi": 172054.761421,
+    "perpadBalance": 60437.364503,
+    "holdDays": 17.98,
+    "base1to1": 60437.364503,
+    "daysBonus": 111617.396918
+  },
+  "5Fmr27UspvExgBqcrLyxPwrJ7JwMfVZt8RfAvogKYuwA": {
+    "amountBaseUnits": "204584645230",
+    "amountUi": 204584.64523,
+    "perpadBalance": 20831.867211,
+    "holdDays": 29.6,
+    "base1to1": 20831.867211,
+    "daysBonus": 183752.778019
+  },
+  "5GN3fMWV1hwbjjSJRPU6eTBwgZ6TQ8FQSyrdU3wV9Y57": {
+    "amountBaseUnits": "6058386275385",
+    "amountUi": 6058386.275385,
+    "perpadBalance": 6014620.833323,
+    "holdDays": 7.05,
+    "base1to1": 6014620.833323,
+    "daysBonus": 43765.442062
+  },
+  "5HMGCieof6uE3THxtGfrDxsvKSpgfqzT21YDiCGMrV1q": {
+    "amountBaseUnits": "160325906539",
+    "amountUi": 160325.906539,
+    "perpadBalance": 98743.894446,
+    "holdDays": 9.92,
+    "base1to1": 98743.894446,
+    "daysBonus": 61582.012093
+  },
+  "5HdA1YZjTJjyxGb6TPdpjLHkWZnhE5719PWk662CTuJm": {
+    "amountBaseUnits": "209373673679",
+    "amountUi": 209373.673679,
+    "perpadBalance": 2217.247919,
+    "holdDays": 33.37,
+    "base1to1": 2217.247919,
+    "daysBonus": 207156.42576
+  },
+  "5LkPxveYHdrgjaPPT8N7xXaCgL8JuuDbAcT4uQr9PEbM": {
+    "amountBaseUnits": "192129481155",
+    "amountUi": 192129.481155,
+    "perpadBalance": 26565.745014,
+    "holdDays": 26.67,
+    "base1to1": 26565.745014,
+    "daysBonus": 165563.736141
+  },
+  "5MEpyog6Qu9SFKWSpGCTxx4ad5AL15PZdpWFaCsYUQk4": {
+    "amountBaseUnits": "98423910479",
+    "amountUi": 98423.910479,
+    "perpadBalance": 4436.847668,
+    "holdDays": 15.14,
+    "base1to1": 4436.847668,
+    "daysBonus": 93987.062811
+  },
+  "5NBWKMq3GG3MDTHRpAjE1LYWsNpUR7VpxZkWFxx2BCdN": {
+    "amountBaseUnits": "3195920191699",
+    "amountUi": 3195920.191699,
+    "perpadBalance": 3000000,
+    "holdDays": 31.56,
+    "base1to1": 3000000,
+    "daysBonus": 195920.191699
+  },
+  "5NMmZvgszyZfYiLjM2rjRX9NYMttm9pegynUZvgxWaN": {
+    "amountBaseUnits": "74523632066",
+    "amountUi": 74523.632066,
+    "perpadBalance": 153.419881,
+    "holdDays": 11.98,
+    "base1to1": 153.419881,
+    "daysBonus": 74370.212185
+  },
+  "5SsAfgiddTRzejm5c7f8k295TwiDFWBybyW4egDTjuhK": {
+    "amountBaseUnits": "174035949922",
+    "amountUi": 174035.949922,
+    "perpadBalance": 91.597216,
+    "holdDays": 28.02,
+    "base1to1": 91.597216,
+    "daysBonus": 173944.352706
+  },
+  "5UkAw92vVibWBGnGCZVTyM5KGCjQ3gv861zt6kVPEGCR": {
+    "amountBaseUnits": "94540851064",
+    "amountUi": 94540.851064,
+    "perpadBalance": 1112.496024,
+    "holdDays": 15.05,
+    "base1to1": 1112.496024,
+    "daysBonus": 93428.35504
+  },
+  "5VXi7JXk5D7y67vGvgHaR2jUH6tUqZkdJhAib3zdbgUC": {
+    "amountBaseUnits": "669831535979",
+    "amountUi": 669831.535979,
+    "perpadBalance": 607877.052039,
+    "holdDays": 9.98,
+    "base1to1": 607877.052039,
+    "daysBonus": 61954.48394
+  },
+  "5YgDGNoXRqkVbQ2PbCF6fL7t1Uaiqzz68FEqk14d2MpM": {
+    "amountBaseUnits": "7351201446566",
+    "amountUi": 7351201.446566,
+    "perpadBalance": 7237783.769052,
+    "holdDays": 18.27,
+    "base1to1": 7237783.769052,
+    "daysBonus": 113417.677514
+  },
+  "5YhSeYgWBmsKBD9EZjCPXvqhHeF5wHFy8yViUSWVrEa4": {
+    "amountBaseUnits": "112776990868",
+    "amountUi": 112776.990868,
+    "perpadBalance": 25184.028103,
+    "holdDays": 14.11,
+    "base1to1": 25184.028103,
+    "daysBonus": 87592.962765
+  },
+  "5ccdMh6zu9VQ6SZMEaVos5ay4T8aaawoJkzx3Rwk8iEi": {
+    "amountBaseUnits": "1421935798837",
+    "amountUi": 1421935.798837,
+    "perpadBalance": 1347565.586652,
+    "holdDays": 11.98,
+    "base1to1": 1347565.586652,
+    "daysBonus": 74370.212185
+  },
+  "5jcVuzCFaCjmpKjDQgBeiC1dEtLGAEnMSvypkZt5Z3Dx": {
+    "amountBaseUnits": "176417505288",
+    "amountUi": 176417.505288,
+    "perpadBalance": 2162.759376,
+    "holdDays": 28.07,
+    "base1to1": 2162.759376,
+    "daysBonus": 174254.745912
+  },
+  "5uez2R1fXyJ6YW1wVPqFoEq91WJufuWceVQy647qVYHF": {
+    "amountBaseUnits": "144468583673",
+    "amountUi": 144468.583673,
+    "perpadBalance": 11.585548,
+    "holdDays": 23.27,
+    "base1to1": 11.585548,
+    "daysBonus": 144456.998125
+  },
+  "5vwQiye6NZuXzpRkk4AcfvjnUFd9gGBRHsHxLKujfPqu": {
+    "amountBaseUnits": "52319359419",
+    "amountUi": 52319.359419,
+    "perpadBalance": 2718.525082,
+    "holdDays": 7.99,
+    "base1to1": 2718.525082,
+    "daysBonus": 49600.834337
+  },
+  "64yK5MpqcZeDDsXwifL3A4SGtd7tFcPudWyRU2hwTWfa": {
+    "amountBaseUnits": "833987513012",
+    "amountUi": 833987.513012,
+    "perpadBalance": 669417.035131,
+    "holdDays": 26.51,
+    "base1to1": 669417.035131,
+    "daysBonus": 164570.477881
+  },
+  "66assuHVJGjxL7uFHYQh1sfxtZj9sd5HuAAdRjgt5no2": {
+    "amountBaseUnits": "618297057074",
+    "amountUi": 618297.057074,
+    "perpadBalance": 443918.153879,
+    "holdDays": 28.09,
+    "base1to1": 443918.153879,
+    "daysBonus": 174378.903195
+  },
+  "66jXt3vAubSYTXrw9PohpTkmJAbjKKhxmpJtMSh6bbvv": {
+    "amountBaseUnits": "96412316559",
+    "amountUi": 96412.316559,
+    "perpadBalance": 66.265381,
+    "holdDays": 15.52,
+    "base1to1": 66.265381,
+    "daysBonus": 96346.051178
+  },
+  "68c5gqqvxfCetYbqhD4sBsaPaDCjQedMns52z1wC11wm": {
+    "amountBaseUnits": "4671966374829",
+    "amountUi": 4671966.374829,
+    "perpadBalance": 4610011.890889,
+    "holdDays": 9.98,
+    "base1to1": 4610011.890889,
+    "daysBonus": 61954.48394
+  },
+  "68vr5YihvzLanJwHRo22qUZetrnQEgA8tr9E7xavZGb": {
+    "amountBaseUnits": "3177159101316",
+    "amountUi": 3177159.101316,
+    "perpadBalance": 3011222.893328,
+    "holdDays": 26.73,
+    "base1to1": 3011222.893328,
+    "daysBonus": 165936.207988
+  },
+  "68zNfLYbKJkBkRW6yCscM4wzAr4qYxi9xdsjhwZm5N4b": {
+    "amountBaseUnits": "177087291341",
+    "amountUi": 177087.291341,
+    "perpadBalance": 2894.62407,
+    "holdDays": 28.06,
+    "base1to1": 2894.62407,
+    "daysBonus": 174192.667271
+  },
+  "69yhtoJR4JYPPABZcSNkzuqbaFbwHsCkja1sP1Q2aVT5": {
+    "amountBaseUnits": "245406254383",
+    "amountUi": 245406.254383,
+    "perpadBalance": 37815.278134,
+    "holdDays": 33.44,
+    "base1to1": 37815.278134,
+    "daysBonus": 207590.976249
+  },
+  "6Ge32v1gWV4KR8tGiEBPHqd2y3pDs7xMtm7YMrW3gMrw": {
+    "amountBaseUnits": "17678509666812",
+    "amountUi": 17678509.666812,
+    "perpadBalance": 17568258,
+    "holdDays": 17.76,
+    "base1to1": 17568258,
+    "daysBonus": 110251.666812
+  },
+  "6H8f1qXca7ooADQ62Zziw3KgXdcZkzau5Ugibu8QMerj": {
+    "amountBaseUnits": "234444965520",
+    "amountUi": 234444.96552,
+    "perpadBalance": 77199.767303,
+    "holdDays": 25.33,
+    "base1to1": 77199.767303,
+    "daysBonus": 157245.198217
+  },
+  "6K5SRSe3e12hiyLNbuwQTZ9apMKLbM9Q5B75DdYx429V": {
+    "amountBaseUnits": "86393393294",
+    "amountUi": 86393.393294,
+    "perpadBalance": 2835.542208,
+    "holdDays": 13.46,
+    "base1to1": 2835.542208,
+    "daysBonus": 83557.851086
+  },
+  "6LiFEXjeaL16oMPseXU1V7bSnVTkF7nVGJ5nihzJfKbW": {
+    "amountBaseUnits": "2347547525519",
+    "amountUi": 2347547.525519,
+    "perpadBalance": 2256850.630693,
+    "holdDays": 14.61,
+    "base1to1": 2256850.630693,
+    "daysBonus": 90696.894826
+  },
+  "6LxaogWYPDJfv7BHW2KyRqx6nL5hma8fWbLjstEwthiq": {
+    "amountBaseUnits": "156929463286",
+    "amountUi": 156929.463286,
+    "perpadBalance": 1608.702947,
+    "holdDays": 25.02,
+    "base1to1": 1608.702947,
+    "daysBonus": 155320.760339
+  },
+  "6TLGYDawCa6sHQ5aVXETsm8vr5wgMeHSYjczGPnjt7MQ": {
+    "amountBaseUnits": "89205019356",
+    "amountUi": 89205.019356,
+    "perpadBalance": 3536.494469,
+    "holdDays": 13.8,
+    "base1to1": 3536.494469,
+    "daysBonus": 85668.524887
+  },
+  "6ULJn22ezuosE3CE6C4U7EMEcXsipG7oBWZw4XCoJXd7": {
+    "amountBaseUnits": "454883478072",
+    "amountUi": 454883.478072,
+    "perpadBalance": 359903.157001,
+    "holdDays": 15.3,
+    "base1to1": 359903.157001,
+    "daysBonus": 94980.321071
+  },
+  "6V9Txdzog6EswfD6yDa2BaTYHFn1kzgv7FJw2YigKRRb": {
+    "amountBaseUnits": "5445017635021",
+    "amountUi": 5445017.635021,
+    "perpadBalance": 5306830.579659,
+    "holdDays": 22.26,
+    "base1to1": 5306830.579659,
+    "daysBonus": 138187.055362
+  },
+  "6ZGpBfMFQKoEiR3RZvVr8HXDFWHp7HugzKdN3c2DssE7": {
+    "amountBaseUnits": "157742980730",
+    "amountUi": 157742.98073,
+    "perpadBalance": 62266.030529,
+    "holdDays": 15.38,
+    "base1to1": 62266.030529,
+    "daysBonus": 95476.950201
+  },
+  "6cWND8vbx8o9y7UNa2TnetczKSL3xQQFmLV74iS9wbC4": {
+    "amountBaseUnits": "90920935510",
+    "amountUi": 90920.93551,
+    "perpadBalance": 3390.051386,
+    "holdDays": 14.1,
+    "base1to1": 3390.051386,
+    "daysBonus": 87530.884124
+  },
+  "6eDacwfR9anz9ERMSmLRcxsbMSbZ9m1rGbET4Z4Sug5q": {
+    "amountBaseUnits": "3963177369997",
+    "amountUi": 3963177.369997,
+    "perpadBalance": 3788612.230879,
+    "holdDays": 28.12,
+    "base1to1": 3788612.230879,
+    "daysBonus": 174565.139118
+  },
+  "6go7QLtds3h4nk3vR7xFLUHrU76zNGZ2gv6V7gdAJdB8": {
+    "amountBaseUnits": "184705366301",
+    "amountUi": 184705.366301,
+    "perpadBalance": 11071.406801,
+    "holdDays": 27.97,
+    "base1to1": 11071.406801,
+    "daysBonus": 173633.9595
+  },
+  "6hgop7WL9Ssy2ceFdgJCeH1C1pBvcAGvCSv3BGgvnxMC": {
+    "amountBaseUnits": "7956778608067",
+    "amountUi": 7956778.608067,
+    "perpadBalance": 7882842.946371,
+    "holdDays": 11.91,
+    "base1to1": 7882842.946371,
+    "daysBonus": 73935.661696
+  },
+  "6houX1Y4CSBAivmKWGqJMfjuZDjZqZFBuy48BesLiohG": {
+    "amountBaseUnits": "294947127469",
+    "amountUi": 294947.127469,
+    "perpadBalance": 270488.142827,
+    "holdDays": 3.94,
+    "base1to1": 270488.142827,
+    "daysBonus": 24458.984642
+  },
+  "6jG3MrGMo8DaCrBfhHCMpse6StVnRhHphmZKComcVKLi": {
+    "amountBaseUnits": "633633420132",
+    "amountUi": 633633.420132,
+    "perpadBalance": 630777.802636,
+    "holdDays": 0.46,
+    "base1to1": 630777.802636,
+    "daysBonus": 2855.617496
+  },
+  "6jJGVEWEMt93GcTET8fviVrY5SKfbHyAorN1yNKp9BEN": {
+    "amountBaseUnits": "175556009328",
+    "amountUi": 175556.009328,
+    "perpadBalance": 1549.577981,
+    "holdDays": 28.03,
+    "base1to1": 1549.577981,
+    "daysBonus": 174006.431347
+  },
+  "6qFXFVBrURci4NEADBNijs8aBkMyUewWArUYDRZmy1PD": {
+    "amountBaseUnits": "4268734600362",
+    "amountUi": 4268734.600362,
+    "perpadBalance": 4173816.357932,
+    "holdDays": 15.29,
+    "base1to1": 4173816.357932,
+    "daysBonus": 94918.24243
+  },
+  "6qkCQBqBLNRUgzDFP5xdFvdQ46peeJE7sv8WNooXrfco": {
+    "amountBaseUnits": "23408232963",
+    "amountUi": 23408.232963,
+    "perpadBalance": 6460.763909,
+    "holdDays": 2.73,
+    "base1to1": 6460.763909,
+    "daysBonus": 16947.469054
+  },
+  "6rFtGXViP7afjEuAar9sWDuD7AH3j6dF7JkNkGVsj4FW": {
+    "amountBaseUnits": "93949390638",
+    "amountUi": 93949.390638,
+    "perpadBalance": 6356.427873,
+    "holdDays": 14.11,
+    "base1to1": 6356.427873,
+    "daysBonus": 87592.962765
+  },
+  "6zbcesCuqKf5uqF8CnpCxFqEMBm8VSsCdTMvTWJbW9p2": {
+    "amountBaseUnits": "8612457289762",
+    "amountUi": 8612457.289762,
+    "perpadBalance": 8404431.763025,
+    "holdDays": 33.51,
+    "base1to1": 8404431.763025,
+    "daysBonus": 208025.526737
+  },
+  "763DVgNn9nDqNXxmshru6HYAppER6Gk1Ut3A5s2qsTEJ": {
+    "amountBaseUnits": "173271321530",
+    "amountUi": 173271.32153,
+    "perpadBalance": 9.833877,
+    "holdDays": 27.91,
+    "base1to1": 9.833877,
+    "daysBonus": 173261.487653
+  },
+  "77bB9nMSydbBrm6L3CoGuCuuxLZYxTyHnw3Ken5xbHK1": {
+    "amountBaseUnits": "189685477290",
+    "amountUi": 189685.47729,
+    "perpadBalance": 15244.495454,
+    "holdDays": 28.1,
+    "base1to1": 15244.495454,
+    "daysBonus": 174440.981836
+  },
+  "77eg8ZALn2CuEs2ErACpBsuzcG5nRoDkK2eyrGQNfxD2": {
+    "amountBaseUnits": "19393965448351",
+    "amountUi": 19393965.448351,
+    "perpadBalance": 19342874.726625,
+    "holdDays": 8.23,
+    "base1to1": 19342874.726625,
+    "daysBonus": 51090.721726
+  },
+  "77hbanGZjwiRmnXT35URccsCa1vna16zPxM6nYLHEZyJ": {
+    "amountBaseUnits": "9147900108346",
+    "amountUi": 9147900.108346,
+    "perpadBalance": 8986557.719808,
+    "holdDays": 25.99,
+    "base1to1": 8986557.719808,
+    "daysBonus": 161342.388538
+  },
+  "7A3tjuXdPTZBxvwzhS1K8u8J58k616xkPEjNzafDnZhT": {
+    "amountBaseUnits": "1131248606473",
+    "amountUi": 1131248.606473,
+    "perpadBalance": 1013795.81728,
+    "holdDays": 18.92,
+    "base1to1": 1013795.81728,
+    "daysBonus": 117452.789193
+  },
+  "7DxeUQ1TQ2wnYKc3vxPsvr6c93vGUBJSuRdP9R6WueGL": {
+    "amountBaseUnits": "49852782639",
+    "amountUi": 49852.782639,
+    "perpadBalance": 3.633737,
+    "holdDays": 8.03,
+    "base1to1": 3.633737,
+    "daysBonus": 49849.148902
+  },
+  "7FrNGQBWLbb3gVrv5yCpUnpVcQ7hUxsfGZtGwQXt8x2H": {
+    "amountBaseUnits": "629894329296",
+    "amountUi": 629894.329296,
+    "perpadBalance": 493880.026377,
+    "holdDays": 21.91,
+    "base1to1": 493880.026377,
+    "daysBonus": 136014.302919
+  },
+  "7JQeyNK55fkUPUmEotupBFpiBGpgEQYLe8Ht1VdSfxcP": {
+    "amountBaseUnits": "171009149355",
+    "amountUi": 171009.149355,
+    "perpadBalance": 44.571428,
+    "holdDays": 27.54,
+    "base1to1": 44.571428,
+    "daysBonus": 170964.577927
+  },
+  "7VYmu8k9hyuyVNUvbQ2P7Uj2bHrMWPexFNvzEgbX3Goy": {
+    "amountBaseUnits": "178225238326",
+    "amountUi": 178225.238326,
+    "perpadBalance": 3598.020567,
+    "holdDays": 28.13,
+    "base1to1": 3598.020567,
+    "daysBonus": 174627.217759
+  },
+  "7Vur86MEpA65DjGjkSFmxH9qiowUBNWUmm8xiHwWtSqG": {
+    "amountBaseUnits": "95480050449",
+    "amountUi": 95480.050449,
+    "perpadBalance": 14405.345012,
+    "holdDays": 13.06,
+    "base1to1": 14405.345012,
+    "daysBonus": 81074.705437
+  },
+  "7dxD5Tqgg59hWQHZknpE5VPo3ddYRiBqr6wrZ7gsze3m": {
+    "amountBaseUnits": "186191964695",
+    "amountUi": 186191.964695,
+    "perpadBalance": 78920.072662,
+    "holdDays": 17.28,
+    "base1to1": 78920.072662,
+    "daysBonus": 107271.892033
+  },
+  "7fbrW6eiGKYz6j8zrEBkFKh7U6peURLvbKN96YzS42Ki": {
+    "amountBaseUnits": "189700246985",
+    "amountUi": 189700.246985,
+    "perpadBalance": 49.99805,
+    "holdDays": 30.55,
+    "base1to1": 49.99805,
+    "daysBonus": 189650.248935
+  },
+  "7gy2PSjeSzj1ooh2B2tG8Aon83KfKAz2mM18JDdhN4KA": {
+    "amountBaseUnits": "360055584499",
+    "amountUi": 360055.584499,
+    "perpadBalance": 195112.63477,
+    "holdDays": 26.57,
+    "base1to1": 195112.63477,
+    "daysBonus": 164942.949729
+  },
+  "7iWnBRRhBCiNXXPhqiGzvvBkKrvFSWqqmxRyu9VyYBxE": {
+    "amountBaseUnits": "237239045985",
+    "amountUi": 237239.045985,
+    "perpadBalance": 29896.384301,
+    "holdDays": 33.4,
+    "base1to1": 29896.384301,
+    "daysBonus": 207342.661684
+  },
+  "7kEc3msfyC8APZLzjJLuKmiWrFBhVmm723EHYhKpQkqr": {
+    "amountBaseUnits": "123742513779",
+    "amountUi": 123742.513779,
+    "perpadBalance": 10262.757624,
+    "holdDays": 18.28,
+    "base1to1": 10262.757624,
+    "daysBonus": 113479.756155
+  },
+  "7vHZVPQcD6figBxekP9YSf1nCELxZxF4jF2M3B7i1X5d": {
+    "amountBaseUnits": "1311433108227",
+    "amountUi": 1311433.108227,
+    "perpadBalance": 1214590.42792,
+    "holdDays": 15.6,
+    "base1to1": 1214590.42792,
+    "daysBonus": 96842.680307
+  },
+  "7wabmEwFJWhXnwu38VaSkKH2tgsKvKPiaMXa2CMuWPWJ": {
+    "amountBaseUnits": "189413352738",
+    "amountUi": 189413.352738,
+    "perpadBalance": 11.418368,
+    "holdDays": 30.51,
+    "base1to1": 11.418368,
+    "daysBonus": 189401.93437
+  },
+  "7xBE9yeoot8Cjt378JMMzWV4158R85ZScTiveuhjwGSg": {
+    "amountBaseUnits": "173085454564",
+    "amountUi": 173085.454564,
+    "perpadBalance": 10.202835,
+    "holdDays": 27.88,
+    "base1to1": 10.202835,
+    "daysBonus": 173075.251729
+  },
+  "7y4t9NKPcg6dN3uBgyaDmDHsfedEiNhaCEZZ2y7j5Dc5": {
+    "amountBaseUnits": "28017604108188",
+    "amountUi": 28017604.108188,
+    "perpadBalance": 27828450.488382,
+    "holdDays": 30.47,
+    "base1to1": 27828450.488382,
+    "daysBonus": 189153.619806
+  },
+  "7zC5kesErW1ZDLYPyY8fssD8KjHWM2iMktHEbuWamDeD": {
+    "amountBaseUnits": "87597127046",
+    "amountUi": 87597.127046,
+    "perpadBalance": 4.164281,
+    "holdDays": 14.11,
+    "base1to1": 4.164281,
+    "daysBonus": 87592.962765
+  },
+  "7zoo3oP4sVoUnecpZFhZSjNziwnoE5Rv7RgWfExfwUdA": {
+    "amountBaseUnits": "1174068509988",
+    "amountUi": 1174068.509988,
+    "perpadBalance": 1000000,
+    "holdDays": 28.04,
+    "base1to1": 1000000,
+    "daysBonus": 174068.509988
+  },
+  "84M8EswKqTpokfTowiUpmN3pzWrW9PUSGWWz9aEJVnjB": {
+    "amountBaseUnits": "1758329904055",
+    "amountUi": 1758329.904055,
+    "perpadBalance": 1640504.643014,
+    "holdDays": 18.98,
+    "base1to1": 1640504.643014,
+    "daysBonus": 117825.261041
+  },
+  "88hioPhM9a5p5oa53VbTXNcpezvndtBsxw9GUV6joxzC": {
+    "amountBaseUnits": "802616753313",
+    "amountUi": 802616.753313,
+    "perpadBalance": 628175.771477,
+    "holdDays": 28.1,
+    "base1to1": 628175.771477,
+    "daysBonus": 174440.981836
+  },
+  "8A4STwLWTBXAPrYnmtuf9KcUM3cK8xDRLbwHokkE6xXt": {
+    "amountBaseUnits": "80304417143",
+    "amountUi": 80304.417143,
+    "perpadBalance": 65591.779173,
+    "holdDays": 2.37,
+    "base1to1": 65591.779173,
+    "daysBonus": 14712.63797
+  },
+  "8G2Wv7g4pyW77sXUMxwQc1PezwYSK47YyAzbXdj37iKV": {
+    "amountBaseUnits": "610546278309",
+    "amountUi": 610546.278309,
+    "perpadBalance": 542011.458399,
+    "holdDays": 11.04,
+    "base1to1": 542011.458399,
+    "daysBonus": 68534.81991
+  },
+  "8KGR9ryTTJZmPeZnPpyUbjL1d3HhRv4DmkzRarqSJ5Z1": {
+    "amountBaseUnits": "321743093977",
+    "amountUi": 321743.093977,
+    "perpadBalance": 250476.813853,
+    "holdDays": 11.48,
+    "base1to1": 250476.813853,
+    "daysBonus": 71266.280124
+  },
+  "8PjvZx41ftGPL8wx8DF8NpGs5Yp5APaVFF2keLoowcZ7": {
+    "amountBaseUnits": "198563536896",
+    "amountUi": 198563.536896,
+    "perpadBalance": 23750.083213,
+    "holdDays": 28.16,
+    "base1to1": 23750.083213,
+    "daysBonus": 174813.453683
+  },
+  "8STEjSxnHAzmW9NMXVjWN3iXK6gHBP816ksHT2XbyAER": {
+    "amountBaseUnits": "175240752487",
+    "amountUi": 175240.752487,
+    "perpadBalance": 7566.342544,
+    "holdDays": 27.01,
+    "base1to1": 7566.342544,
+    "daysBonus": 167674.409943
+  },
+  "8TPjzvrUU6fKmmso4nD6fBnrhcEjwh8HrZRC5276gAjh": {
+    "amountBaseUnits": "1241318198615",
+    "amountUi": 1241318.198615,
+    "perpadBalance": 1095805.863589,
+    "holdDays": 23.44,
+    "base1to1": 1095805.863589,
+    "daysBonus": 145512.335026
+  },
+  "8Vu6kfxytK74rHTFF8Epf4XQioyuPhU1jghMXrDcfJKD": {
+    "amountBaseUnits": "1033846394051",
+    "amountUi": 1033846.394051,
+    "perpadBalance": 862447.265635,
+    "holdDays": 27.61,
+    "base1to1": 862447.265635,
+    "daysBonus": 171399.128416
+  },
+  "8YpGjBxBPe5eqA9JcucoEn2y1btRk3MXc15TvZTp4YUF": {
+    "amountBaseUnits": "257836288571",
+    "amountUi": 257836.288571,
+    "perpadBalance": 135665.522645,
+    "holdDays": 19.68,
+    "base1to1": 135665.522645,
+    "daysBonus": 122170.765926
+  },
+  "8ZC2qDb7gKR7NBfsMUXdpKqKCvhMbbPJoWuSboCWDCgF": {
+    "amountBaseUnits": "129223950551",
+    "amountUi": 129223.950551,
+    "perpadBalance": 19282.676946,
+    "holdDays": 17.71,
+    "base1to1": 19282.676946,
+    "daysBonus": 109941.273605
+  },
+  "8bT3AYYxjYZJ5mcdV1wEzEbpoGoRAJfpAMqZfPvDihA9": {
+    "amountBaseUnits": "83232946889",
+    "amountUi": 83232.946889,
+    "perpadBalance": 24444.473651,
+    "holdDays": 9.47,
+    "base1to1": 24444.473651,
+    "daysBonus": 58788.473238
+  },
+  "8fenZTDtD27NgQoApjRVTPnZyTEgdjuxkWcQZiPVRS4E": {
+    "amountBaseUnits": "11143215425301",
+    "amountUi": 11143215.425301,
+    "perpadBalance": 11000000,
+    "holdDays": 23.07,
+    "base1to1": 11000000,
+    "daysBonus": 143215.425301
+  },
+  "8oE5NMVQuz5gF9zJR75YoXXG5SQP7dCJUDr8XQ25dBQY": {
+    "amountBaseUnits": "37959435948",
+    "amountUi": 37959.435948,
+    "perpadBalance": 526.015291,
+    "holdDays": 6.03,
+    "base1to1": 526.015291,
+    "daysBonus": 37433.420657
+  },
+  "8od8WRSL5sNW71w3RrUF3nczY2dQqG4ArpsyH1Wy1YmY": {
+    "amountBaseUnits": "3296424445643",
+    "amountUi": 3296424.445643,
+    "perpadBalance": 3124901.159945,
+    "holdDays": 27.63,
+    "base1to1": 3124901.159945,
+    "daysBonus": 171523.285698
+  },
+  "8psNvWTrdNTiVRNzAgsou9kETXNJm2SXZyaKuJraVRtf": {
+    "amountBaseUnits": "240825219485",
+    "amountUi": 240825.219485,
+    "perpadBalance": 32861.771389,
+    "holdDays": 33.5,
+    "base1to1": 32861.771389,
+    "daysBonus": 207963.448096
+  },
+  "8qUUMVhCgVAbJSoKACLrkrNHFNbyz1HNF8kaSpVV4cAw": {
+    "amountBaseUnits": "190428911154",
+    "amountUi": 190428.911154,
+    "perpadBalance": 95.797165,
+    "holdDays": 30.66,
+    "base1to1": 95.797165,
+    "daysBonus": 190333.113989
+  },
+  "8qw4jwJsJTvgE7MiKuFQWrdpQc9xrq4dcHnbuukbV5fr": {
+    "amountBaseUnits": "204183306476",
+    "amountUi": 204183.306476,
+    "perpadBalance": 187918.702476,
+    "holdDays": 2.62,
+    "base1to1": 187918.702476,
+    "daysBonus": 16264.604
+  },
+  "8uBYo7usSiWgMS4xxFsuWUwCPu85XYwsaNtUCruhaZSf": {
+    "amountBaseUnits": "11020292430180",
+    "amountUi": 11020292.43018,
+    "perpadBalance": 10976154.516271,
+    "holdDays": 7.11,
+    "base1to1": 10976154.516271,
+    "daysBonus": 44137.913909
+  },
+  "8vxaoTGHrR5yJ8nCyaDsumKBrySEzbzY8Ua8pfUU6men": {
+    "amountBaseUnits": "175836824366",
+    "amountUi": 175836.824366,
+    "perpadBalance": 6362.133828,
+    "holdDays": 27.3,
+    "base1to1": 6362.133828,
+    "daysBonus": 169474.690538
+  },
+  "8zR2heEW7JRtrj4DNaXtPB2kE8abwvW2aL7ZqZY2xLin": {
+    "amountBaseUnits": "7773702291310",
+    "amountUi": 7773702.29131,
+    "perpadBalance": 7727950.332729,
+    "holdDays": 7.37,
+    "base1to1": 7727950.332729,
+    "daysBonus": 45751.958581
+  },
+  "8zhMiAARc12kWRyVuVDZXi5YJDUC1mZhZL3CAsgnR8hN": {
+    "amountBaseUnits": "1206253947281",
+    "amountUi": 1206253.947281,
+    "perpadBalance": 998849.206956,
+    "holdDays": 33.41,
+    "base1to1": 998849.206956,
+    "daysBonus": 207404.740325
+  },
+  "93FZsokDJCk4APzRqvxz54nEZ3GezkCb8m8Xzbn8g8QD": {
+    "amountBaseUnits": "51178530079",
+    "amountUi": 51178.530079,
+    "perpadBalance": 4495.39188,
+    "holdDays": 7.52,
+    "base1to1": 4495.39188,
+    "daysBonus": 46683.138199
+  },
+  "93LvaAqjJvU7TY9Qv7hnwN1TmCQPw9hAcRD1DEzoQ8Jx": {
+    "amountBaseUnits": "8068667856975",
+    "amountUi": 8068667.856975,
+    "perpadBalance": 7968286.694118,
+    "holdDays": 16.17,
+    "base1to1": 7968286.694118,
+    "daysBonus": 100381.162857
+  },
+  "97hjR1XP8LXrdjiFhSfw6XZqqhZbFFhcitWpKJdgRZQc": {
+    "amountBaseUnits": "178361865997",
+    "amountUi": 178361.865997,
+    "perpadBalance": 70282.951628,
+    "holdDays": 17.41,
+    "base1to1": 70282.951628,
+    "daysBonus": 108078.914369
+  },
+  "9D5rfnqJboZMsLUbjBa1oUyaxTZDRXcLGv9jkPTdfori": {
+    "amountBaseUnits": "206856760131",
+    "amountUi": 206856.760131,
+    "perpadBalance": 35457.631715,
+    "holdDays": 27.61,
+    "base1to1": 35457.631715,
+    "daysBonus": 171399.128416
+  },
+  "9JGqAUnmoBTCM959CixymRW8UTknToD2PUssM4UUVWVQ": {
+    "amountBaseUnits": "174038819496",
+    "amountUi": 174038.819496,
+    "perpadBalance": 2080.983309,
+    "holdDays": 27.7,
+    "base1to1": 2080.983309,
+    "daysBonus": 171957.836187
+  },
+  "9KY87or3zpNxdwdvkqMqXdUC5sN7wi4P8zxuxaH1e7GN": {
+    "amountBaseUnits": "86984931198",
+    "amountUi": 86984.931198,
+    "perpadBalance": 12.754845,
+    "holdDays": 14.01,
+    "base1to1": 12.754845,
+    "daysBonus": 86972.176353
+  },
+  "9RgRmUy33w643Zvi2xDpNE7y7Ves1jimDgQZBPcjxw3Y": {
+    "amountBaseUnits": "170428003561",
+    "amountUi": 170428.003561,
+    "perpadBalance": 22.133405,
+    "holdDays": 27.45,
+    "base1to1": 22.133405,
+    "daysBonus": 170405.870156
+  },
+  "9WuDr2LTHkvVc4h9MpAWpa8qiWNtVt45mpzsjB7priAW": {
+    "amountBaseUnits": "79363359357",
+    "amountUi": 79363.359357,
+    "perpadBalance": 2758.316088,
+    "holdDays": 12.34,
+    "base1to1": 2758.316088,
+    "daysBonus": 76605.043269
+  },
+  "9YWcwswpA5mFcnKvWo4v7MGpTJvhGNr7iPbEgncCZzyK": {
+    "amountBaseUnits": "890775884349",
+    "amountUi": 890775.884349,
+    "perpadBalance": 726267.485109,
+    "holdDays": 26.5,
+    "base1to1": 726267.485109,
+    "daysBonus": 164508.39924
+  },
+  "9ZopaxcUMEiGLFsHfPmZJrrYYykctHd2w8J5BLm6Zxqq": {
+    "amountBaseUnits": "195021044659",
+    "amountUi": 195021.044659,
+    "perpadBalance": 60000,
+    "holdDays": 21.75,
+    "base1to1": 60000,
+    "daysBonus": 135021.044659
+  },
+  "9au5jxHiVmftGS1dmc9bNbeBh59coKjsNGvXnRnc9TKK": {
+    "amountBaseUnits": "192434507967",
+    "amountUi": 192434.507967,
+    "perpadBalance": 18055.604772,
+    "holdDays": 28.09,
+    "base1to1": 18055.604772,
+    "daysBonus": 174378.903195
+  },
+  "9bkwtn1qc88NVqWWdP2pxxZfT31dX9TrLcQsRdQ2yz6j": {
+    "amountBaseUnits": "375233681154",
+    "amountUi": 375233.681154,
+    "perpadBalance": 342766.551795,
+    "holdDays": 5.23,
+    "base1to1": 342766.551795,
+    "daysBonus": 32467.129359
+  },
+  "9bsoeFLcABGLHXWviwjxT5L4HSHZupGgHUxTmRZndBob": {
+    "amountBaseUnits": "357949964981",
+    "amountUi": 357949.964981,
+    "perpadBalance": 323682.555026,
+    "holdDays": 5.52,
+    "base1to1": 323682.555026,
+    "daysBonus": 34267.409955
+  },
+  "9cr2mKCCG2XLiqzwntm9JFz3kqA5S8wgEGsBh25NUvv6": {
+    "amountBaseUnits": "2276271135005",
+    "amountUi": 2276271.135005,
+    "perpadBalance": 2102264.703658,
+    "holdDays": 28.03,
+    "base1to1": 2102264.703658,
+    "daysBonus": 174006.431347
+  },
+  "9g9itRF9Yy4DRbQ9feyX1VdNvddg4AGkvMQNixSCXKqA": {
+    "amountBaseUnits": "23909506910061",
+    "amountUi": 23909506.910061,
+    "perpadBalance": 23738107.781645,
+    "holdDays": 27.61,
+    "base1to1": 23738107.781645,
+    "daysBonus": 171399.128416
+  },
+  "9gsxjDogpMaewiwUDVTg8s7eoh58zCiFhg3CHntExu9L": {
+    "amountBaseUnits": "677229311410",
+    "amountUi": 677229.31141,
+    "perpadBalance": 507506.306307,
+    "holdDays": 27.34,
+    "base1to1": 507506.306307,
+    "daysBonus": 169723.005103
+  },
+  "9kuSr6YijitVcyRQkKu3GPBrVS9T6SppQtndrjy1w4iA": {
+    "amountBaseUnits": "105104866401",
+    "amountUi": 105104.866401,
+    "perpadBalance": 5.726811,
+    "holdDays": 16.93,
+    "base1to1": 5.726811,
+    "daysBonus": 105099.13959
+  },
+  "9mX2UR5H8wmAzeP4dTkU6mpFkXZ4pP9DDtHYzGWba4C": {
+    "amountBaseUnits": "228866593026",
+    "amountUi": 228866.593026,
+    "perpadBalance": 35367.468335,
+    "holdDays": 31.17,
+    "base1to1": 35367.468335,
+    "daysBonus": 193499.124691
+  },
+  "9mtwN9Ms7qeAxZjNCUtTViZtam1wyH36JgfmpEBF27GS": {
+    "amountBaseUnits": "1110527690887",
+    "amountUi": 1110527.690887,
+    "perpadBalance": 1060057.755573,
+    "holdDays": 8.13,
+    "base1to1": 1060057.755573,
+    "daysBonus": 50469.935314
+  },
+  "9qdqmk6abn3XX3EouBAFk2fbE4gRWzo2ARopmyf1x9mb": {
+    "amountBaseUnits": "1174254745912",
+    "amountUi": 1174254.745912,
+    "perpadBalance": 1000000,
+    "holdDays": 28.07,
+    "base1to1": 1000000,
+    "daysBonus": 174254.745912
+  },
+  "9r7hAx69YUNpspGSAJzSAoqswznMgWSFgHx31do9LhMU": {
+    "amountBaseUnits": "96133171644",
+    "amountUi": 96133.171644,
+    "perpadBalance": 35.435031,
+    "holdDays": 15.48,
+    "base1to1": 35.435031,
+    "daysBonus": 96097.736613
+  },
+  "9rkpXQFT9u3yk2iSVfrUMFXVcqEqmmYYVWsR3ish12Y7": {
+    "amountBaseUnits": "212830983408",
+    "amountUi": 212830.983408,
+    "perpadBalance": 25477.644198,
+    "holdDays": 30.18,
+    "base1to1": 25477.644198,
+    "daysBonus": 187353.33921
+  },
+  "9tcTWVXP5mZSAJxbTgjJeZb71tbgQdDPn2EJ8SDyiMGs": {
+    "amountBaseUnits": "176840839771",
+    "amountUi": 176840.839771,
+    "perpadBalance": 3827.666683,
+    "holdDays": 27.87,
+    "base1to1": 3827.666683,
+    "daysBonus": 173013.173088
+  },
+  "9vfWFXXzypN9sicVbmGbhXnShNJamEMAMhmdsQmkpHsP": {
+    "amountBaseUnits": "254904945501",
+    "amountUi": 254904.945501,
+    "perpadBalance": 53211.440168,
+    "holdDays": 32.49,
+    "base1to1": 53211.440168,
+    "daysBonus": 201693.505333
+  },
+  "9x1ZfzuG8vkQNJgPV98HjaPVKRyh5b6bpbp5wy7smsuk": {
+    "amountBaseUnits": "4256824582582",
+    "amountUi": 4256824.582582,
+    "perpadBalance": 4212190.039543,
+    "holdDays": 7.19,
+    "base1to1": 4212190.039543,
+    "daysBonus": 44634.543039
+  },
+  "9zEx1LSUpPqMuv6mcPmTzt9sGUGTE4tskkuHXaXN2S8m": {
+    "amountBaseUnits": "1098854108299",
+    "amountUi": 1098854.108299,
+    "perpadBalance": 909265.938005,
+    "holdDays": 30.54,
+    "base1to1": 909265.938005,
+    "daysBonus": 189588.170294
+  },
+  "A12j5iKXktGH9JtR1jidPDefDC1x87dwszbRiA3QdfEF": {
+    "amountBaseUnits": "101562634458",
+    "amountUi": 101562.634458,
+    "perpadBalance": 1.977418,
+    "holdDays": 16.36,
+    "base1to1": 1.977418,
+    "daysBonus": 101560.65704
+  },
+  "A7CgL2j8QhJZrupLYmCVjNjowsCxnad8KDPTHyp8YPcp": {
+    "amountBaseUnits": "55265421391",
+    "amountUi": 55265.421391,
+    "perpadBalance": 5602.508413,
+    "holdDays": 8,
+    "base1to1": 5602.508413,
+    "daysBonus": 49662.912978
+  },
+  "A81L3maMepVsgVHW8Y683TjmCdepRiHEktk2MNVVWGrz": {
+    "amountBaseUnits": "6243072002635",
+    "amountUi": 6243072.002635,
+    "perpadBalance": 6081729.614097,
+    "holdDays": 25.99,
+    "base1to1": 6081729.614097,
+    "daysBonus": 161342.388538
+  },
+  "ABd6t3dbfwhQdh9Qm1mqJsgoSrZAhCoEjBTUgkFs7Fug": {
+    "amountBaseUnits": "371549427931",
+    "amountUi": 371549.427931,
+    "perpadBalance": 277065.73599,
+    "holdDays": 15.22,
+    "base1to1": 277065.73599,
+    "daysBonus": 94483.691941
+  },
+  "ACv85aJFzABZZuUUHkdJgCvGozDJQRV5ETeWe1yXZzvs": {
+    "amountBaseUnits": "172505166390",
+    "amountUi": 172505.16639,
+    "perpadBalance": 1602.667104,
+    "holdDays": 27.53,
+    "base1to1": 1602.667104,
+    "daysBonus": 170902.499286
+  },
+  "AFKC7cDEtNnAS7fvyDfopt4rWDGu1H9zQEh9EH3MuPit": {
+    "amountBaseUnits": "207896442433",
+    "amountUi": 207896.442433,
+    "perpadBalance": 120924.26608,
+    "holdDays": 14.01,
+    "base1to1": 120924.26608,
+    "daysBonus": 86972.176353
+  },
+  "AKtRgusRnqPrVE9ZtrAvJzrk31UXitjenPwvzuLiUZYb": {
+    "amountBaseUnits": "4119653564799",
+    "amountUi": 4119653.564799,
+    "perpadBalance": 4116177.160891,
+    "holdDays": 0.56,
+    "base1to1": 4116177.160891,
+    "daysBonus": 3476.403908
+  },
+  "AQ3MK4mf4i4r3G9rkbAvfoxGP6eZ7yscuiy5Syyuq27U": {
+    "amountBaseUnits": "196251836299",
+    "amountUi": 196251.836299,
+    "perpadBalance": 1449.060142,
+    "holdDays": 31.38,
+    "base1to1": 1449.060142,
+    "daysBonus": 194802.776157
+  },
+  "AQWrpoD5SEYVwEkq9d3aYzKpvKFaHhPKQcVLH1sYBMjK": {
+    "amountBaseUnits": "130231350404",
+    "amountUi": 130231.350404,
+    "perpadBalance": 47418.443013,
+    "holdDays": 13.34,
+    "base1to1": 47418.443013,
+    "daysBonus": 82812.907391
+  },
+  "AQbgSfH5DyKQmzxrtqZFN3pB6Z5s3WstJ34qBCuWnN6f": {
+    "amountBaseUnits": "90468384600",
+    "amountUi": 90468.3846,
+    "perpadBalance": 578.51211,
+    "holdDays": 14.48,
+    "base1to1": 578.51211,
+    "daysBonus": 89889.87249
+  },
+  "ATRdUhtqdjveEtG9Z7iUwGo44HF3mR62mcq9BoVAbvPi": {
+    "amountBaseUnits": "174338759720",
+    "amountUi": 174338.75972,
+    "perpadBalance": 84.013808,
+    "holdDays": 28.07,
+    "base1to1": 84.013808,
+    "daysBonus": 174254.745912
+  },
+  "AU7JeyPkGX4eVqAR2VeKJ4b9G2jLsynhNvQ47KdJXRug": {
+    "amountBaseUnits": "102350557392",
+    "amountUi": 102350.557392,
+    "perpadBalance": 44.956657,
+    "holdDays": 16.48,
+    "base1to1": 44.956657,
+    "daysBonus": 102305.600735
+  },
+  "AVUAd41acKuA7VA52bx8YF5esq1SX8j6wsnKRZEsocXJ": {
+    "amountBaseUnits": "61217304401",
+    "amountUi": 61217.304401,
+    "perpadBalance": 1932.202033,
+    "holdDays": 9.55,
+    "base1to1": 1932.202033,
+    "daysBonus": 59285.102368
+  },
+  "AVxMfARdffFoHJGVPBC8xYooFBdzKPcqYiq25BuWd53q": {
+    "amountBaseUnits": "7618378526047",
+    "amountUi": 7618378.526047,
+    "perpadBalance": 7560024.603298,
+    "holdDays": 9.4,
+    "base1to1": 7560024.603298,
+    "daysBonus": 58353.922749
+  },
+  "Aawf3PuPLn8yUWGgpwMM6FVB8uYFL1c28F9Fp418K5EU": {
+    "amountBaseUnits": "168866543524",
+    "amountUi": 168866.543524,
+    "perpadBalance": 1812.919994,
+    "holdDays": 26.91,
+    "base1to1": 1812.919994,
+    "daysBonus": 167053.62353
+  },
+  "Ac2axB9VgmQgcXuMAonoHdVamC9JUXyfZMqT9Pn9gDHm": {
+    "amountBaseUnits": "254405387784",
+    "amountUi": 254405.387784,
+    "perpadBalance": 80150.641872,
+    "holdDays": 28.07,
+    "base1to1": 80150.641872,
+    "daysBonus": 174254.745912
+  },
+  "AfQ1oaudsGjvznX4JNEw671hi57JfWo4CWqhtkdgoVHU": {
+    "amountBaseUnits": "133025264866",
+    "amountUi": 133025.264866,
+    "perpadBalance": 2660.118298,
+    "holdDays": 21,
+    "base1to1": 2660.118298,
+    "daysBonus": 130365.146568
+  },
+  "AkTgH1uW6J6j6QHmFNGzZuZwwXaHQsPCpHUriED28tRj": {
+    "amountBaseUnits": "172531287285",
+    "amountUi": 172531.287285,
+    "perpadBalance": 9202.382228,
+    "holdDays": 26.31,
+    "base1to1": 9202.382228,
+    "daysBonus": 163328.905057
+  },
+  "AnPy9y7oFQpbUiCHXqpnWTF7P7YJSgEZP1AqNCLGDQdB": {
+    "amountBaseUnits": "619059292305",
+    "amountUi": 619059.292305,
+    "perpadBalance": 464855.947508,
+    "holdDays": 24.84,
+    "base1to1": 464855.947508,
+    "daysBonus": 154203.344797
+  },
+  "AoXHQ1YhNNhGxBjzp4WNFZNFgLkZiPWqWAJPtsDbudbK": {
+    "amountBaseUnits": "5645970114177",
+    "amountUi": 5645970.114177,
+    "perpadBalance": 5482703.287761,
+    "holdDays": 26.3,
+    "base1to1": 5482703.287761,
+    "daysBonus": 163266.826416
+  },
+  "ArzxMDoK9eymipq8j97RZTfNCw2DBjpboN8BuD28tgCb": {
+    "amountBaseUnits": "189220666888",
+    "amountUi": 189220.666888,
+    "perpadBalance": 4.968441,
+    "holdDays": 30.48,
+    "base1to1": 4.968441,
+    "daysBonus": 189215.698447
+  },
+  "AuvDAPRtCRjrb1UhyV6bDYmYZYnJcprxy6ibJSkh2szg": {
+    "amountBaseUnits": "97179318730",
+    "amountUi": 97179.31873,
+    "perpadBalance": 1143.660758,
+    "holdDays": 15.47,
+    "base1to1": 1143.660758,
+    "daysBonus": 96035.657972
+  },
+  "B7XwXUuZn9zkRSV17mcn35J77hv91GJpK5jMH3Y7kk5R": {
+    "amountBaseUnits": "177968469060",
+    "amountUi": 177968.46906,
+    "perpadBalance": 423.555163,
+    "holdDays": 28.6,
+    "base1to1": 423.555163,
+    "daysBonus": 177544.913897
+  },
+  "B7oEuTZymiUZGgR9JzcnmVvxxKtS6Lc46y5Gp1b5KqGV": {
+    "amountBaseUnits": "180408753411",
+    "amountUi": 180408.753411,
+    "perpadBalance": 6278.164781,
+    "holdDays": 28.05,
+    "base1to1": 6278.164781,
+    "daysBonus": 174130.58863
+  },
+  "B7rampNB25tXhY6a16g6vd7m7hZgbjkGQ5VmE4TLSMZk": {
+    "amountBaseUnits": "114131658375",
+    "amountUi": 114131.658375,
+    "perpadBalance": 17785.607197,
+    "holdDays": 15.52,
+    "base1to1": 17785.607197,
+    "daysBonus": 96346.051178
+  },
+  "BE9i51eV7isJeV7wfbWLDX5ts8zXzFu62PSqiyTj1wLA": {
+    "amountBaseUnits": "183078104657",
+    "amountUi": 183078.104657,
+    "perpadBalance": 8761.280104,
+    "holdDays": 28.08,
+    "base1to1": 8761.280104,
+    "daysBonus": 174316.824553
+  },
+  "BL4qtraXh9RYapms7NgZZSC6mrtpi7DovzHrSxLxeiTg": {
+    "amountBaseUnits": "197725950933",
+    "amountUi": 197725.950933,
+    "perpadBalance": 8758.567051,
+    "holdDays": 30.44,
+    "base1to1": 8758.567051,
+    "daysBonus": 188967.383882
+  },
+  "BM9CcyErJcu2mjrFvUsRRrD3snGeHDDVirJLvL6EjvMN": {
+    "amountBaseUnits": "213599452437",
+    "amountUi": 213599.452437,
+    "perpadBalance": 6877.577165,
+    "holdDays": 33.3,
+    "base1to1": 6877.577165,
+    "daysBonus": 206721.875272
+  },
+  "BVMecLuCWiH5uBNTLtoG6nowMahzmqbX5fTozWEfKfPM": {
+    "amountBaseUnits": "128458043048",
+    "amountUi": 128458.043048,
+    "perpadBalance": 58309.178466,
+    "holdDays": 11.3,
+    "base1to1": 58309.178466,
+    "daysBonus": 70148.864582
+  },
+  "BboHJUEy4btF4d9w2w8WpbgAP4vqaj57ERw3yMw7nhXh": {
+    "amountBaseUnits": "103452598343",
+    "amountUi": 103452.598343,
+    "perpadBalance": 153.739348,
+    "holdDays": 16.64,
+    "base1to1": 153.739348,
+    "daysBonus": 103298.858995
+  },
+  "BdaKk9fuTqrHcAnyggWDUqAfH1ma2cCCScca225nnUbG": {
+    "amountBaseUnits": "174716824553",
+    "amountUi": 174716.824553,
+    "perpadBalance": 400,
+    "holdDays": 28.08,
+    "base1to1": 400,
+    "daysBonus": 174316.824553
+  },
+  "BgZWoccciPbrU2STxYLfWbDsSKrLgTSHgF8t7G8bzSij": {
+    "amountBaseUnits": "929426143523",
+    "amountUi": 929426.143523,
+    "perpadBalance": 880880.646087,
+    "holdDays": 7.82,
+    "base1to1": 880880.646087,
+    "daysBonus": 48545.497436
+  },
+  "Bpz2mNR9pZtYvqvhexXN2f9LWBjf8h3Nk2FnjxWEXDzm": {
+    "amountBaseUnits": "6258260138081",
+    "amountUi": 6258260.138081,
+    "perpadBalance": 6184138.240461,
+    "holdDays": 11.94,
+    "base1to1": 6184138.240461,
+    "daysBonus": 74121.89762
+  },
+  "BrrH1qxiqf7KkaMziUvJV3vd4retdJEELuphvkkF5hHy": {
+    "amountBaseUnits": "175396826862",
+    "amountUi": 175396.826862,
+    "perpadBalance": 397.137255,
+    "holdDays": 28.19,
+    "base1to1": 397.137255,
+    "daysBonus": 174999.689607
+  },
+  "BrwWLBHSFNGRZ2NUohoo3ure7oHDiGX9g2zKd3Qy5ZkC": {
+    "amountBaseUnits": "943920574767",
+    "amountUi": 943920.574767,
+    "perpadBalance": 871412.721819,
+    "holdDays": 11.68,
+    "base1to1": 871412.721819,
+    "daysBonus": 72507.852948
+  },
+  "BspDJZRa5ABrUuagpUYTu7CPjPDswRgWfuqQ2STAg5RL": {
+    "amountBaseUnits": "7471781771828",
+    "amountUi": 7471781.771828,
+    "perpadBalance": 7421870.544285,
+    "holdDays": 8.04,
+    "base1to1": 7421870.544285,
+    "daysBonus": 49911.227543
+  },
+  "BuWhEVj2DjAkZf96KKBm7rd2QfLaKdBjAHEL3zCHCA3r": {
+    "amountBaseUnits": "3817323914321",
+    "amountUi": 3817323.914321,
+    "perpadBalance": 3813847.510413,
+    "holdDays": 0.56,
+    "base1to1": 3813847.510413,
+    "daysBonus": 3476.403908
+  },
+  "C1LQzbCMraMEbyoAt9SCxrRrC9fk9ruhCWDfMGcWN6wJ": {
+    "amountBaseUnits": "331132853973",
+    "amountUi": 331132.853973,
+    "perpadBalance": 196732.595726,
+    "holdDays": 21.65,
+    "base1to1": 196732.595726,
+    "daysBonus": 134400.258247
+  },
+  "C2rySQ59nNN7uAX7ydRYk4CmHPYKTu1iAABKq2z9eEmU": {
+    "amountBaseUnits": "98802017699",
+    "amountUi": 98802.017699,
+    "perpadBalance": 2083.494674,
+    "holdDays": 15.58,
+    "base1to1": 2083.494674,
+    "daysBonus": 96718.523025
+  },
+  "C3kHANiNEF7ehUpW7fut5WkzfwWKcjBEdZukNYMLjNPY": {
+    "amountBaseUnits": "424634868504",
+    "amountUi": 424634.868504,
+    "perpadBalance": 356100.048594,
+    "holdDays": 11.04,
+    "base1to1": 356100.048594,
+    "daysBonus": 68534.81991
+  },
+  "C4wMwptXpYcBxEDGkW721FCaitRXA9t2R6Ncd3Z9AyCA": {
+    "amountBaseUnits": "175143284920",
+    "amountUi": 175143.28492,
+    "perpadBalance": 19.438031,
+    "holdDays": 28.21,
+    "base1to1": 19.438031,
+    "daysBonus": 175123.846889
+  },
+  "C92nBXrrANmWpgJKhBdbnqtUuCcoEZ7kQJoyScZ5sQak": {
+    "amountBaseUnits": "2855035419017",
+    "amountUi": 2855035.419017,
+    "perpadBalance": 2680842.751746,
+    "holdDays": 28.06,
+    "base1to1": 2680842.751746,
+    "daysBonus": 174192.667271
+  },
+  "CEqLUVoiJj2HeN2hjDzPcsFxp8Qqadv5QzNMsk2C4e2E": {
+    "amountBaseUnits": "397066082459",
+    "amountUi": 397066.082459,
+    "perpadBalance": 289297.561296,
+    "holdDays": 17.36,
+    "base1to1": 289297.561296,
+    "daysBonus": 107768.521163
+  },
+  "CGyCouo66CmW7rsDGX5YLdQYfiMhxeyJKee7eXcJrcKL": {
+    "amountBaseUnits": "616870482237",
+    "amountUi": 616870.482237,
+    "perpadBalance": 431627.816828,
+    "holdDays": 29.84,
+    "base1to1": 431627.816828,
+    "daysBonus": 185242.665409
+  },
+  "CWGQPqtYdECUH7Hip8nvwex5ps3abrQt8q1Nj6M5piY2": {
+    "amountBaseUnits": "178270325684",
+    "amountUi": 178270.325684,
+    "perpadBalance": 42.546734,
+    "holdDays": 28.71,
+    "base1to1": 42.546734,
+    "daysBonus": 178227.77895
+  },
+  "CaJTA84PNtCmi9KFU6oGFdDdP5i34eP6rQ8EBFKrE66d": {
+    "amountBaseUnits": "196061070558",
+    "amountUi": 196061.070558,
+    "perpadBalance": 21868.403287,
+    "holdDays": 28.06,
+    "base1to1": 21868.403287,
+    "daysBonus": 174192.667271
+  },
+  "Caso9tL7kjvgPyKXDfdr5epaJaVKivggvJxFzKBNZYmL": {
+    "amountBaseUnits": "172906877084",
+    "amountUi": 172906.877084,
+    "perpadBalance": 123119.806823,
+    "holdDays": 8.02,
+    "base1to1": 123119.806823,
+    "daysBonus": 49787.070261
+  },
+  "Cbw53QRaciuGdxr4Fii4NRVQDHgQvGBWFzKjM5ALKwCz": {
+    "amountBaseUnits": "183438181857",
+    "amountUi": 183438.181857,
+    "perpadBalance": 9183.435945,
+    "holdDays": 28.07,
+    "base1to1": 9183.435945,
+    "daysBonus": 174254.745912
+  },
+  "CchibXNpzAVqspkdsgBAqnG1o5VGsSqv1xwz9tkCmjDY": {
+    "amountBaseUnits": "191332801416",
+    "amountUi": 191332.801416,
+    "perpadBalance": 1744.631122,
+    "holdDays": 30.54,
+    "base1to1": 1744.631122,
+    "daysBonus": 189588.170294
+  },
+  "CdVg5btZfpThjcxLH7aNPykVuZaj5SrvzGP2xKS2C3sX": {
+    "amountBaseUnits": "122054380472",
+    "amountUi": 122054.380472,
+    "perpadBalance": 59913.660608,
+    "holdDays": 10.01,
+    "base1to1": 59913.660608,
+    "daysBonus": 62140.719864
+  },
+  "CivwSEtj5qwo7vJYprbcTS7CxNcMxiThhyLNhohQnstb": {
+    "amountBaseUnits": "5204783897540",
+    "amountUi": 5204783.89754,
+    "perpadBalance": 5001600.504818,
+    "holdDays": 32.73,
+    "base1to1": 5001600.504818,
+    "daysBonus": 203183.392722
+  },
+  "CkD5ogK9F1WvayRVXcC84fr3hkRoUxvjXE4Tvr29saKj": {
+    "amountBaseUnits": "190952278056",
+    "amountUi": 190952.278056,
+    "perpadBalance": 97151.451168,
+    "holdDays": 15.11,
+    "base1to1": 97151.451168,
+    "daysBonus": 93800.826888
+  },
+  "CpgJWUhTKr8uw8F92EaZW53dWRqct9tQATosKLhByTYo": {
+    "amountBaseUnits": "147284847853",
+    "amountUi": 147284.847853,
+    "perpadBalance": 138345.523517,
+    "holdDays": 1.44,
+    "base1to1": 138345.523517,
+    "daysBonus": 8939.324336
+  },
+  "CxFLEUnwXahmiJC441kRGX9m9Xxc5bdqeDbaDM2r4k3v": {
+    "amountBaseUnits": "839935032981",
+    "amountUi": 839935.032981,
+    "perpadBalance": 820938.968767,
+    "holdDays": 3.06,
+    "base1to1": 820938.968767,
+    "daysBonus": 18996.064214
+  },
+  "CxiQBwKwes2Z43F4jfTMoCNHdNAHmuNa6N94Cru3g2gx": {
+    "amountBaseUnits": "2923412351647",
+    "amountUi": 2923412.351647,
+    "perpadBalance": 2872569.944486,
+    "holdDays": 8.19,
+    "base1to1": 2872569.944486,
+    "daysBonus": 50842.407161
+  },
+  "D5mJfNrr1TtGJmweVHcSWrbHkutwqxUaUZqm17eqm7Ex": {
+    "amountBaseUnits": "167262864897",
+    "amountUi": 167262.864897,
+    "perpadBalance": 333.398649,
+    "holdDays": 26.89,
+    "base1to1": 333.398649,
+    "daysBonus": 166929.466248
+  },
+  "D88iDM8j7M4AKwbp2AYJYvhus2JwLby9LoV2ZoZqre1t": {
+    "amountBaseUnits": "1203367131163",
+    "amountUi": 1203367.131163,
+    "perpadBalance": 1065180.075801,
+    "holdDays": 22.26,
+    "base1to1": 1065180.075801,
+    "daysBonus": 138187.055362
+  },
+  "D9GYt4W7VvteKCSvTgyjzuiBJyTy94Kmr6YiC9fbxGjW": {
+    "amountBaseUnits": "218605100266",
+    "amountUi": 218605.100266,
+    "perpadBalance": 10641.65217,
+    "holdDays": 33.5,
+    "base1to1": 10641.65217,
+    "daysBonus": 207963.448096
+  },
+  "D9QdDrQEWBYU9XzEKX4s3yRwQX67EAMjabsTU2KhNCpN": {
+    "amountBaseUnits": "1083542127426",
+    "amountUi": 1083542.127426,
+    "perpadBalance": 903886.539728,
+    "holdDays": 28.94,
+    "base1to1": 903886.539728,
+    "daysBonus": 179655.587698
+  },
+  "DCH49iLFG9NrdgTtJ9f3uFxpK6gT7vw6Sjht6PcbNuM3": {
+    "amountBaseUnits": "97612179204",
+    "amountUi": 97612.179204,
+    "perpadBalance": 2445.62221,
+    "holdDays": 15.33,
+    "base1to1": 2445.62221,
+    "daysBonus": 95166.556994
+  },
+  "DEADUVKhU7KjotQ9in9r2zsguKsT7jViBUmpSvXu5Pv1": {
+    "amountBaseUnits": "2211325996409",
+    "amountUi": 2211325.996409,
+    "perpadBalance": 2004107.492008,
+    "holdDays": 33.38,
+    "base1to1": 2004107.492008,
+    "daysBonus": 207218.504401
+  },
+  "DFnDFuaVn1N39asEmuZe8aH5NUaJrHZd61gcidfKhfyB": {
+    "amountBaseUnits": "178147220438",
+    "amountUi": 178147.220438,
+    "perpadBalance": 9107.080389,
+    "holdDays": 27.23,
+    "base1to1": 9107.080389,
+    "daysBonus": 169040.140049
+  },
+  "DJxat3ybx6UbEZgaQrTfV2ov78RecoffPTiPZmokrS6": {
+    "amountBaseUnits": "189985123196",
+    "amountUi": 189985.123196,
+    "perpadBalance": 272.795619,
+    "holdDays": 30.56,
+    "base1to1": 272.795619,
+    "daysBonus": 189712.327577
+  },
+  "DNH7JfyXMejKdAa5qC8oYiJ6Vt3YXugNS9x2qFHPUw9y": {
+    "amountBaseUnits": "193491802309",
+    "amountUi": 193491.802309,
+    "perpadBalance": 9739.02429,
+    "holdDays": 29.6,
+    "base1to1": 9739.02429,
+    "daysBonus": 183752.778019
+  },
+  "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm": {
+    "amountBaseUnits": "11594005053288",
+    "amountUi": 11594005.053288,
+    "perpadBalance": 11410252.275269,
+    "holdDays": 29.6,
+    "base1to1": 11410252.275269,
+    "daysBonus": 183752.778019
+  },
+  "DNz21dsJBXJLRaozDi4FoXh3AQc4pCGQRv8ji7AJTjE2": {
+    "amountBaseUnits": "75164113678",
+    "amountUi": 75164.113678,
+    "perpadBalance": 64672.823311,
+    "holdDays": 1.69,
+    "base1to1": 64672.823311,
+    "daysBonus": 10491.290367
+  },
+  "DSN3j1ykL3obAVNv7ZX49VsFCPe4LqzxHnmtLiPwY6xg": {
+    "amountBaseUnits": "260272239527",
+    "amountUi": 260272.239527,
+    "perpadBalance": 52681.263278,
+    "holdDays": 33.44,
+    "base1to1": 52681.263278,
+    "daysBonus": 207590.976249
+  },
+  "DaLR173tY64Huz62TitvSHMCKSiaJP7KUpTEZjNwTUQ9": {
+    "amountBaseUnits": "192521653349",
+    "amountUi": 192521.653349,
+    "perpadBalance": 162599.74828,
+    "holdDays": 4.82,
+    "base1to1": 162599.74828,
+    "daysBonus": 29921.905069
+  },
+  "DcSjGBn5vUmocjGpwXvXfcmquytxtDgEBQrAuHkVT4Fk": {
+    "amountBaseUnits": "164180924728",
+    "amountUi": 164180.924728,
+    "perpadBalance": 4018.030373,
+    "holdDays": 25.8,
+    "base1to1": 4018.030373,
+    "daysBonus": 160162.894355
+  },
+  "DfVEuF4ithset71vN5p8gK9knsc6SpmtCKH7gTno6S8i": {
+    "amountBaseUnits": "117469367335",
+    "amountUi": 117469.367335,
+    "perpadBalance": 4672.476233,
+    "holdDays": 18.17,
+    "base1to1": 4672.476233,
+    "daysBonus": 112796.891102
+  },
+  "DtvmxrTACskMG2W8a6KXgSemUfvyNVeQTgfpJoGvMVKx": {
+    "amountBaseUnits": "198982081195",
+    "amountUi": 198982.081195,
+    "perpadBalance": 3372.282702,
+    "holdDays": 31.51,
+    "base1to1": 3372.282702,
+    "daysBonus": 195609.798493
+  },
+  "DxXkPzZAGCcpvu7pdUFtKjbXpa3xKAeAjhrVekuuN2Rc": {
+    "amountBaseUnits": "2755392942966",
+    "amountUi": 2755392.942966,
+    "perpadBalance": 2570833.142611,
+    "holdDays": 29.73,
+    "base1to1": 2570833.142611,
+    "daysBonus": 184559.800355
+  },
+  "DySndeyVNEri6RrEtXLpz5UmJrNdnCJEvhe5HTPCzcys": {
+    "amountBaseUnits": "498718462103",
+    "amountUi": 498718.462103,
+    "perpadBalance": 448745.155919,
+    "holdDays": 8.05,
+    "base1to1": 448745.155919,
+    "daysBonus": 49973.306184
+  },
+  "DzjYAxZesbVW56knp41qU2pnirZEQsF1u2DghnCnFno4": {
+    "amountBaseUnits": "176494043593",
+    "amountUi": 176494.043593,
+    "perpadBalance": 2115.140398,
+    "holdDays": 28.09,
+    "base1to1": 2115.140398,
+    "daysBonus": 174378.903195
+  },
+  "E2Bj3Kunk1q962T7jZfQtzaaGj7RME4jBwE5DbkxGwUQ": {
+    "amountBaseUnits": "128784084649",
+    "amountUi": 128784.084649,
+    "perpadBalance": 16732.137242,
+    "holdDays": 18.05,
+    "base1to1": 16732.137242,
+    "daysBonus": 112051.947407
+  },
+  "E517XaqF81eHdd2rqv2byy6ZwBXEoM8Jjy5BzemvjyDE": {
+    "amountBaseUnits": "209012100067",
+    "amountUi": 209012.100067,
+    "perpadBalance": 1669.438383,
+    "holdDays": 33.4,
+    "base1to1": 1669.438383,
+    "daysBonus": 207342.661684
+  },
+  "EEyccKWx91tMLQbbvWEYQ8VYGvU96vH1W7ibDHJQs2HE": {
+    "amountBaseUnits": "19457818025996",
+    "amountUi": 19457818.025996,
+    "perpadBalance": 19344027.876635,
+    "holdDays": 18.33,
+    "base1to1": 19344027.876635,
+    "daysBonus": 113790.149361
+  },
+  "EGNFZcZmK8ZUA3vdAY4MJY6UE5sPuz6cyQtAnyn5f8JM": {
+    "amountBaseUnits": "173197928293",
+    "amountUi": 173197.928293,
+    "perpadBalance": 1240.092106,
+    "holdDays": 27.7,
+    "base1to1": 1240.092106,
+    "daysBonus": 171957.836187
+  },
+  "EKuXVPeWXkfQrvzyRwwLP169yMzStJKr7DBV7RQKP5Nh": {
+    "amountBaseUnits": "3974467277946",
+    "amountUi": 3974467.277946,
+    "perpadBalance": 3880356.057852,
+    "holdDays": 15.16,
+    "base1to1": 3880356.057852,
+    "daysBonus": 94111.220094
+  },
+  "ELeeKF1xAQdppxkff57K6JBLumAw1Kt9XkRLS59bceYJ": {
+    "amountBaseUnits": "760867601600",
+    "amountUi": 760867.6016,
+    "perpadBalance": 690532.501095,
+    "holdDays": 11.33,
+    "base1to1": 690532.501095,
+    "daysBonus": 70335.100505
+  },
+  "EPsjwThfdCya8LsRqNJ4zCJV9zaoRehz2dRVwFXNUtrk": {
+    "amountBaseUnits": "18169758438050",
+    "amountUi": 18169758.43805,
+    "perpadBalance": 17965147.23658,
+    "holdDays": 32.96,
+    "base1to1": 17965147.23658,
+    "daysBonus": 204611.20147
+  },
+  "EQJjg8RqHMrhrqoLPYWQx7wCV2tSDg1iEMwfumVfodSg": {
+    "amountBaseUnits": "275141829090",
+    "amountUi": 275141.82909,
+    "perpadBalance": 103928.936598,
+    "holdDays": 27.58,
+    "base1to1": 103928.936598,
+    "daysBonus": 171212.892492
+  },
+  "ERMcidBpkCsJZpinHjEihoWz8t5kr7VRrs2AWYqG5qim": {
+    "amountBaseUnits": "363818924739",
+    "amountUi": 363818.924739,
+    "perpadBalance": 157593.678597,
+    "holdDays": 33.22,
+    "base1to1": 157593.678597,
+    "daysBonus": 206225.246142
+  },
+  "ESSMxfvqPYt9tRaymkmKXJKp4TmWxtysEbG8qR4tKomK": {
+    "amountBaseUnits": "87678265955",
+    "amountUi": 87678.265955,
+    "perpadBalance": 85.30319,
+    "holdDays": 14.11,
+    "base1to1": 85.30319,
+    "daysBonus": 87592.962765
+  },
+  "ESuvjvsQtjuxC4XGsDeMhx8Wp5yjQcCFGncGhupcJbg8": {
+    "amountBaseUnits": "198238387690",
+    "amountUi": 198238.38769,
+    "perpadBalance": 21.286266,
+    "holdDays": 31.93,
+    "base1to1": 21.286266,
+    "daysBonus": 198217.101424
+  },
+  "ESxUCvPtnaSQV3jJy977J5PooGeQfVFDJ96eaRb1zJDb": {
+    "amountBaseUnits": "143242699335",
+    "amountUi": 143242.699335,
+    "perpadBalance": 8904.519729,
+    "holdDays": 21.64,
+    "base1to1": 8904.519729,
+    "daysBonus": 134338.179606
+  },
+  "ETBJJxrdNqCT7NKtrthJd1cPwdhvogGUF2oW2BBd9QcV": {
+    "amountBaseUnits": "185847797795",
+    "amountUi": 185847.797795,
+    "perpadBalance": 480.975104,
+    "holdDays": 29.86,
+    "base1to1": 480.975104,
+    "daysBonus": 185366.822691
+  },
+  "EUZAujz662Fdv9qzkKT7cXmBWmMufZVMuDSeLmf6Nact": {
+    "amountBaseUnits": "9040000913743",
+    "amountUi": 9040000.913743,
+    "perpadBalance": 8902124.251587,
+    "holdDays": 22.21,
+    "base1to1": 8902124.251587,
+    "daysBonus": 137876.662156
+  },
+  "EW7nHJE8rPVYRZFKupymAcrmovQGxp8iAyHmViNvddCd": {
+    "amountBaseUnits": "174380468547",
+    "amountUi": 174380.468547,
+    "perpadBalance": 1.565352,
+    "holdDays": 28.09,
+    "base1to1": 1.565352,
+    "daysBonus": 174378.903195
+  },
+  "EXWPaZ19frkAByBhm8sicr1m9fhrJp2voJXyUoGe8BTC": {
+    "amountBaseUnits": "164177265104",
+    "amountUi": 164177.265104,
+    "perpadBalance": 103.416352,
+    "holdDays": 26.43,
+    "base1to1": 103.416352,
+    "daysBonus": 164073.848752
+  },
+  "EemJ7c1p24n6XjPNLx9qfqVgsHEYPMisr5muGPkxXRvC": {
+    "amountBaseUnits": "209736354145",
+    "amountUi": 209736.354145,
+    "perpadBalance": 47400.707348,
+    "holdDays": 26.15,
+    "base1to1": 47400.707348,
+    "daysBonus": 162335.646797
+  },
+  "EkResxGQctHoxjB75CCTjWae3AYXDdxECea9auKs5SL3": {
+    "amountBaseUnits": "193090422776",
+    "amountUi": 193090.422776,
+    "perpadBalance": 18711.519581,
+    "holdDays": 28.09,
+    "base1to1": 18711.519581,
+    "daysBonus": 174378.903195
+  },
+  "EkTyQHa63ofo49jQEwv8NPpTawbrnGq4dFGi5NK87CtM": {
+    "amountBaseUnits": "2044618914680",
+    "amountUi": 2044618.91468,
+    "perpadBalance": 2004950.662939,
+    "holdDays": 6.39,
+    "base1to1": 2004950.662939,
+    "daysBonus": 39668.251741
+  },
+  "EmG6pUGhserm6CL1ZdTX3ewPNpScm3MzDiCDjKqLqN3x": {
+    "amountBaseUnits": "20328373484815",
+    "amountUi": 20328373.484815,
+    "perpadBalance": 20138723.23588,
+    "holdDays": 30.55,
+    "base1to1": 20138723.23588,
+    "daysBonus": 189650.248935
+  },
+  "Emb8bnsTGpmzr3oo8NWsG4htEMH8pRBndJTBXsenHQMz": {
+    "amountBaseUnits": "280730643209",
+    "amountUi": 280730.643209,
+    "perpadBalance": 229764.078765,
+    "holdDays": 8.21,
+    "base1to1": 229764.078765,
+    "daysBonus": 50966.564444
+  },
+  "EvMrhZufgJW9hhQxkQydrvBWhVQgk2YtcXyku5Vtfpqd": {
+    "amountBaseUnits": "4604209261532",
+    "amountUi": 4604209.261532,
+    "perpadBalance": 4503828.098675,
+    "holdDays": 16.17,
+    "base1to1": 4503828.098675,
+    "daysBonus": 100381.162857
+  },
+  "EwedFJsU4TUfj4PZQNyC8Pxm9CbPz37BsczV2zwGccDH": {
+    "amountBaseUnits": "175035366648",
+    "amountUi": 175035.366648,
+    "perpadBalance": 904.778018,
+    "holdDays": 28.05,
+    "base1to1": 904.778018,
+    "daysBonus": 174130.58863
+  },
+  "EyC9fT5QDwNTW6NcdEHPWh1baRoojRw45WYX3UtJ5VwB": {
+    "amountBaseUnits": "100435811975",
+    "amountUi": 100435.811975,
+    "perpadBalance": 44068.405745,
+    "holdDays": 9.08,
+    "base1to1": 44068.405745,
+    "daysBonus": 56367.40623
+  },
+  "EyuZ6A5oUaYG2afnwv8SRd9HPbAFAdPPFc9vrTk3mnNP": {
+    "amountBaseUnits": "242165599984",
+    "amountUi": 242165.599984,
+    "perpadBalance": 58412.821965,
+    "holdDays": 29.6,
+    "base1to1": 58412.821965,
+    "daysBonus": 183752.778019
+  },
+  "F3uocK6zkHPUvoMAMmCjPFLVnAxSyPTJBn2Ad2f57Tj7": {
+    "amountBaseUnits": "203522851162",
+    "amountUi": 203522.851162,
+    "perpadBalance": 91.143875,
+    "holdDays": 32.77,
+    "base1to1": 91.143875,
+    "daysBonus": 203431.707287
+  },
+  "F6pksPYLJBwWcevEfYrhfbMvFfGtvWKU97CtTcngirPZ": {
+    "amountBaseUnits": "191775954996",
+    "amountUi": 191775.954996,
+    "perpadBalance": 8085.255618,
+    "holdDays": 29.59,
+    "base1to1": 8085.255618,
+    "daysBonus": 183690.699378
+  },
+  "F742qzfCvYp7ZjoyH6RggzNjdVezqpcfuTWaq7r6kP2L": {
+    "amountBaseUnits": "11674604845793",
+    "amountUi": 11674604.845793,
+    "perpadBalance": 11511586.333942,
+    "holdDays": 26.26,
+    "base1to1": 11511586.333942,
+    "daysBonus": 163018.511851
+  },
+  "F7zoAUmX3MUxtPbD2UqaeqMU1hws5my5StAS8LLvAD35": {
+    "amountBaseUnits": "171304479409",
+    "amountUi": 171304.479409,
+    "perpadBalance": 29.508276,
+    "holdDays": 27.59,
+    "base1to1": 29.508276,
+    "daysBonus": 171274.971133
+  },
+  "FFnqyuJ4UHeVdMsRSQhT8QsN3tVV7fothYYvbsXoKNmQ": {
+    "amountBaseUnits": "212780703583",
+    "amountUi": 212780.703583,
+    "perpadBalance": 22820.061442,
+    "holdDays": 30.6,
+    "base1to1": 22820.061442,
+    "daysBonus": 189960.642141
+  },
+  "FHsho3J8PsRN47y139HK2mvvcu1dxwumjUkifPwJ2bzr": {
+    "amountBaseUnits": "240291910441",
+    "amountUi": 240291.910441,
+    "perpadBalance": 50765.818788,
+    "holdDays": 30.53,
+    "base1to1": 50765.818788,
+    "daysBonus": 189526.091653
+  },
+  "FLS4QSbuiNu5djLHB7RkexBZKpfMbVYX4gH8CeCCEftp": {
+    "amountBaseUnits": "167002559456",
+    "amountUi": 167002.559456,
+    "perpadBalance": 11.014567,
+    "holdDays": 26.9,
+    "base1to1": 11.014567,
+    "daysBonus": 166991.544889
+  },
+  "FMNbvgmADbzZ4BZge8CSotLwvvgDLRvyTod3P1yRj8eu": {
+    "amountBaseUnits": "911837251855",
+    "amountUi": 911837.251855,
+    "perpadBalance": 771787.837257,
+    "holdDays": 22.56,
+    "base1to1": 771787.837257,
+    "daysBonus": 140049.414598
+  },
+  "FMVHP1xw6ZHB9zLGyrJeeAvEzCBgouH8bPzdkYqq2C5W": {
+    "amountBaseUnits": "219092743215",
+    "amountUi": 219092.743215,
+    "perpadBalance": 29132.101074,
+    "holdDays": 30.6,
+    "base1to1": 29132.101074,
+    "daysBonus": 189960.642141
+  },
+  "FPQVdLecSNQ31tfMfW7bpuhZesgadEiHgkAeZBHjPFw3": {
+    "amountBaseUnits": "8334918192676",
+    "amountUi": 8334918.192676,
+    "perpadBalance": 8163581.142901,
+    "holdDays": 27.6,
+    "base1to1": 8163581.142901,
+    "daysBonus": 171337.049775
+  },
+  "FQ4JkRTRxpF9bkcgVacswsie2LtKLytmcL4FoLZhwgXj": {
+    "amountBaseUnits": "6960722810195",
+    "amountUi": 6960722.810195,
+    "perpadBalance": 6785102.334176,
+    "holdDays": 28.29,
+    "base1to1": 6785102.334176,
+    "daysBonus": 175620.476019
+  },
+  "FUmABziHyV7cy2kexrM7Ci7qtf7HmCqSy9ygh3XRHkJU": {
+    "amountBaseUnits": "16831839666812",
+    "amountUi": 16831839.666812,
+    "perpadBalance": 16721588,
+    "holdDays": 17.76,
+    "base1to1": 16721588,
+    "daysBonus": 110251.666812
+  },
+  "FWUMb7MnHMJooPc47LLFca5JQ2cyaShDXbPpsj5orpHb": {
+    "amountBaseUnits": "78899998851",
+    "amountUi": 78899.998851,
+    "perpadBalance": 35382.871354,
+    "holdDays": 7.01,
+    "base1to1": 35382.871354,
+    "daysBonus": 43517.127497
+  },
+  "Ff1ZfeobBBkdJyjvurkCYuCus3amXJeRRWB57Tf7G69s": {
+    "amountBaseUnits": "98850319310",
+    "amountUi": 98850.31931,
+    "perpadBalance": 2131.796285,
+    "holdDays": 15.58,
+    "base1to1": 2131.796285,
+    "daysBonus": 96718.523025
+  },
+  "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM": {
+    "amountBaseUnits": "635545731448",
+    "amountUi": 635545.731448,
+    "perpadBalance": 427520.204711,
+    "holdDays": 33.51,
+    "base1to1": 427520.204711,
+    "daysBonus": 208025.526737
+  },
+  "Fiu84VDv13eM4rq3cYsKw9XkrjRFVTnyYtVo4St3wiU1": {
+    "amountBaseUnits": "208132019839",
+    "amountUi": 208132.019839,
+    "perpadBalance": 50576.428416,
+    "holdDays": 25.38,
+    "base1to1": 50576.428416,
+    "daysBonus": 157555.591423
+  },
+  "FkT7sXCo9GRCPMNsMXynBnTaUQ8fUdY5wG8SBGfo8JTh": {
+    "amountBaseUnits": "11429356575289",
+    "amountUi": 11429356.575289,
+    "perpadBalance": 11242996.494338,
+    "holdDays": 30.02,
+    "base1to1": 11242996.494338,
+    "daysBonus": 186360.080951
+  },
+  "FrAc1CuT9Gg6MXR2uzDKkaPfduxunYxF6BzwtSsUrXaF": {
+    "amountBaseUnits": "86966670047",
+    "amountUi": 86966.670047,
+    "perpadBalance": 30971.735664,
+    "holdDays": 9.02,
+    "base1to1": 30971.735664,
+    "daysBonus": 55994.934383
+  },
+  "FrmkYENTRFYSUZVvhMyzRHn2wcKDvyww5mUgpdkahvPN": {
+    "amountBaseUnits": "101160540261",
+    "amountUi": 101160.540261,
+    "perpadBalance": 4504.095877,
+    "holdDays": 15.57,
+    "base1to1": 4504.095877,
+    "daysBonus": 96656.444384
+  },
+  "Fsf6kwdXGqqHAGGRLkdAokBsuZVK2VoqyzHju1ffqqgV": {
+    "amountBaseUnits": "27185087255434",
+    "amountUi": 27185087.255434,
+    "perpadBalance": 26977123.807338,
+    "holdDays": 33.5,
+    "base1to1": 26977123.807338,
+    "daysBonus": 207963.448096
+  },
+  "Ft2Lz8aXvdvtPPSFuSArk3ddBhAkow3acWzsJwFNLWRA": {
+    "amountBaseUnits": "112084396001",
+    "amountUi": 112084.396001,
+    "perpadBalance": 43239.182885,
+    "holdDays": 11.09,
+    "base1to1": 43239.182885,
+    "daysBonus": 68845.213116
+  },
+  "G1Bz2Y4YGbSBYKxGvdHHRxsipstPsfkcdUm39JXkZsJF": {
+    "amountBaseUnits": "1332082069584",
+    "amountUi": 1332082.069584,
+    "perpadBalance": 1143673.393473,
+    "holdDays": 30.35,
+    "base1to1": 1143673.393473,
+    "daysBonus": 188408.676111
+  },
+  "G38qq9ZbVsmseDm7AFnm6APcdKU3kkd4LUUpwz7DDHG5": {
+    "amountBaseUnits": "184193492336",
+    "amountUi": 184193.492336,
+    "perpadBalance": 10062.903706,
+    "holdDays": 28.05,
+    "base1to1": 10062.903706,
+    "daysBonus": 174130.58863
+  },
+  "G79T3STdAGj3YMiZVvxFeG36qBKF5eUUaGV93BZheq2U": {
+    "amountBaseUnits": "6351464179892",
+    "amountUi": 6351464.179892,
+    "perpadBalance": 6300621.772731,
+    "holdDays": 8.19,
+    "base1to1": 6300621.772731,
+    "daysBonus": 50842.407161
+  },
+  "G9PXBQx4dCSn38sMLJcxxpurXA6ppUjCuiAriSfquB18": {
+    "amountBaseUnits": "1301146766811",
+    "amountUi": 1301146.766811,
+    "perpadBalance": 1121242.864548,
+    "holdDays": 28.98,
+    "base1to1": 1121242.864548,
+    "daysBonus": 179903.902263
+  },
+  "GJnFvWvSxbk2bZZ8sjrHe9AUteP89QZPxtKdXt6fr2pd": {
+    "amountBaseUnits": "85849383322",
+    "amountUi": 85849.383322,
+    "perpadBalance": 27681.696496,
+    "holdDays": 9.37,
+    "base1to1": 27681.696496,
+    "daysBonus": 58167.686826
+  },
+  "GMRhsKDmQFppFUd4aVGTDGvG2sXUgrVkGEC4Zdi5sFJV": {
+    "amountBaseUnits": "175463540213",
+    "amountUi": 175463.540213,
+    "perpadBalance": 29.300118,
+    "holdDays": 28.26,
+    "base1to1": 29.300118,
+    "daysBonus": 175434.240095
+  },
+  "GNhY4ZTpr37QU2RpfG9tvQ1FbqyQ7hfFB9sPADCAYwzi": {
+    "amountBaseUnits": "427222788703",
+    "amountUi": 427222.788703,
+    "perpadBalance": 253775.065127,
+    "holdDays": 27.94,
+    "base1to1": 253775.065127,
+    "daysBonus": 173447.723576
+  },
+  "GP8StUXNYSZjPikyRsvkTbvRV1GBxMErb59cpeCJnDf1": {
+    "amountBaseUnits": "248089222943",
+    "amountUi": 248089.222943,
+    "perpadBalance": 42733.077778,
+    "holdDays": 33.08,
+    "base1to1": 42733.077778,
+    "daysBonus": 205356.145165
+  },
+  "GUesEGqKjNcnSeyQGHwwhbNR7n5xsVEZNQ3pEoiYvm6P": {
+    "amountBaseUnits": "103253220382",
+    "amountUi": 103253.220382,
+    "perpadBalance": 49058.566595,
+    "holdDays": 8.73,
+    "base1to1": 49058.566595,
+    "daysBonus": 54194.653787
+  },
+  "GVmhw3Vej4kSPivCjUFnefbvaEAB395oM6LmoKnmJK7Z": {
+    "amountBaseUnits": "130376441770",
+    "amountUi": 130376.44177,
+    "perpadBalance": 61034.599524,
+    "holdDays": 11.17,
+    "base1to1": 61034.599524,
+    "daysBonus": 69341.842246
+  },
+  "GVq6HuPCN7vbcryZXwQfJX1hqs22EswBb6GsoCt9pxtt": {
+    "amountBaseUnits": "370121503897",
+    "amountUi": 370121.503897,
+    "perpadBalance": 195928.836626,
+    "holdDays": 28.06,
+    "base1to1": 195928.836626,
+    "daysBonus": 174192.667271
+  },
+  "GW6fCvK2DhoRhjwNVXnhqpnRL1fQ4be2dvgUH4A3SASY": {
+    "amountBaseUnits": "174475064900",
+    "amountUi": 174475.0649,
+    "perpadBalance": 716.948118,
+    "holdDays": 27.99,
+    "base1to1": 716.948118,
+    "daysBonus": 173758.116782
+  },
+  "GWGxnkYQzYGsQEhJSrsxTdTGHSP4G7UzQzP2XEWWwKKX": {
+    "amountBaseUnits": "15368292003875",
+    "amountUi": 15368292.003875,
+    "perpadBalance": 15160390.63442,
+    "holdDays": 33.49,
+    "base1to1": 15160390.63442,
+    "daysBonus": 207901.369455
+  },
+  "Ggx5aZPzGVjvN7VBpHU6NybYYZ3JHi5AxX58kkbZqyqt": {
+    "amountBaseUnits": "112376417032",
+    "amountUi": 112376.417032,
+    "perpadBalance": 14.076419,
+    "holdDays": 18.1,
+    "base1to1": 14.076419,
+    "daysBonus": 112362.340613
+  },
+  "GhhyQXX3t5gCfbjv1KZV6SpHE3tTFLg1EKrRXWEoNsn9": {
+    "amountBaseUnits": "121126237356",
+    "amountUi": 121126.237356,
+    "perpadBalance": 32664.173614,
+    "holdDays": 14.25,
+    "base1to1": 32664.173614,
+    "daysBonus": 88462.063742
+  },
+  "Giv3MJsQPsQgdW7NqEFvzzvrAZbqaqTjqxwzGNkuEb8b": {
+    "amountBaseUnits": "130348249299",
+    "amountUi": 130348.249299,
+    "perpadBalance": 22393.492213,
+    "holdDays": 17.39,
+    "base1to1": 22393.492213,
+    "daysBonus": 107954.757086
+  },
+  "GjURyDMFBHSnwMgEtxHuZCD9J12M5gcMwnmNktREUo4s": {
+    "amountBaseUnits": "2150369020996",
+    "amountUi": 2150369.020996,
+    "perpadBalance": 2001566.517985,
+    "holdDays": 23.97,
+    "base1to1": 2001566.517985,
+    "daysBonus": 148802.503011
+  },
+  "GmP6U3svmJMaP7ZrVAaxfnCyuAbXPV8Pteb639dRKepR": {
+    "amountBaseUnits": "262366269383",
+    "amountUi": 262366.269383,
+    "perpadBalance": 96119.668189,
+    "holdDays": 26.78,
+    "base1to1": 96119.668189,
+    "daysBonus": 166246.601194
+  },
+  "GooWbuoyQyefPkt9tTHdn8w1XLMb2RGxWBNtb5ZdzEWW": {
+    "amountBaseUnits": "244218729966",
+    "amountUi": 244218.729966,
+    "perpadBalance": 61583.367489,
+    "holdDays": 29.42,
+    "base1to1": 61583.367489,
+    "daysBonus": 182635.362477
+  },
+  "GqUTciHdQzSqQao89Gufrwx9xECZT2V188duWC4PNTVU": {
+    "amountBaseUnits": "3488555195735",
+    "amountUi": 3488555.195735,
+    "perpadBalance": 3349995.668526,
+    "holdDays": 22.32,
+    "base1to1": 3349995.668526,
+    "daysBonus": 138559.527209
+  },
+  "GxKeAtKX35c3weM8J1PF95hsffNNHgL9RU9uEtSk6pWL": {
+    "amountBaseUnits": "1265662045172",
+    "amountUi": 1265662.045172,
+    "perpadBalance": 1135793.527734,
+    "holdDays": 20.92,
+    "base1to1": 1135793.527734,
+    "daysBonus": 129868.517438
+  },
+  "Gzm9sVa1bKeLfa3Qz8E1GXS8TeakPRT37nL8w9pSqQvd": {
+    "amountBaseUnits": "121874377328",
+    "amountUi": 121874.377328,
+    "perpadBalance": 7277.205631,
+    "holdDays": 18.46,
+    "base1to1": 7277.205631,
+    "daysBonus": 114597.171697
+  },
+  "H4rvvksrGxbJQCLUx4kaKbFw1TPKHFvawXDCrdKQqQJ8": {
+    "amountBaseUnits": "311060195313",
+    "amountUi": 311060.195313,
+    "perpadBalance": 103282.983141,
+    "holdDays": 33.47,
+    "base1to1": 103282.983141,
+    "daysBonus": 207777.212172
+  },
+  "H53JQtm44kJhbqyNGi5mgQkN79zDChioSgxAW78h3rqu": {
+    "amountBaseUnits": "201937925448",
+    "amountUi": 201937.925448,
+    "perpadBalance": 27559.022253,
+    "holdDays": 28.09,
+    "base1to1": 27559.022253,
+    "daysBonus": 174378.903195
+  },
+  "H7GCD8ZNGec6kMC17VYeXgFMygUJV6qy4CHegxCuqJNc": {
+    "amountBaseUnits": "13716413231015",
+    "amountUi": 13716413.231015,
+    "perpadBalance": 13543213.822004,
+    "holdDays": 27.9,
+    "base1to1": 13543213.822004,
+    "daysBonus": 173199.409011
+  },
+  "H7H9ZWw8S4YHXZ1LREKcBn7EnxudXJSfuRWxpGo6Nci5": {
+    "amountBaseUnits": "927700677928",
+    "amountUi": 927700.677928,
+    "perpadBalance": 721289.195863,
+    "holdDays": 33.25,
+    "base1to1": 721289.195863,
+    "daysBonus": 206411.482065
+  },
+  "HARZjgeUwP36PAwS4HXUMn3AXAnofAbHZBaURx6r31kG": {
+    "amountBaseUnits": "15663701092134",
+    "amountUi": 15663701.092134,
+    "perpadBalance": 15467718.821794,
+    "holdDays": 31.57,
+    "base1to1": 15467718.821794,
+    "daysBonus": 195982.27034
+  },
+  "HCqp4wMdcUSumEGCgRJm57a7geu9Qu2nE5C8x2kUEPBg": {
+    "amountBaseUnits": "169266953150",
+    "amountUi": 169266.95315,
+    "perpadBalance": 288.891742,
+    "holdDays": 27.22,
+    "base1to1": 288.891742,
+    "daysBonus": 168978.061408
+  },
+  "HFqp6ErWHY6Uzhj8rFyjYuDya2mXUpYEk8VW75K9PSiY": {
+    "amountBaseUnits": "305091159574",
+    "amountUi": 305091.159574,
+    "perpadBalance": 97748.49789,
+    "holdDays": 33.4,
+    "base1to1": 97748.49789,
+    "daysBonus": 207342.661684
+  },
+  "HFrBgUrY7gqF1nwrQEGhk2ErMjNCzFxUH7nATSqeEHDW": {
+    "amountBaseUnits": "122149260406",
+    "amountUi": 122149.260406,
+    "perpadBalance": 15187.761579,
+    "holdDays": 17.23,
+    "base1to1": 15187.761579,
+    "daysBonus": 106961.498827
+  },
+  "HH3F1NeHm8qUtk5qaTcNMkNtCcevS9vaTyDYkXdjesus": {
+    "amountBaseUnits": "16712637983683",
+    "amountUi": 16712637.983683,
+    "perpadBalance": 16510199.534656,
+    "holdDays": 32.61,
+    "base1to1": 16510199.534656,
+    "daysBonus": 202438.449027
+  },
+  "HMgdv9v5s6EGGNjggdHRQCfByMmbSQWdbtCZpTYSYg4u": {
+    "amountBaseUnits": "141904499686",
+    "amountUi": 141904.499686,
+    "perpadBalance": 2413.792859,
+    "holdDays": 22.47,
+    "base1to1": 2413.792859,
+    "daysBonus": 139490.706827
+  },
+  "HPmi2R4hF9PqpvzWo43uaqxUkSn9r2eMXzqwL9isEbo": {
+    "amountBaseUnits": "1749799496934",
+    "amountUi": 1749799.496934,
+    "perpadBalance": 1663820.578841,
+    "holdDays": 13.85,
+    "base1to1": 1663820.578841,
+    "daysBonus": 85978.918093
+  },
+  "HPsZzcJZaugtTiikWkxF3SrnmTNmeqTAerKUF6M38CSo": {
+    "amountBaseUnits": "360162206711",
+    "amountUi": 360162.206711,
+    "perpadBalance": 221975.151349,
+    "holdDays": 22.26,
+    "base1to1": 221975.151349,
+    "daysBonus": 138187.055362
+  },
+  "HU23r7UoZbqTUuh3vA7emAGztFtqwTeVips789vqxxBw": {
+    "amountBaseUnits": "230212781953",
+    "amountUi": 230212.781953,
+    "perpadBalance": 22621.805704,
+    "holdDays": 33.44,
+    "base1to1": 22621.805704,
+    "daysBonus": 207590.976249
+  },
+  "HZFBNRJmp8PswJAAbeuva9uyNZ88Ptk8CoYKrLGrmLNe": {
+    "amountBaseUnits": "212995252635",
+    "amountUi": 212995.252635,
+    "perpadBalance": 40540.787318,
+    "holdDays": 27.78,
+    "base1to1": 40540.787318,
+    "daysBonus": 172454.465317
+  },
+  "Had1BXzUZpM5GpN3ShRvdV9Au8ubMmRiaVixH72Zsq1w": {
+    "amountBaseUnits": "136920727432",
+    "amountUi": 136920.727432,
+    "perpadBalance": 1961.761414,
+    "holdDays": 21.74,
+    "base1to1": 1961.761414,
+    "daysBonus": 134958.966018
+  },
+  "Haee7H5bKDCnm6dXLkeR9DcWw9Puhnkwk71QBUSHcpUt": {
+    "amountBaseUnits": "16520638829262",
+    "amountUi": 16520638.829262,
+    "perpadBalance": 16345452.903732,
+    "holdDays": 28.22,
+    "base1to1": 16345452.903732,
+    "daysBonus": 175185.92553
+  },
+  "He881QaP5Bahk8UNYkwPeGGzKhG2RvJQ1gdHHQA4g3Yt": {
+    "amountBaseUnits": "703143012663",
+    "amountUi": 703143.012663,
+    "perpadBalance": 612259.881913,
+    "holdDays": 14.64,
+    "base1to1": 612259.881913,
+    "daysBonus": 90883.13075
+  },
+  "HfSKFfbm5WZeJFjD1jVJqgyfFpnGtBn3q7HXgdaGot9i": {
+    "amountBaseUnits": "115377041429",
+    "amountUi": 115377.041429,
+    "perpadBalance": 1959.363915,
+    "holdDays": 18.27,
+    "base1to1": 1959.363915,
+    "daysBonus": 113417.677514
+  },
+  "HgttPjAhpzGEKqmvXpwk7LjdnwuaMLjRUZeT1iGEGNY": {
+    "amountBaseUnits": "98490086269",
+    "amountUi": 98490.086269,
+    "perpadBalance": 2206.113733,
+    "holdDays": 15.51,
+    "base1to1": 2206.113733,
+    "daysBonus": 96283.972536
+  },
+  "Hh2zxJMWHHJAKT4FpoAnGjotv18Xwnt9zp8QhM7kC1bo": {
+    "amountBaseUnits": "472747100894",
+    "amountUi": 472747.100894,
+    "perpadBalance": 298616.512264,
+    "holdDays": 28.05,
+    "base1to1": 298616.512264,
+    "daysBonus": 174130.58863
+  },
+  "HiStAEEGkdXaYededtE3qZLhGhWQPwiLzcq3Ju4CPNrP": {
+    "amountBaseUnits": "174747625156",
+    "amountUi": 174747.625156,
+    "perpadBalance": 492.879244,
+    "holdDays": 28.07,
+    "base1to1": 492.879244,
+    "daysBonus": 174254.745912
+  },
+  "HkCHPfUy6xjiWAMe7nqSVFRqPfRarbGv34dkZKKxGCp8": {
+    "amountBaseUnits": "14021395453305",
+    "amountUi": 14021395.453305,
+    "perpadBalance": 14014690.960053,
+    "holdDays": 1.08,
+    "base1to1": 14014690.960053,
+    "daysBonus": 6704.493252
+  },
+  "HmvB1R5BMyUxuqcyU14YcPXFGj1nS9GFK7Y1m3fC4ygv": {
+    "amountBaseUnits": "189276074479",
+    "amountUi": 189276.074479,
+    "perpadBalance": 122.454673,
+    "holdDays": 30.47,
+    "base1to1": 122.454673,
+    "daysBonus": 189153.619806
+  },
+  "HpJ6bsNhW4ftV1E1KtSwvr9yQ55ZbHaxMVvgney6gpoY": {
+    "amountBaseUnits": "46499698213797",
+    "amountUi": 46499698.213797,
+    "perpadBalance": 46325753.861091,
+    "holdDays": 28.02,
+    "base1to1": 46325753.861091,
+    "daysBonus": 173944.352706
+  },
+  "HpJbzERP44V21mKGRDDUArb9JJaL9NdPSgXzZ9uyieVB": {
+    "amountBaseUnits": "4123704042236",
+    "amountUi": 4123704.042236,
+    "perpadBalance": 4118923.986862,
+    "holdDays": 0.77,
+    "base1to1": 4118923.986862,
+    "daysBonus": 4780.055374
+  },
+  "HvFdDWS3RqymRAVx1ZdoL2RjiC38r5dtt19Z8op5jqDK": {
+    "amountBaseUnits": "197400236943",
+    "amountUi": 197400.236943,
+    "perpadBalance": 238.47242,
+    "holdDays": 31.76,
+    "base1to1": 238.47242,
+    "daysBonus": 197161.764523
+  },
+  "HvPDoXZAVQejM97J7JmfpuTvtMN6oQVZjxirXtMMUZh9": {
+    "amountBaseUnits": "124334310193",
+    "amountUi": 124334.310193,
+    "perpadBalance": 11227.025885,
+    "holdDays": 18.22,
+    "base1to1": 11227.025885,
+    "daysBonus": 113107.284308
+  },
+  "HxjwdF326ZunmUwC1iXhfgL3ku78YsksN6n7Rfxzwr6b": {
+    "amountBaseUnits": "191833669603",
+    "amountUi": 191833.669603,
+    "perpadBalance": 1376.398332,
+    "holdDays": 30.68,
+    "base1to1": 1376.398332,
+    "daysBonus": 190457.271271
+  },
+  "Hyvrqq7zzQjx8CeskeZbiVSNT3ky2kdD8gNR5j5SSwNB": {
+    "amountBaseUnits": "424139930168",
+    "amountUi": 424139.930168,
+    "perpadBalance": 216176.482072,
+    "holdDays": 33.5,
+    "base1to1": 216176.482072,
+    "daysBonus": 207963.448096
+  },
+  "J4SXR99htBBSBWgY5eQ1cEKJvmacQaq2VJJDkdeLh5MF": {
+    "amountBaseUnits": "8875529331748",
+    "amountUi": 8875529.331748,
+    "perpadBalance": 8871866.691916,
+    "holdDays": 0.59,
+    "base1to1": 8871866.691916,
+    "daysBonus": 3662.639832
+  },
+  "J5YWwgyHAGEKWqycLrFBFRZqa7mTa1eTDKq4iSJsRWK7": {
+    "amountBaseUnits": "9869117666812",
+    "amountUi": 9869117.666812,
+    "perpadBalance": 9758866,
+    "holdDays": 17.76,
+    "base1to1": 9758866,
+    "daysBonus": 110251.666812
+  },
+  "J7GR6XoJfCPwZumW9xZ1nbWkyaq1oYSQuSVmCdBTx6Nf": {
+    "amountBaseUnits": "194308284932",
+    "amountUi": 194308.284932,
+    "perpadBalance": 250.45247,
+    "holdDays": 31.26,
+    "base1to1": 250.45247,
+    "daysBonus": 194057.832462
+  },
+  "JAEWQzHmfESDLdBAgjzy5Vq17m82D7iTYTrfhCHKsGwR": {
+    "amountBaseUnits": "212191222456",
+    "amountUi": 212191.222456,
+    "perpadBalance": 34522.151277,
+    "holdDays": 28.62,
+    "base1to1": 34522.151277,
+    "daysBonus": 177669.071179
+  },
+  "JD6rVaerbyz6wjQ433nrw6bFTgFrp46MiYmi8EtUAfsG": {
+    "amountBaseUnits": "205095711247",
+    "amountUi": 205095.711247,
+    "perpadBalance": 546.588418,
+    "holdDays": 32.95,
+    "base1to1": 546.588418,
+    "daysBonus": 204549.122829
+  },
+  "JESUSL2s5BsffGNNn6wQtHART2iXVGjtGhKAwGw44bL": {
+    "amountBaseUnits": "174214284895",
+    "amountUi": 174214.284895,
+    "perpadBalance": 21.617624,
+    "holdDays": 28.06,
+    "base1to1": 21.617624,
+    "daysBonus": 174192.667271
+  },
+  "KH6sTYvRZAvGNKGuCLfmsz7JpKNNgHXHfHnjgtt4W2q": {
+    "amountBaseUnits": "209799811867",
+    "amountUi": 209799.811867,
+    "perpadBalance": 1898.442412,
+    "holdDays": 33.49,
+    "base1to1": 1898.442412,
+    "daysBonus": 207901.369455
+  },
+  "SJQRqN6HXf22hzxjBSnzGKCMtn8AwcyfBnEQBgU6gzd": {
+    "amountBaseUnits": "1256911248650",
+    "amountUi": 1256911.24865,
+    "perpadBalance": 1190735.417107,
+    "holdDays": 10.66,
+    "base1to1": 1190735.417107,
+    "daysBonus": 66175.831543
+  },
+  "SxwJegg1Mxk3GkejVg3vfBaLPWNtsVfFk2B48eUogPn": {
+    "amountBaseUnits": "174524837499",
+    "amountUi": 174524.837499,
+    "perpadBalance": 83.855663,
+    "holdDays": 28.1,
+    "base1to1": 83.855663,
+    "daysBonus": 174440.981836
+  },
+  "aaTLH7oCjx3RkD3BuzdjdK9xXfH3NknKze8mLdMYPv9": {
+    "amountBaseUnits": "256794852962",
+    "amountUi": 256794.852962,
+    "perpadBalance": 82974.657538,
+    "holdDays": 28,
+    "base1to1": 82974.657538,
+    "daysBonus": 173820.195424
+  },
+  "g3zJsU7oNVrPzvf1UysboLsR3qWGv6N73uB87KPAntv": {
+    "amountBaseUnits": "767737640016",
+    "amountUi": 767737.640016,
+    "perpadBalance": 752093.822428,
+    "holdDays": 2.52,
+    "base1to1": 752093.822428,
+    "daysBonus": 15643.817588
+  },
+  "mP4tnNkwAtRLpSZG5CqcH3CVPJHgVw7XH3j6YRyayQP": {
+    "amountBaseUnits": "737963915354",
+    "amountUi": 737963.915354,
+    "perpadBalance": 530000.467258,
+    "holdDays": 33.5,
+    "base1to1": 530000.467258,
+    "daysBonus": 207963.448096
+  },
+  "qjxjkyoiv26BNVaPPuLTwGewBUJ54oTzjKs4xh7XNPe": {
+    "amountBaseUnits": "254152588832",
+    "amountUi": 254152.588832,
+    "perpadBalance": 47679.028125,
+    "holdDays": 33.26,
+    "base1to1": 47679.028125,
+    "daysBonus": 206473.560707
+  },
+  "tTqQLnbYyDunQdWTm6zH45GjeVdkWrDqdgw2ShscuiJ": {
+    "amountBaseUnits": "483798424954",
+    "amountUi": 483798.424954,
+    "perpadBalance": 315379.071317,
+    "holdDays": 27.13,
+    "base1to1": 315379.071317,
+    "daysBonus": 168419.353637
+  },
+  "tq4xVnb63ZR5hEvuMmtBbL434t3gXTtWzzBrRw6exY2": {
+    "amountBaseUnits": "118398625728",
+    "amountUi": 118398.625728,
+    "perpadBalance": 5291.34142,
+    "holdDays": 18.22,
+    "base1to1": 5291.34142,
+    "daysBonus": 113107.284308
+  },
+  "vwc2qDA4MohC865aWYvgfoYyMSWqdtGGkavfcxKV4dw": {
+    "amountBaseUnits": "2454061822302",
+    "amountUi": 2454061.822302,
+    "perpadBalance": 2278441.346283,
+    "holdDays": 28.29,
+    "base1to1": 2278441.346283,
+    "daysBonus": 175620.476019
+  },
+  "wJH848t1NVrzPqYZnYedAwHwcsqiCxx58pCF1D5Bx33": {
+    "amountBaseUnits": "1284266530313",
+    "amountUi": 1284266.530313,
+    "perpadBalance": 1275389.284618,
+    "holdDays": 1.43,
+    "base1to1": 1275389.284618,
+    "daysBonus": 8877.245695
+  },
+  "winLAv7Vsk2kRyxUF1LcABikpw4o2VDvtUzweBfLpVN": {
+    "amountBaseUnits": "9490796090190",
+    "amountUi": 9490796.09019,
+    "perpadBalance": 9300959.605331,
+    "holdDays": 30.58,
+    "base1to1": 9300959.605331,
+    "daysBonus": 189836.484859
+  },
+  "xTvmWB7GYrYyuJUBDscXZxCXe6u9KJH4pHEoV3Hg7bM": {
+    "amountBaseUnits": "1964114717510",
+    "amountUi": 1964114.71751,
+    "perpadBalance": 1957410.224258,
+    "holdDays": 1.08,
+    "base1to1": 1957410.224258,
+    "daysBonus": 6704.493252
+  },
+  "xcyp5YCJLCM6pMU4x4oNf4TifpBASzymcgKdVFMudyY": {
+    "amountBaseUnits": "162653194005",
+    "amountUi": 162653.194005,
+    "perpadBalance": 10498.444368,
+    "holdDays": 24.51,
+    "base1to1": 10498.444368,
+    "daysBonus": 152154.749637
+  }
+}

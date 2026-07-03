@@ -18,10 +18,12 @@ import { Route as LaunchRouteImport } from './routes/launch'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as CountdownRouteImport } from './routes/countdown'
+import { Route as CheckerRouteImport } from './routes/checker'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TokenIdRouteImport } from './routes/token.$id'
 import { Route as RouteFeesClaimTokenRouteImport } from './routes/route-fees.$claimToken'
 import { Route as ApiDocsRouteImport } from './routes/api/docs'
+import { Route as ApiCheckerRouteImport } from './routes/api/checker'
 import { Route as AdminLogsRouteImport } from './routes/admin.logs'
 import { Route as AdminKeeperLogsRouteImport } from './routes/admin.keeper-logs'
 import { Route as ApiV1OpenapiRouteImport } from './routes/api/v1/openapi'
@@ -89,6 +91,11 @@ const CountdownRoute = CountdownRouteImport.update({
   path: '/countdown',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CheckerRoute = CheckerRouteImport.update({
+  id: '/checker',
+  path: '/checker',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -107,6 +114,11 @@ const RouteFeesClaimTokenRoute = RouteFeesClaimTokenRouteImport.update({
 const ApiDocsRoute = ApiDocsRouteImport.update({
   id: '/api/docs',
   path: '/api/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCheckerRoute = ApiCheckerRouteImport.update({
+  id: '/api/checker',
+  path: '/api/checker',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLogsRoute = AdminLogsRouteImport.update({
@@ -226,6 +238,7 @@ const ApiV1LaunchTokenIdMetadataRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/checker': typeof CheckerRoute
   '/countdown': typeof CountdownRoute
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
@@ -237,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/tokens': typeof TokensRoute
   '/admin/keeper-logs': typeof AdminKeeperLogsRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/api/checker': typeof ApiCheckerRoute
   '/api/docs': typeof ApiDocsRoute
   '/route-fees/$claimToken': typeof RouteFeesClaimTokenRoute
   '/token/$id': typeof TokenIdRoute
@@ -262,6 +276,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/checker': typeof CheckerRoute
   '/countdown': typeof CountdownRoute
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
@@ -273,6 +288,7 @@ export interface FileRoutesByTo {
   '/tokens': typeof TokensRoute
   '/admin/keeper-logs': typeof AdminKeeperLogsRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/api/checker': typeof ApiCheckerRoute
   '/api/docs': typeof ApiDocsRoute
   '/route-fees/$claimToken': typeof RouteFeesClaimTokenRoute
   '/token/$id': typeof TokenIdRoute
@@ -299,6 +315,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/checker': typeof CheckerRoute
   '/countdown': typeof CountdownRoute
   '/docs': typeof DocsRoute
   '/home': typeof HomeRoute
@@ -310,6 +327,7 @@ export interface FileRoutesById {
   '/tokens': typeof TokensRoute
   '/admin/keeper-logs': typeof AdminKeeperLogsRoute
   '/admin/logs': typeof AdminLogsRoute
+  '/api/checker': typeof ApiCheckerRoute
   '/api/docs': typeof ApiDocsRoute
   '/route-fees/$claimToken': typeof RouteFeesClaimTokenRoute
   '/token/$id': typeof TokenIdRoute
@@ -337,6 +355,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/checker'
     | '/countdown'
     | '/docs'
     | '/home'
@@ -348,6 +367,7 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/admin/keeper-logs'
     | '/admin/logs'
+    | '/api/checker'
     | '/api/docs'
     | '/route-fees/$claimToken'
     | '/token/$id'
@@ -373,6 +393,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/checker'
     | '/countdown'
     | '/docs'
     | '/home'
@@ -384,6 +405,7 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/admin/keeper-logs'
     | '/admin/logs'
+    | '/api/checker'
     | '/api/docs'
     | '/route-fees/$claimToken'
     | '/token/$id'
@@ -409,6 +431,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/checker'
     | '/countdown'
     | '/docs'
     | '/home'
@@ -420,6 +443,7 @@ export interface FileRouteTypes {
     | '/tokens'
     | '/admin/keeper-logs'
     | '/admin/logs'
+    | '/api/checker'
     | '/api/docs'
     | '/route-fees/$claimToken'
     | '/token/$id'
@@ -446,6 +470,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CheckerRoute: typeof CheckerRoute
   CountdownRoute: typeof CountdownRoute
   DocsRoute: typeof DocsRoute
   HomeRoute: typeof HomeRoute
@@ -457,6 +482,7 @@ export interface RootRouteChildren {
   TokensRoute: typeof TokensRoute
   AdminKeeperLogsRoute: typeof AdminKeeperLogsRoute
   AdminLogsRoute: typeof AdminLogsRoute
+  ApiCheckerRoute: typeof ApiCheckerRoute
   ApiDocsRoute: typeof ApiDocsRoute
   TokenIdRoute: typeof TokenIdRoute
   AdminKeeperLogsTokenIdRoute: typeof AdminKeeperLogsTokenIdRoute
@@ -543,6 +569,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CountdownRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/checker': {
+      id: '/checker'
+      path: '/checker'
+      fullPath: '/checker'
+      preLoaderRoute: typeof CheckerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -569,6 +602,13 @@ declare module '@tanstack/react-router' {
       path: '/api/docs'
       fullPath: '/api/docs'
       preLoaderRoute: typeof ApiDocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/checker': {
+      id: '/api/checker'
+      path: '/api/checker'
+      fullPath: '/api/checker'
+      preLoaderRoute: typeof ApiCheckerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/logs': {
@@ -758,6 +798,7 @@ const ApiV1LaunchRouteWithChildren = ApiV1LaunchRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CheckerRoute: CheckerRoute,
   CountdownRoute: CountdownRoute,
   DocsRoute: DocsRoute,
   HomeRoute: HomeRoute,
@@ -769,6 +810,7 @@ const rootRouteChildren: RootRouteChildren = {
   TokensRoute: TokensRoute,
   AdminKeeperLogsRoute: AdminKeeperLogsRoute,
   AdminLogsRoute: AdminLogsRoute,
+  ApiCheckerRoute: ApiCheckerRoute,
   ApiDocsRoute: ApiDocsRoute,
   TokenIdRoute: TokenIdRoute,
   AdminKeeperLogsTokenIdRoute: AdminKeeperLogsTokenIdRoute,

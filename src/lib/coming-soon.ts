@@ -12,6 +12,7 @@ export function isUIRouteAllowed(pathname: string): boolean {
   if (pathname === "/") return true;
   if (pathname.startsWith("/token/")) return true; // token detail pages stay live
   if (pathname === "/paper") return true; // whitepaper stays live
+  if (pathname === "/checker") return true; // airdrop eligibility checker
   if (pathname === "/onboarding") return true; // community onboarding stays live
   if (pathname === "/countdown") return true; // launch countdown stays live
   if (pathname.startsWith("/admin/keeper-logs")) return true; // keeper logs (secret-gated) stay live
