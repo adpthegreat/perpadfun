@@ -66,7 +66,7 @@ export const Route = createFileRoute("/api/checker")({
           breakdown: {
             perpadBalance: alloc.perpadBalance,
             holdDays: alloc.holdDays,
-            base1to1: alloc.base1to1,
+            base: alloc.base,
             daysBonus: alloc.daysBonus,
           },
         });

@@ -81,7 +81,7 @@ const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 type Breakdown = {
   perpadBalance: number;
   holdDays: number;
-  base1to1: number;
+  base: number;
   daysBonus: number;
 };
 
@@ -365,12 +365,11 @@ function CheckerPage() {
                         $PERPAD
                       </span>
                     </div>
-                    <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/5 bg-white/5 sm:grid-cols-4">
+                    <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/5 bg-white/5 sm:grid-cols-3">
                       {[
                         { k: "held balance", v: formatPerpad(result.breakdown.perpadBalance) },
-                        { k: "base (1:1)", v: formatPerpad(result.breakdown.base1to1) },
-                        { k: "hold bonus", v: formatPerpad(result.breakdown.daysBonus) },
-                        { k: "days held", v: String(result.breakdown.holdDays) },
+                        { k: "base", v: formatPerpad(result.breakdown.base) },
+                        { k: `bonus · ${result.breakdown.holdDays.toFixed(1)}d`, v: formatPerpad(result.breakdown.daysBonus) },
                       ].map((cell) => (
                         <div key={cell.k} className="bg-card/80 p-3.5">
                           <dt className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground/70">
@@ -410,7 +409,7 @@ function CheckerPage() {
           </div>
         </div>
 
-        {/* context note */}
+        {/* airdrop criteria */}
         <div
           className="reveal-up w-full rounded-[2rem] bg-white/[0.04] p-1.5 ring-1 ring-white/10"
           style={reveal(240)}
@@ -419,15 +418,58 @@ function CheckerPage() {
             <div className="flex items-center gap-2.5">
               <span className="h-1.5 w-1.5 rounded-full bg-[#9d4eff]" />
               <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-                note
+                how the airdrop works
               </span>
             </div>
 
-            <p className="mt-5 text-[15px] leading-relaxed text-foreground/85">
-              Tested with a dummy launch to see how the anti snipe mechanism and supply control works
-              and how it plays out on the new PERPSPAD platform and made a decoy launch so the chart
-              doesn&apos;t get fucked, no CA has been posted, clearly there was no dev buy and supply
-              control on this launch, more details will be shared.
+            <ul className="mt-5 space-y-3 text-[14px] leading-relaxed text-foreground/85">
+              <li className="flex gap-3">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
+                <span>
+                  <span className="text-foreground">Eligibility.</span> You held{" "}
+                  <span className="font-semibold text-[#9d4eff]">$PERPAD</span> on Perpad as of the
+                  snapshot, taken{" "}
+                  <span className="font-semibold text-foreground">13 June 2026 · 14:00 UTC</span>.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
+                <span>
+                  <span className="text-foreground">The pool.</span> The airdrop is{" "}
+                  <span className="font-semibold text-foreground">7% of supply</span> —{" "}
+                  <span className="font-semibold text-foreground">70,000,000 $PERPAD</span> — split
+                  into a base + a loyalty bonus.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
+                <span>
+                  <span className="text-foreground">Base.</span> A shared{" "}
+                  <span className="font-semibold text-foreground">65,000,000</span> pool, split by how
+                  much $PERPAD you held.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
+                <span>
+                  <span className="text-foreground">Loyalty bonus.</span> A shared{" "}
+                  <span className="font-semibold text-foreground">5,000,000</span> pool, split by days
+                  held (~620.8 / day) — the same for everyone who held the same length, regardless of
+                  size.
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[#16e0a3]" />
+                <span>
+                  <span className="text-foreground">Unlock.</span> 100% unlocked{" "}
+                  <span className="font-semibold text-foreground">12 hours after launch</span>.
+                </span>
+              </li>
+            </ul>
+
+            <p className="mt-6 border-t border-white/5 pt-5 font-mono text-[11px] leading-relaxed text-muted-foreground/70">
+              70,000,000 $PERPAD (7% of 1,000,000,000 supply) across 380 former holders — 65,000,000
+              base + 5,000,000 loyalty bonus.
             </p>
           </div>
         </div>

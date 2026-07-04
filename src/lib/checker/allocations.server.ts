@@ -8,13 +8,15 @@
 import allocations from "./allocations.json";
 
 export interface Allocation {
-  /** Exact integer base units (6 decimals). floor(total_airdrop * 1e6). */
+  /** Exact integer base units (6 decimals) of the total airdrop (base + bonus). */
   amountBaseUnits: string;
-  /** UI decimal amount (== total_airdrop from the CSV). */
+  /** UI decimal total airdrop (== base + daysBonus). NOT a 1:1 of held balance. */
   amountUi: number;
   perpadBalance: number;
   holdDays: number;
-  base1to1: number;
+  /** Balance-weighted slice of the 65M base pool. */
+  base: number;
+  /** Days-weighted slice of the 5M loyalty pool (620.7864 tokens/day). */
   daysBonus: number;
 }
 
