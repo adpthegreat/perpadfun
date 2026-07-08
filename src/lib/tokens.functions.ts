@@ -457,6 +457,7 @@ export const getToken = createServerFn({ method: "GET" })
         dbcPoolAddress: t.dbc_pool_address as string | null,
         dbcConfigAddress: t.dbc_config_address as string | null,
         graduatedPoolAddress: t.graduated_pool_address as string | null,
+        quoteToken: (t.quote_token === "USDC" ? "USDC" : "SOL") as "SOL" | "USDC",
         curvePreset: t.curve_preset as string,
         raydiumPoolId: null as string | null,
         poolSeededAt: null as string | null,

@@ -257,6 +257,7 @@ function TokenPage() {
                 externalPlatform: ((token as any).externalPlatform as string | null) ?? null,
                 dbcPoolAddress: ((token as any).dbcPoolAddress as string | null) ?? null,
                 graduatedPoolAddress: ((token as any).graduatedPoolAddress as string | null) ?? null,
+                quoteToken: ((token as any).quoteToken as "SOL" | "USDC" | undefined) ?? "SOL",
               }}
             />
 

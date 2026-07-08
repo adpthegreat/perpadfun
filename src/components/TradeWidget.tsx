@@ -43,6 +43,7 @@ export function TradeWidget({
     externalPlatform: string | null;
     dbcPoolAddress: string | null;
     graduatedPoolAddress: string | null;
+    quoteToken?: "SOL" | "USDC";
   };
 }) {
   const mint = token.mintAddress;
@@ -54,12 +55,22 @@ export function TradeWidget({
   const isPumpFun = token.externalPlatform === "pump_fun";
   const route: "jup" | "dbc" | "damm" =
     isPumpFun || !poolAddress ? "jup" : token.graduated ? "damm" : "dbc";
+  // Jupiter routes are always SOL-quoted. Meteora pools may be USDC-quoted (see
+  // plan/USDC_PAIRING.md — set at launch, immutable). All input math below is
+  // conditioned on this: `quoteKind` is what the pool is denominated in.
+  const quoteKind: "SOL" | "USDC" = route === "jup" ? "SOL" : token.quoteToken ?? "SOL";
+  const isUsdcQuote = quoteKind === "USDC";
+  // Base units in the quote token: SOL = 9dp (lamports), USDC = 6dp.
+  const quoteBase = isUsdcQuote ? 1_000_000 : 1_000_000_000;
+  const quoteLabel = quoteKind;
   const { connection } = useConnection();
   const { publicKey, signTransaction, connected } = useAdapterWallet();
   const { connectSolana, connecting } = useWallet();
   const qc = useQueryClient();
 
   const [side, setSide] = useState<Side>("buy");
+  // buyUnit toggle only exposes the SOL alternative on SOL pools. For USDC
+  // pools we stick to "usd" (USDC ≈ $1, so USD input ≈ USDC input).
   const [buyUnit, setBuyUnit] = useState<"usd" | "sol">("usd");
   const [amount, setAmount] = useState("");
   const [slippageBps, setSlippageBps] = useState(100);
@@ -120,21 +131,37 @@ export function TradeWidget({
     refreshBalance();
   }, [refreshBalance]);
 
-  // gross input the user commits, in base units of the input mint
+  // gross input the user commits, in base units of the input mint.
+  // Buy: input mint is the quote token (SOL lamports or USDC 6dp).
+  // Sell: input mint is the base token (`decimals` from the mint account).
   const grossIn = (() => {
     const a = parseFloat(amount);
     if (!a || a <= 0) return 0;
     if (side === "buy") {
+      if (isUsdcQuote) {
+        // USDC ≈ $1 so the USD input is the USDC input. buyUnit toggle is
+        // hidden on USDC pools — always "usd" — but be defensive.
+        return Math.floor(a * quoteBase);
+      }
+      // SOL pool: convert USD → SOL if needed, then to lamports.
       const sol = buyUnit === "usd" ? (solUsd > 0 ? a / solUsd : 0) : a;
-      return Math.floor(sol * 1e9);
+      return Math.floor(sol * quoteBase);
     }
     if (decimals == null) return 0;
     return Math.floor(a * 10 ** decimals);
   })();
-  // Buy: 1% fee comes out of the SOL input, so the swap routes 99%.
-  // Sell: swap the full token; the 1% comes off the SOL output (post-quote).
-  const buyFeeLamports = side === "buy" ? Math.floor((grossIn * FEE_BPS) / 10000) : 0;
-  const swapIn = side === "buy" ? grossIn - buyFeeLamports : grossIn;
+  // Buy: 1% fee is taken IN THE QUOTE TOKEN. For SOL pools we then attach a
+  // matching SOL SystemProgram.transfer to the swap tx (see meteoraSwapTx).
+  // USDC-pool fees would require an SPL Token transfer to the fee wallet's
+  // USDC ATA — not wired yet — so we skip the fee on USDC pools for now.
+  // TODO(usdc-fee): collect 1% fee on USDC pools via SPL transfer.
+  const feeInQuote =
+    side === "buy" && !isUsdcQuote ? Math.floor((grossIn * FEE_BPS) / 10000) : 0;
+  const swapIn = side === "buy" ? grossIn - feeInQuote : grossIn;
+  // The tx-builder's `feeLamports` parameter is still SOL-denominated (it emits
+  // a SystemProgram.transfer). For SOL pools this is the 1% fee. For USDC
+  // pools this is 0 until we ship the SPL-fee path.
+  const buyFeeLamports = isUsdcQuote ? 0 : feeInQuote;
 
   // debounced quote
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -192,9 +219,14 @@ export function TradeWidget({
       const t = decimals != null ? out / 10 ** decimals : 0;
       return { amount: t, label: token.ticker, usd: t * token.priceUsd };
     }
-    const sellFee = Math.floor((out * FEE_BPS) / 10000);
-    const sol = (out - sellFee) / 1e9;
-    return { amount: sol, label: "SOL", usd: sol * solUsd };
+    // Sell: output is the quote token (SOL lamports or USDC 6dp).
+    // Fee taken off the quote-token output — same "not yet on USDC" caveat.
+    const sellFee = isUsdcQuote ? 0 : Math.floor((out * FEE_BPS) / 10000);
+    const net = (out - sellFee) / quoteBase;
+    // USDC ≈ $1, so net is already the USD amount for USDC pools. For SOL
+    // pools multiply by the fresh SOL/USD mid.
+    const usd = isUsdcQuote ? net : net * solUsd;
+    return { amount: net, label: quoteLabel, usd };
   })();
 
   const buyPresets = [25, 100, 250];
@@ -223,8 +255,12 @@ export function TradeWidget({
     }
     try {
       setStatus("signing");
-      const feeLamports =
-        side === "buy"
+      // Fee is emitted as a SystemProgram.transfer in lamports by meteoraSwapTx,
+      // so it's only meaningful when the output/input token is native SOL. On
+      // USDC pools we skip (see TODO(usdc-fee)).
+      const feeLamports = isUsdcQuote
+        ? 0
+        : side === "buy"
           ? buyFeeLamports
           : Math.floor((quote.outAmount * FEE_BPS) / 10000);
       const tx =
@@ -267,7 +303,7 @@ export function TradeWidget({
       toast.success(
         side === "buy"
           ? `Bought ${fmt(receive?.amount ?? 0, 2)} ${token.ticker}`
-          : `Sold ${token.ticker} for ≈ ${fmt(receive?.amount ?? 0, 4)} SOL`,
+          : `Sold ${token.ticker} for ≈ ${fmt(receive?.amount ?? 0, 4)} ${quoteLabel}`,
       );
       setAmount("");
       setQuote(null);
@@ -374,13 +410,21 @@ export function TradeWidget({
           className="w-full bg-transparent text-center text-5xl font-semibold tabular-nums outline-none placeholder:text-muted-foreground/40"
         />
         <button
-          onClick={() => isBuy && setBuyUnit((u) => (u === "usd" ? "sol" : "usd"))}
-          disabled={!isBuy}
+          onClick={() =>
+            isBuy && !isUsdcQuote && setBuyUnit((u) => (u === "usd" ? "sol" : "usd"))
+          }
+          disabled={!isBuy || isUsdcQuote}
           className="flex shrink-0 items-center gap-1 rounded-full border border-border px-3 py-1.5 font-mono text-xs uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:text-foreground disabled:opacity-70"
-          title={isBuy ? "Switch USD / SOL" : "Selling in token units"}
+          title={
+            isBuy
+              ? isUsdcQuote
+                ? "USDC pool: input in USD"
+                : "Switch USD / SOL"
+              : "Selling in token units"
+          }
         >
-          {isBuy ? buyUnit : token.ticker}
-          {isBuy && <ArrowDownUp className="h-3 w-3" />}
+          {isBuy ? (isUsdcQuote ? "usd" : buyUnit) : token.ticker}
+          {isBuy && !isUsdcQuote && <ArrowDownUp className="h-3 w-3" />}
         </button>
       </div>
 
