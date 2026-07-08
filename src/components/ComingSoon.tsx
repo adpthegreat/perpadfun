@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "@tanstack/react-router";
 
 // Launch target: 3 July 2026, 14:00 UTC.
-const LAUNCH_TARGET_UTC = "2026-07-03T14:00:00Z";
+const LAUNCH_TARGET_UTC = "2026-07-06T15:00:00Z";
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 const MIN = 60_000;
@@ -124,7 +124,7 @@ export function ComingSoon() {
             ))}
           </div>
           <span className="font-mono text-sm font-bold tracking-[0.2em] text-foreground md:text-base">
-            3 July 2026 · 14:00 UTC
+            6 July 2026 · 15:00 UTC
           </span>
         </div>
 
