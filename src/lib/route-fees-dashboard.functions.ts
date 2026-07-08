@@ -17,7 +17,7 @@ export const getRouterDashboard = createServerFn({ method: "GET" })
     const { data: token, error } = await supabaseAdmin
       .from("tokens")
       .select(
-        "id, ticker, name, external_mint, external_platform, underlying, leverage, direction, treasury_wallet_address, created_at, status, mint_pending",
+        "id, ticker, name, external_mint, external_platform, underlying, leverage, direction, treasury_wallet_address, created_at, status, mint_pending, first_fee_routed_at",
       )
       .eq("claim_token", data.claimToken)
       .eq("source", "external")
@@ -74,6 +74,7 @@ export const getRouterDashboard = createServerFn({ method: "GET" })
         status: token.status,
         mintPending: !!token.mint_pending,
         createdAt: token.created_at,
+        firstFeeRoutedAt: (token as { first_fee_routed_at?: string | null }).first_fee_routed_at ?? null,
       },
       balance: { sol: balanceSol, error: balanceError },
       totals: {

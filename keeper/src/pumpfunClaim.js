@@ -46,6 +46,11 @@ import { config } from './config.js';
 
 export const PUMP_PROGRAM_ID = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
 export const PUMP_AMM_PROGRAM_ID = new PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
+// pump.fun "creator fee sharing" program. When a coin opts into fee sharing,
+// bonding_curve.creator points at a config account OWNED by this program whose
+// body lists the recipient wallets (one of which is our sub-wallet). See
+// isPumpfunFeeRecipient below.
+export const PUMP_FEE_SHARE_PROGRAM_ID = new PublicKey('pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ');
 const SYSTEM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
 const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -116,14 +121,12 @@ async function fetchBondingCurveCreator(c, bondingCurvePk) {
   return new PublicKey(acct.data.slice(49, 49 + 32));
 }
 
-// Unspoofable ownership signal for external fee routers: read the coin's on-chain
-// creator-fee recipient (bonding_curve.creator) for `mint`. Only the coin's real
-// creator can set this on pump.fun, so `readPumpfunCreator(mint) === subWallet`
-// proves the true owner routed fees to our sub-wallet — unlike any SOL/vault
-// balance, which anyone can inflate by sending. Returns the base58 recipient, or
-// null if the bonding curve can't be read (network error / not a pump.fun coin).
-// The bonding-curve account persists after graduation (marked complete), so this
-// covers post-grad coins too. See plan/FEE_ROUTING_AND_MINT_INDEX.md §6.
+// Read the coin's on-chain creator-fee recipient (bonding_curve.creator) for
+// `mint`. NOTE: this is NOT necessarily a wallet — when the coin opts into
+// pump.fun's creator-fee sharing (the common case for our routers), it is the
+// address of a fee-share CONFIG account owned by PUMP_FEE_SHARE_PROGRAM_ID whose
+// body lists the actual recipient wallets. Use isPumpfunFeeRecipient() to decide
+// ownership; this raw read is kept for diagnostics. Returns base58 or null.
 export async function readPumpfunCreator(mint) {
   try {
     const bondingCurve = deriveBondingCurve(new PublicKey(mint));
@@ -132,6 +135,60 @@ export async function readPumpfunCreator(mint) {
   } catch {
     return null;
   }
+}
+
+// Unspoofable ownership proof for an external fee router: is `subWallet` the
+// designated pump.fun creator-fee recipient for `mint`?
+//
+// pump.fun stores this one of two ways, and we accept BOTH:
+//   1. Direct creator — bonding_curve.creator == subWallet (coin was launched
+//      with the sub-wallet as the creator/fee wallet).
+//   2. Fee sharing (the common case) — bonding_curve.creator points at a config
+//      account owned by PUMP_FEE_SHARE_PROGRAM_ID, and the sub-wallet is listed
+//      as a recipient inside it. Only the coin's true creator can add a recipient
+//      to that config, so the sub-wallet's presence proves the owner routed fees
+//      to us — unlike a SOL/vault balance, which anyone can inflate by sending.
+//
+// The old check compared bonding_curve.creator directly against the sub-wallet,
+// which is the CONFIG address (not a recipient) in the sharing case, so it never
+// matched and routed tokens stayed hidden. See plan/FEE_ROUTING_AND_MINT_INDEX.md §6.
+//
+// The bonding-curve account persists after graduation (marked complete), so this
+// covers post-grad coins too. Returns true/false, or null when the chain can't be
+// read (network error / not a pump.fun coin) so callers can distinguish "no" from
+// "couldn't check".
+export async function isPumpfunFeeRecipient(mint, subWallet) {
+  const subB58 = typeof subWallet === 'string' ? subWallet : subWallet?.toBase58?.();
+  if (!subB58) return null;
+  let configPk;
+  try {
+    const bondingCurve = deriveBondingCurve(new PublicKey(mint));
+    configPk = await fetchBondingCurveCreator(conn(), bondingCurve);
+  } catch {
+    return null;
+  }
+  // Case 1: direct creator wallet.
+  if (configPk.toBase58() === subB58) return true;
+  // Case 2: fee-share config account — the sub-wallet must be a recipient inside.
+  let cfg;
+  try {
+    cfg = await conn().getAccountInfo(configPk, 'confirmed');
+  } catch {
+    return null;
+  }
+  if (!cfg) return false;
+  // Only trust the sharing program's own accounts. A coincidental match inside an
+  // arbitrary account we don't recognise must not grant a lock.
+  if (!cfg.owner.equals(PUMP_FEE_SHARE_PROGRAM_ID)) return false;
+  // Scan for the sub-wallet's 32 raw bytes among the recipient list. Byte match
+  // (not offset-aligned) is safe: a 32-byte pubkey collision is astronomically
+  // unlikely, and the sub-wallet can only be in here if the creator put it here.
+  const target = new PublicKey(subB58).toBuffer();
+  const data = cfg.data;
+  for (let i = 0; i + 32 <= data.length; i++) {
+    if (data.subarray(i, i + 32).equals(target)) return true;
+  }
+  return false;
 }
 
 function buildDistributeIx({
