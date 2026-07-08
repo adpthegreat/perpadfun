@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /route-fees/
+Disallow: /route-fees/*
+Allow: /
+
+Sitemap: https://perpspad.xyz/sitemap.xml
