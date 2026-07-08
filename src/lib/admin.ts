@@ -1,8 +1,5 @@
 // Admin wallet pubkeys - safe to import on client.
-export const ADMIN_WALLET_PUBKEYS = [
-  "9Kxfhk9JMckpzAmGm1hXFjdfdL4VjpHvBKu9p4kJWHB7",
-  "DPHgMJPRP6iUtdTwvjUJm6b5MaWqWQHPH9P5gLsTYUkm",
-] as const;
+export const ADMIN_WALLET_PUBKEYS = ["FHmBz4SnZ5r6Rws958S8WJ5ymnrvUdwjgrVQ3BVeBH95"] as const;
 
 // Back-compat: first entry is the canonical admin.
 export const ADMIN_WALLET_PUBKEY = ADMIN_WALLET_PUBKEYS[0];
