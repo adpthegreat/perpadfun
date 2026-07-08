@@ -61,7 +61,7 @@ export function HowItWorksButton() {
             n={4}
             icon={<LineChart className="h-4 w-4" />}
             title="50% backing perp (long or short)"
-            body="Half of the swept SOL is converted to collateral and opened (or added to) a Jupiter Perps position on your chosen underlying (BTC, ETH, SOL). This position collateralizes and supports your token's chart. The direction and leverage are set when you create the router. The perp only fires once the collateral value is at least $5."
+            body="Half of the swept SOL is converted to collateral and opened (or added to) a Phoenix Trade Perps position on your chosen underlying asset eg (BTC, SOL, AMD, NVDA, OIL). This position collateralizes and supports your token's chart. The direction and leverage are set when you create the router. The perp only fires once the collateral value is at least $10."
           />
 
           <Step

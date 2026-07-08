@@ -1330,7 +1330,7 @@ async function readPositionPreState(ctx) {
   }
 }
 
-// ---- 2d. IMPERIAL DEPOSIT (side-by-side with Jupiter perps) ----
+// ---- 2d. IMPERIAL DEPOSIT ---
 // Off / shadow / live, gated by IMPERIAL_DEPOSIT_MODE. Only fires when
 // the token has an assigned imperial_profile_index. In `live` we sign
 // and submit /deposit/build-tx (auto-swapping SOL->USDC if needed).
