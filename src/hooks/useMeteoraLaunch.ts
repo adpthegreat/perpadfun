@@ -41,7 +41,7 @@ export type LaunchStatus =
   | "done"
   | "error";
 
-type LaunchInput = {
+export type LaunchInput = {
   ticker: string;
   name: string;
   description?: string;
@@ -52,6 +52,10 @@ type LaunchInput = {
   leverage: number;
   direction: "long" | "short";
   creatorAddress?: string;
+  // Admin-only knobs (exposed by /admin-launch; /launch omits them).
+  leftoverTokens?: number;         // held back from the bonding curve, 0..1B
+  vanityMintPrivateKey?: string;   // base58 or JSON array of 64 ints; server decodes
+  adminSecret?: string;            // required when either admin knob above is set
   // Quote token the bonding curve is denominated in (default SOL).
   quote?: "SOL" | "USDC";
   // Creator dev-buy, in the QUOTE token's UI units. SOL: 0.1–5. USDC: 5–5000.
@@ -69,7 +73,7 @@ const USDC_MINT_PK = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 // transactions treasury signs (config init + pool+buy), plus a retry buffer
 // so a partial failure (config landed, pool didn't) can be retried. Must
 // match LAUNCH_RENT_AND_FEES_LAMPORTS + SUB_WALLET_OPS_SEED on the server.
-const TX_SLACK_LAMPORTS = 110_000_000; // 0.11 SOL
+const TX_SLACK_LAMPORTS = 130_000_000; // 0.13 SOL
 
 export function useMeteoraLaunch() {
   const { publicKey, signTransaction } = useSolanaAdapterWallet();
@@ -241,6 +245,10 @@ export function useMeteoraLaunch() {
             buyAmount,
             prefundSignature: prefundSig,
             curvePreset: draft.curvePreset as "gentle" | "standard" | "parabolic",
+            // Admin extras. Undefined when called from /launch.
+            leftoverTokens: input.leftoverTokens,
+            vanityMintPrivateKey: input.vanityMintPrivateKey,
+            adminSecret: input.adminSecret,
           },
         });
         if (!rec.ok) {

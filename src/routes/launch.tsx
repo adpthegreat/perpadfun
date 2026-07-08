@@ -449,8 +449,10 @@ function LaunchPage() {
                       key={l}
                       type="button"
                       onClick={() => setLeverage(l)}
-                      className={`border py-2.5 text-sm font-medium transition-all ${
-                        leverage === l ? "border-foreground bg-accent" : "border-border hover:border-foreground/40"
+                      className={`rounded-md border px-3 py-2 text-sm transition ${
+                        leverage === l
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {l}x
@@ -466,10 +468,10 @@ function LaunchPage() {
                         key={l}
                         type="button"
                         onClick={() => setLeverage(l)}
-                        className={`border py-2.5 text-sm font-medium transition-all ${
+                        className={`rounded-md border px-3 py-2 text-sm transition ${
                           leverage === l
                             ? "border-destructive bg-destructive/10 text-destructive"
-                            : "border-border hover:border-destructive/50"
+                            : "border-border text-muted-foreground hover:text-destructive"
                         }`}
                       >
                         {l}x

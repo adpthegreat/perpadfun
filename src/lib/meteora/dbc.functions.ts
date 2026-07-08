@@ -527,11 +527,43 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
         prefundSignature: z.string().min(32).max(120).nullable().optional(),
         // 'gentle' | 'standard' | 'parabolic' — picked from leverage server-side.
         curvePreset: z.enum(["gentle", "standard", "parabolic"]),
+        // Admin knob (surfaced only by /admin-launch UI): tokens held back
+        // from the bonding curve. Undefined/0 = 100% of supply tradable. Passed
+        // straight into DBC's buildCurveWithMarketCap `leftover` param.
+        leftoverTokens: z.number().int().min(0).max(1_000_000_000).optional(),
+        // Admin knob: pre-grinded mint keypair (base58 secret ~88 chars OR
+        // JSON array of 64 ints — up to ~320 chars). When present, used as
+        // the base mint instead of Keypair.generate(). Undefined = fresh
+        // random mint. Wire-level so the operator supplies it per-launch
+        // from the UI — never a server env.
+        vanityMintPrivateKey: z.string().min(64).max(500).optional(),
+        // Required whenever any admin knob is set (leftoverTokens > 0 OR
+        // vanityMintPrivateKey). Server checks it against process.env
+        // KEEPER_SECRET. Sent by /admin-launch UI (cached from admin-key.ts).
+        // /launch omits it and is rejected if it tries to use admin extras.
+        adminSecret: z.string().min(1).max(200).optional(),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
     try {
+      // Gate admin extras. Public /launch never sends leftoverTokens > 0 or
+      // vanityMintPrivateKey, so it doesn't need adminSecret. /admin-launch
+      // sends both extras and the adminSecret; server rejects if the secret
+      // is missing or doesn't match KEEPER_SECRET.
+      const wantsAdminExtras =
+        (data.leftoverTokens ?? 0) > 0 || !!data.vanityMintPrivateKey?.trim();
+      if (wantsAdminExtras) {
+        const expected = (process.env.KEEPER_SECRET ?? "").trim();
+        const provided = (data.adminSecret ?? "").trim();
+        if (!expected || !provided || expected !== provided) {
+          return {
+            ok: false as const,
+            error: "unauthorized: admin extras (leftoverTokens or vanityMintPrivateKey) require a valid keeper secret",
+          };
+        }
+      }
+
       assertAllowedLauncher(data.creatorAddress);
       const conn = new Connection(getServerSolanaRpcUrl(), "confirmed");
 
@@ -677,7 +709,26 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
 
       const client = new DynamicBondingCurveClient(conn, "confirmed");
       const config = Keypair.generate();
-      const baseMint = Keypair.generate();
+      // Base mint: fresh keypair unless the operator supplied a pre-grinded
+      // vanity secret via the wire. Accepts base58 (88 chars) OR a JSON array
+      // of 64 ints — same shape as TREASURY_SECRET_KEY, so operators use one
+      // encoding across the codebase. Decoding errors surface cleanly to the
+      // caller rather than degrading silently.
+      const baseMint = await (async () => {
+        const v = data.vanityMintPrivateKey?.trim();
+        if (!v) return Keypair.generate();
+        const bs58 = (await import("bs58")).default;
+        let bytes: Uint8Array;
+        try {
+          bytes = v.startsWith("[") ? new Uint8Array(JSON.parse(v)) : bs58.decode(v);
+        } catch (e) {
+          throw new Error(`vanityMintPrivateKey could not be decoded: ${(e as Error).message}`);
+        }
+        if (bytes.length !== 64) {
+          throw new Error(`vanityMintPrivateKey length ${bytes.length} (expected 64)`);
+        }
+        return Keypair.fromSecretKey(bytes);
+      })();
       const userPk = new PublicKey(data.creatorAddress);
       const quoteMint = new PublicKey(quoteMintStr);
 
@@ -708,28 +759,32 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
           tokenQuoteDecimal: quote === "USDC" ? TokenDecimal.SIX : TokenDecimal.NINE,
           tokenUpdateAuthority: TokenUpdateAuthorityOption.CreatorUpdateAuthority,
           totalTokenSupply: 1_000_000_000,
-          leftover: 0,
+          leftover: data.leftoverTokens ?? 0,
         },
         fee: {
           baseFeeParams: {
-            baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+            // TEMPORARY — anti-sniper fee curve. Decays from 95% to 2.5% over
+            // ~2 minutes (300 slots × 400 ms) in 60 exponential steps. Revert
+            // to the prior linear 4%→2.5% over ~24h once initial-launch bot
+            // activity settles. See launchAsTreasury field defense in chat.
+            baseFeeMode: BaseFeeMode.FeeSchedulerExponential,
             feeSchedulerParam: {
-              startingFeeBps: 400,
-              endingFeeBps: 250,
-              numberOfPeriod: 24,
-              totalDuration: 216_000,
+              startingFeeBps: 400,   // TEMPORARY 95% (was 400 = 4%)
+              endingFeeBps: 250,      // 2.5% steady-state
+              numberOfPeriod: 60,     // TEMPORARY step every ~2s (was 24)
+              totalDuration: 300,     // TEMPORARY 300 slots = ~2 min (was 216_000 = ~24h)
             },
           },
           dynamicFeeEnabled: true,
           collectFeeMode: CollectFeeMode.QuoteToken,
           creatorTradingFeePercentage: 0,
-          poolCreationFee: 0.001,
+          poolCreationFee: 0,
           enableFirstSwapWithMinFee: false,
         },
         migration: {
           migrationOption: MigrationOption.MET_DAMM_V2,
           migrationFeeOption: MigrationFeeOption.FixedBps100,
-          migrationFee: { feePercentage: 0.01, creatorFeePercentage: 0 },
+          migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
         },
         liquidityDistribution: {
           partnerPermanentLockedLiquidityPercentage: 50,
@@ -828,16 +883,43 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
       const configSig = await conn.sendRawTransaction(createConfigTx.serialize(), {
         skipPreflight: false,
       });
-      // Wait for "processed" instead of "confirmed". The pool tx only needs
-      // the config account to exist on-chain (already true after processed),
-      // and "confirmed" takes 10-30s which blew our Worker subrequest budget
-      // and left the launch half-done.
-      await conn
-        .confirmTransaction(
-          { signature: configSig, blockhash: bh1.blockhash, lastValidBlockHeight: bh1.lastValidBlockHeight },
-          "processed",
-        )
-        .catch((e) => console.warn("confirm configTx", e));
+      // HTTP-poll the config sig until it's at least `processed`. Replaces the
+      // old `conn.confirmTransaction(...).catch(...)` which swallowed timeouts
+      // (WebSocket signatureSubscribe stalls on Cloudflare Workers) and raced
+      // ahead to send the pool tx while the config was still in-flight —
+      // producing AccountOwnedByWrongProgram (Anchor 3007 / 0xbbf) at pool-tx
+      // preflight. If the poll times out or reports an on-chain err, abort
+      // BEFORE sending the pool tx.
+      const ACCEPT = ["processed", "confirmed", "finalized"];
+      let configOnChainErr: unknown = null;
+      let configConfirmed = false;
+      await backOff(
+        async () => {
+          const v = (await conn.getSignatureStatus(configSig, { searchTransactionHistory: true })).value;
+          if (v?.err) {
+            configOnChainErr = v.err;
+            return;
+          }
+          if (v?.confirmationStatus && ACCEPT.includes(v.confirmationStatus)) {
+            configConfirmed = true;
+            return;
+          }
+          throw new Error("not yet confirmed");
+        },
+        { numOfAttempts: 16, startingDelay: 1000, timeMultiple: 1.5, maxDelay: 4000, jitter: "full", retry: () => true },
+      ).catch(() => {});
+      if (configOnChainErr) {
+        return {
+          ok: false as const,
+          error: `config tx failed on-chain: ${JSON.stringify(configOnChainErr)}. Sig: ${configSig}`,
+        };
+      }
+      if (!configConfirmed) {
+        return {
+          ok: false as const,
+          error: `config tx not confirmed in time. Sig: ${configSig}`,
+        };
+      }
 
       // 5. Sign + send pool+buy tx. Sub-wallet is fee payer + buyer + creator.
       const bh2 = await conn.getLatestBlockhash("confirmed");

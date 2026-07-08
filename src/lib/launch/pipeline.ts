@@ -11,45 +11,40 @@ import { getServerSolanaRpcUrl } from "@/lib/wallet/solanaConfig";
 import { getTreasuryKeypair } from "@/lib/solana/treasury.server";
 import { backOff } from "@/lib/backoff";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { computeSupplyBreakdown, validateLeftover, type SupplyBreakdown } from "@/lib/launch/supplyBreakdown";
+import { type SupplyBreakdown } from "@/lib/launch/supplyBreakdown";
 import { deriveSubWalletKeypair, tokenInvariantsFor } from "@/lib/solana/subWallet.server";
 import { isLaunchableMarket, isValidLeverageFor, maxLeverageFor } from "@/lib/imperial-markets";
+import {
+  breakdownFor,
+  buildConfigParams,
+  LAUNCH_RENT_AND_FEES_LAMPORTS,
+  loadBN,
+  loadSdk,
+  presetForLeverage,
+  publicBaseUrl,
+  quoteMintFor,
+  STANDARD_FEE_SCHEDULE,
+  SUB_WALLET_OPS_SEED_LAMPORTS,
+  type CurvePreset,
+  type FeeSchedule,
+  type Quote,
+} from "@/lib/launch/config-builder";
 
 const USDC_MINT_STR = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const NATIVE_SOL_MINT_STR = "So11111111111111111111111111111111111111112";
-const TOTAL_SUPPLY = 1_000_000_000;
-const TOKEN_DECIMALS = 6;
 export const PUBLIC_LAUNCH_FEE_SOL = Number(process.env.PUBLIC_LAUNCH_FEE_SOL ?? 0.01);
 
-export type CurvePreset = "gentle" | "standard" | "parabolic";
-export type Quote = "SOL" | "USDC";
-
-// Standard anti-snipe fee: exponential 4% -> 2.5%. Public always uses it; admin may override.
-export type FeeSchedule = { startingFeeBps: number; endingFeeBps: number; numberOfPeriod: number; totalDuration: number };
-export const STANDARD_FEE_SCHEDULE: FeeSchedule = { startingFeeBps: 400, endingFeeBps: 250, numberOfPeriod: 60, totalDuration: 9000 };
-
-const PRESETS = {
-  SOL: {
-    gentle: { initialMarketCap: 34, migrationMarketCap: 400 },
-    standard: { initialMarketCap: 34, migrationMarketCap: 460 },
-    parabolic: { initialMarketCap: 34, migrationMarketCap: 550 },
-  },
-  USDC: {
-    gentle: { initialMarketCap: 3000, migrationMarketCap: 36000 },
-    standard: { initialMarketCap: 3000, migrationMarketCap: 41000 },
-    parabolic: { initialMarketCap: 3000, migrationMarketCap: 49000 },
-  },
-} as const;
-
-function publicBaseUrl(): string {
-  return (process.env.PUBLIC_BASE_URL || process.env.PERPAD_BASE_URL || "https://perpspad.fun").replace(/\/$/, "");
-}
-function presetForLeverage(leverage: number): CurvePreset {
-  return leverage === 2 ? "gentle" : leverage >= 5 ? "parabolic" : "standard";
-}
-function quoteMintFor(quote: Quote): PublicKey {
-  return new PublicKey(quote === "USDC" ? USDC_MINT_STR : NATIVE_SOL_MINT_STR);
-}
+export {
+  buildConfigParams,
+  LAUNCH_RENT_AND_FEES_LAMPORTS,
+  loadBN,
+  loadSdk,
+  presetForLeverage,
+  publicBaseUrl,
+  quoteMintFor,
+  STANDARD_FEE_SCHEDULE,
+  SUB_WALLET_OPS_SEED_LAMPORTS,
+};
+export type { CurvePreset, FeeSchedule, Quote };
 
 // Common launch fields shared by both modes.
 export type BaseLaunchFields = {
@@ -68,28 +63,16 @@ export type BaseLaunchFields = {
 export type PublicLaunchInput = BaseLaunchFields & { devBuy: number };
 export type AdminLaunchInput = BaseLaunchFields & { devBuy: number; leftoverTokens?: number; feeSchedule?: FeeSchedule; tokenId?: string };
 
-// Sub-wallet funding floor (lamports), mirrors launchAsTreasury: rent for config/pool/mint + 2 tx
-// fees + retry buffer (0.10 SOL) + a small keeper ops seed (0.01 SOL). Dev-buy (SOL pools) on top.
-const LAUNCH_RENT_AND_FEES_LAMPORTS = 100_000_000;
-const SUB_WALLET_OPS_SEED_LAMPORTS = 10_000_000;
-
-function assertMarket(underlying: string, leverage: number) {
+export function assertMarket(underlying: string, leverage: number) {
   if (!isLaunchableMarket(underlying)) throw new Error(`unsupported market: ${underlying}`);
   if (!isValidLeverageFor(underlying, leverage))
     throw new Error(`unsupported leverage ${leverage}x for ${underlying} (cap ${maxLeverageFor(underlying)}x)`);
 }
 
-async function loadSdk() {
-  return (await import("@meteora-ag/dynamic-bonding-curve-sdk")) as any;
-}
-async function loadBN() {
-  return (await import("bn.js")).default as any;
-}
-
 // Worker-safe confirmation — the SAME technique launchAsTreasury uses for its prefund: poll
 // getSignatureStatus with exponential backoff (HTTP, no WebSocket signatureSubscribe to stall on a
 // Cloudflare Worker). Throws on a terminal on-chain error or if it never reaches confirmed/finalized.
-async function pollConfirmed(conn: Connection, sig: string, minStatus: "processed" | "confirmed" = "confirmed"): Promise<void> {
+export async function pollConfirmed(conn: Connection, sig: string, minStatus: "processed" | "confirmed" = "confirmed"): Promise<void> {
   const accept = minStatus === "processed" ? ["processed", "confirmed", "finalized"] : ["confirmed", "finalized"];
   let ok = false;
   let onChainErr: unknown = null;
@@ -112,57 +95,6 @@ async function pollConfirmed(conn: Connection, sig: string, minStatus: "processe
   if (!ok) throw new Error(`tx ${sig} not confirmed in time`);
 }
 
-// Build the Meteora DBC config params (curve + leftover + anti-snipe fee).
-async function buildConfigParams(
-  sdk: any,
-  cfg: { quote: Quote; curvePreset: CurvePreset; leftoverTokens?: number; feeSchedule?: FeeSchedule },
-) {
-  const preset = PRESETS[cfg.quote][cfg.curvePreset];
-  const fee = cfg.feeSchedule ?? STANDARD_FEE_SCHEDULE;
-  const leftover = cfg.leftoverTokens ?? 0;
-  const lvErr = validateLeftover(leftover, TOTAL_SUPPLY);
-  if (lvErr) throw new Error(lvErr);
-  return sdk.buildCurveWithMarketCap({
-    initialMarketCap: preset.initialMarketCap,
-    migrationMarketCap: preset.migrationMarketCap,
-    activationType: sdk.ActivationType.Slot,
-    token: {
-      tokenType: sdk.TokenType.SPL,
-      tokenBaseDecimal: sdk.TokenDecimal.SIX,
-      tokenQuoteDecimal: cfg.quote === "USDC" ? sdk.TokenDecimal.SIX : sdk.TokenDecimal.NINE,
-      tokenUpdateAuthority: sdk.TokenUpdateAuthorityOption.CreatorUpdateAuthority,
-      totalTokenSupply: TOTAL_SUPPLY,
-      leftover,
-    },
-    fee: {
-      baseFeeParams: {
-        baseFeeMode: sdk.BaseFeeMode.FeeSchedulerExponential,
-        feeSchedulerParam: { startingFeeBps: fee.startingFeeBps, endingFeeBps: fee.endingFeeBps, numberOfPeriod: fee.numberOfPeriod, totalDuration: fee.totalDuration },
-      },
-      dynamicFeeEnabled: true,
-      collectFeeMode: sdk.CollectFeeMode.QuoteToken,
-      creatorTradingFeePercentage: 0,
-      poolCreationFee: 0,
-      enableFirstSwapWithMinFee: false,
-    },
-    migration: {
-      migrationOption: sdk.MigrationOption.MET_DAMM_V2,
-      migrationFeeOption: sdk.MigrationFeeOption.FixedBps100,
-      migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
-    },
-    liquidityDistribution: {
-      partnerPermanentLockedLiquidityPercentage: 50,
-      partnerLiquidityPercentage: 0,
-      creatorPermanentLockedLiquidityPercentage: 50,
-      creatorLiquidityPercentage: 0,
-    },
-    lockedVesting: { totalLockedVestingAmount: 0, numberOfVestingPeriod: 0, cliffUnlockAmount: 0, totalVestingDuration: 0, cliffDurationFromMigrationTime: 0 },
-  });
-}
-
-function breakdownFor(configParams: any, leftoverTokens: number): SupplyBreakdown {
-  return computeSupplyBreakdown(configParams, TOTAL_SUPPLY, leftoverTokens, TOKEN_DECIMALS);
-}
 
 // Single row writer. status='live' for a confirmed launch; status='launching' for a
 // public pending row awaiting on-chain confirmation. on-conflict(id) keeps it idempotent.
@@ -355,6 +287,7 @@ export async function buildPublicLaunchTx(input: PublicLaunchInput): Promise<{
   const conn = new Connection(getServerSolanaRpcUrl(), "confirmed");
 
   const tokenId = randomUUID();
+
   const subWallet = deriveSubWalletKeypair(tokenId);
   const treasury = getTreasuryKeypair();
   const config = Keypair.generate();
