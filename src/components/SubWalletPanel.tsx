@@ -60,7 +60,7 @@ export function SubWalletPanel({ tokenId }: { tokenId: string }) {
         return;
       }
       setPrivateKey(res.privateKey);
-      toast.success("Private key revealed. Do not share.");
+      toast.success("Wallet secret revealed. Do not share.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Reveal failed");
     } finally {
@@ -135,7 +135,7 @@ export function SubWalletPanel({ tokenId }: { tokenId: string }) {
       </div>
       <p className="mt-2 text-[11px] text-muted-foreground">
         Dedicated wallet for this token. Receives fees and holds the perp position.
-        Derived deterministically on the server. Private key is never stored.
+        Derived deterministically on the server. No wallet credentials are stored client-side.
       </p>
 
       {isAdmin && (
@@ -169,7 +169,7 @@ export function SubWalletPanel({ tokenId }: { tokenId: string }) {
           {privateKey && (
             <div className="mt-3 border border-destructive bg-destructive/10 p-2">
               <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-destructive">
-                Private key (base58). Paste into Phantom import. Do not share.
+                Wallet secret (base58). Import into Phantom. Do not share.
               </div>
               <textarea
                 readOnly
@@ -197,11 +197,11 @@ export function SubWalletPanel({ tokenId }: { tokenId: string }) {
         </div>
       )}
 
-      {!isAdmin && publicKey && (
+      {/* {!isAdmin && publicKey && (
         <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           Connect an authorized admin wallet to manage.
         </p>
-      )}
+      )} */}
     </div>
   );
 }

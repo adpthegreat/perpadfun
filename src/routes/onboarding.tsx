@@ -260,7 +260,6 @@ function OnboardingPage() {
                         value={walletInput}
                         onChange={(e) => setWalletInput(e.target.value.trim())}
                         onKeyDown={(e) => e.key === "Enter" && handleSubmitWallet()}
-                        placeholder="paste your Solana address"
                         spellCheck={false}
                         className="w-[210px] rounded-full border border-border bg-card/60 px-4 py-2 font-mono text-[11px] outline-none focus:border-[#9d4eff]"
                       />

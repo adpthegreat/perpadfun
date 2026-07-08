@@ -197,7 +197,7 @@ function AdminCockpit() {
           <input
             type="password"
             className="w-[260px] rounded border border-border bg-background px-2 py-1 font-mono"
-            placeholder="x-keeper-secret (enter once)"
+            placeholder="admin key (enter once)"
             defaultValue={adminKey}
             onKeyDown={(e) => {
               if (e.key === "Enter") {

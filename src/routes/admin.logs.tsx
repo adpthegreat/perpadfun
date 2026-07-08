@@ -620,8 +620,7 @@ function DevNotes() {
         <div>
           <div className="font-semibold text-foreground">Keeper / runtime</div>
           The keeper runs on Fly.io (separate from this web app). Logs: <code>fly logs -a &lt;app&gt;</code>.
-          Private keys (TREASURY_SECRET_KEY, TREASURY_SOLANA_PRIVATE_KEY) live only as Fly secrets and Supabase
-          secrets, never in the DB. RPC: SOLANA_RPC_URL.
+          Signing credentials live only as Fly secrets and Supabase secrets, never in the DB. RPC: SOLANA_RPC_URL.
         </div>
       </div>
     </details>

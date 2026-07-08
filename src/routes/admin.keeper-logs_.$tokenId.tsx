@@ -123,7 +123,7 @@ function AdminTokenKeeperLogsPage() {
           <input
             type="password"
             className="px-2 py-1 rounded border border-border bg-background w-[260px] font-mono"
-            placeholder="x-keeper-secret (enter once)"
+            placeholder="admin key (enter once)"
             defaultValue={adminKey}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
