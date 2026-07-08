@@ -77,7 +77,7 @@ export const IMPERIAL_MAX_LEVERAGE: Record<string, number> = {
 // 50× / 100× tiers from the picker entirely — they would never show under
 // any Phoenix-routed asset.
 export const BASE_LEVERAGES = [2, 3, 5] as const;
-export const DEGEN_LEVERAGES = [10, 20, 25] as const;
+export const DEGEN_LEVERAGES = [10, 15, 20, 25] as const;
 
 // Every discrete leverage tier the UI can show, ascending. Single source of
 // truth shared by the picker and the server-side validators, so the two can
