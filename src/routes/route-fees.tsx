@@ -168,7 +168,19 @@ function RouteFeesPage() {
         return;
       }
       toast.success(r.alreadyLinked ? "Mint was already linked." : "Mint linked. Buyback+burn is live.");
-      window.location.href = `/route-fees/${r.claimToken}`;
+      if (!r.claimToken) {
+        // Extremely defensive — a successful link SHOULD always return a token.
+        // If it doesn't we still surface success (toast fired) but can't nav.
+        toast.error("Linked, but no claim token returned. Refresh /route-fees to find your dashboard.");
+        return;
+      }
+      // Hard nav to the dashboard with ?linked=1 so it can render the
+      // persistent success banner. Hard nav (instead of TanStack `navigate`)
+      // sidesteps the search-schema serialization quirk where the search
+      // param can be silently normalized away and the navigation no-ops.
+      // The banner replaces the toast on the destination, so persistence
+      // across reload isn't needed.
+      window.location.assign(`/route-fees/${r.claimToken}?linked=1`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unexpected error");
     } finally {
@@ -196,7 +208,7 @@ function RouteFeesPage() {
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Generate a fresh, one-use sub-wallet. Set it as the creator-fee receiver on your pump.fun
             token. Every fee that lands is split 50% backing perp, 25% buyback and burn, 25% treasury
-            runway. Only perpspad can move funds out.
+            runway.
           </p>
           <p className="mt-2 max-w-2xl text-sm font-medium text-amber-600 dark:text-amber-400">
             Your token needs to generate at least $100 in fees (with perpspad as the sole fee receiver) before automation kicks in.
@@ -408,7 +420,7 @@ function RouteFeesPage() {
                     )}
                     {degenMode && degenOpts.length > 0 && (
                       <>
-                        <div className="mt-2 grid grid-cols-4 gap-2">
+                        <div className="mt-2 grid grid-cols-3 gap-2">
                           {degenOpts.map((l) => (
                             <button
                               type="button"

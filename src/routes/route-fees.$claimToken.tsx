@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useParams } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -9,10 +9,16 @@ import { Label } from "@/components/ui/label";
 import { getRouterDashboard } from "@/lib/route-fees-dashboard.functions";
 import { linkMintToRouter } from "@/lib/external-router.functions";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, ExternalLink, Flame, LineChart, Link2, RefreshCw, Wallet } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Copy, ExternalLink, Flame, LineChart, Link2, RefreshCw, Wallet, X } from "lucide-react";
 
 export const Route = createFileRoute("/route-fees/$claimToken")({
   component: RouterDashboard,
+  validateSearch: (raw: Record<string, unknown>) => ({
+    // `?linked=1` is set by the route-fees start page after a successful link
+    // to render a persistent success banner that survives longer than the
+    // sonner toast (which dies on the client-side navigation).
+    linked: raw.linked === 1 || raw.linked === "1" || raw.linked === true ? true : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Router dashboard. perpspad" },
@@ -27,12 +33,29 @@ export const Route = createFileRoute("/route-fees/$claimToken")({
 
 function RouterDashboard() {
   const { claimToken } = useParams({ from: "/route-fees/$claimToken" });
+  const search = useSearch({ from: "/route-fees/$claimToken" });
+  const navigate = useNavigate();
   const fetchFn = useServerFn(getRouterDashboard);
   const q = useQuery({
     queryKey: ["router-dashboard", claimToken],
     queryFn: () => fetchFn({ data: { claimToken } }),
     refetchInterval: 15_000,
   });
+
+  // Reflects whether we just arrived here via a successful link. Persistent
+  // until the user dismisses it or clicks the "Got it" button.
+  const [linkedDismissed, setLinkedDismissed] = useState(false);
+  const showLinkedBanner = search.linked === true && !linkedDismissed;
+  function dismissLinked() {
+    setLinkedDismissed(true);
+    // Also strip the query param so a refresh doesn't re-open the banner.
+    navigate({
+      to: "/route-fees/$claimToken",
+      params: { claimToken },
+      search: {},
+      replace: true,
+    });
+  }
 
   function copy(text: string, label: string) {
     navigator.clipboard.writeText(text);
@@ -61,7 +84,15 @@ function RouterDashboard() {
             </p>
           </div>
         ) : (
-          <Dashboard data={q.data} onRefresh={() => q.refetch()} refreshing={q.isFetching} copy={copy} claimToken={claimToken} />
+          <Dashboard
+            data={q.data}
+            onRefresh={() => q.refetch()}
+            refreshing={q.isFetching}
+            copy={copy}
+            claimToken={claimToken}
+            showLinkedBanner={showLinkedBanner}
+            onDismissLinked={dismissLinked}
+          />
         )}
       </main>
     </div>
@@ -74,17 +105,94 @@ function Dashboard({
   refreshing,
   copy,
   claimToken,
+  showLinkedBanner,
+  onDismissLinked,
 }: {
   data: Extract<Awaited<ReturnType<typeof getRouterDashboard>>, { ok: true }>;
   onRefresh: () => void;
   refreshing: boolean;
   copy: (t: string, l: string) => void;
   claimToken: string;
+  showLinkedBanner: boolean;
+  onDismissLinked: () => void;
 }) {
   const { router, balance, totals, events } = data;
+  // "Awaiting first sweep" until first_fee_routed_at is populated by the keeper.
+  // Until then the token is filtered out of the market feed (tokens.functions.ts
+  // partial-visibility query), so we explain that here rather than let the user
+  // think the link is broken.
+  const awaitingFirstSweep = !router.mintPending && !router.firstFeeRoutedAt;
+  const isLive = !!router.firstFeeRoutedAt;
 
   return (
     <div className="space-y-6">
+      {showLinkedBanner ? (
+        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/5 p-5">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
+            <div className="flex-1">
+              <div className="text-base font-semibold text-emerald-300">
+                Router linked. Your token is set up.
+              </div>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Fees will auto-route to the sub-wallet below the moment pump.fun forwards them.
+                Bookmark this page — it's your live status.
+              </p>
+            </div>
+            <button
+              onClick={onDismissLinked}
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="Dismiss"
+              title="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Concrete artifacts — the user's real question is "where is my token?" */}
+          <div className="mt-4 space-y-2 rounded-xl border border-emerald-500/20 bg-background/40 p-3">
+            {router.externalMint ? (
+              <ReceiptRow
+                label="Your token mint"
+                value={router.externalMint}
+                onCopy={() => copy(router.externalMint as string, "Mint")}
+                openHref={`https://solscan.io/token/${router.externalMint}`}
+              />
+            ) : null}
+            <ReceiptRow
+              label="Public token page"
+              value={`${typeof window !== "undefined" ? window.location.origin : ""}/token/${router.id}`}
+              onCopy={() =>
+                copy(
+                  `${typeof window !== "undefined" ? window.location.origin : ""}/token/${router.id}`,
+                  "URL",
+                )
+              }
+              openTo={{ to: "/token/$id", params: { id: router.id } }}
+            />
+          </div>
+
+          {awaitingFirstSweep ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Note: your token appears on the market feed after the first fee is routed. See the
+              amber card below for the current status.
+            </p>
+          ) : null}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button size="sm" asChild>
+              <Link to="/token/$id" params={{ id: router.id }}>
+                Open token page
+                <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+            <Button size="sm" variant="outline" onClick={onDismissLinked}>
+              Got it
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="rounded-2xl border border-border bg-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -125,6 +233,41 @@ function Dashboard({
 
       {router.mintPending ? <LinkMintCard claimToken={claimToken} onLinked={onRefresh} /> : null}
 
+      {awaitingFirstSweep ? (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-300">
+            <RefreshCw className="h-4 w-4" />
+            Awaiting first sweep
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your token will appear on the perpspad market feed after the first fee is routed. The
+            keeper checks this sub-wallet every few seconds and sweeps once it holds at least
+            0.01 SOL — enough to cover the buyback + burn tx fees.
+          </p>
+          <div className="mt-3 text-xs text-muted-foreground">
+            Current balance:{" "}
+            <span className="font-mono text-foreground">{balance.sol.toFixed(4)} SOL</span> · Last
+            checked {refreshing ? "just now" : "recently"} (auto-refreshes every 15s)
+          </div>
+        </div>
+      ) : isLive ? (
+        <div className="flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <div className="flex-1 text-emerald-200">
+            Fee routing verified — first sweep landed{" "}
+            <span className="font-mono text-muted-foreground">
+              {new Date(router.firstFeeRoutedAt as string).toLocaleString()}
+            </span>
+            . Your token is on the market feed.
+          </div>
+          <Button size="sm" variant="outline" asChild>
+            <Link to="/token/$id" params={{ id: router.id }}>
+              View public page
+              <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-4">
         <Stat icon={<Wallet className="h-4 w-4" />} label="Live balance" value={`${balance.sol.toFixed(4)} SOL`} hint={balance.error ?? "On-chain"} />
@@ -187,6 +330,52 @@ function Dashboard({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Compact address/URL row used inside the success banner. Same shape as `Row`
+// but denser and with an optional in-app "open" affordance so the user can
+// tap through to the token page without hunting for a button.
+function ReceiptRow({
+  label,
+  value,
+  onCopy,
+  openHref,
+  openTo,
+}: {
+  label: string;
+  value: string;
+  onCopy: () => void;
+  openHref?: string;
+  openTo?: { to: string; params: Record<string, string> };
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-32 shrink-0 text-[11px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      <code className="min-w-0 flex-1 truncate rounded bg-background px-2 py-1 text-[11px] font-mono">
+        {value}
+      </code>
+      <Button size="sm" variant="outline" onClick={onCopy}>
+        <Copy className="h-3 w-3" />
+      </Button>
+      {openHref ? (
+        <Button size="sm" variant="outline" asChild>
+          <a href={openHref} target="_blank" rel="noreferrer">
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </Button>
+      ) : null}
+      {openTo ? (
+        <Button size="sm" variant="outline" asChild>
+          {/* @ts-expect-error — dynamic route param type is fine at runtime */}
+          <Link to={openTo.to} params={openTo.params}>
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        </Button>
+      ) : null}
     </div>
   );
 }
