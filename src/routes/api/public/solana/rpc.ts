@@ -24,8 +24,8 @@ function isAllowedPreviewOrigin(origin: string | null) {
       hostname === "127.0.0.1" ||
       hostname.endsWith("lovableproject.com") ||
       hostname.endsWith("lovable.app") ||
-      hostname === "perpspad.fun" ||
-      hostname === "www.perpspad.fun"
+      hostname === "perpspad.xyz" ||
+      hostname === "www.perpspad.xyz"
     );
   } catch {
     return false;

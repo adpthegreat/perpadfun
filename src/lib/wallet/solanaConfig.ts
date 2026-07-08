@@ -1,7 +1,7 @@
 // Solana mainnet config.
 // RPC key is NEVER hardcoded/shipped to the browser. Resolution order:
 //   1. VITE_SOLANA_RPC_URL (build-time env) if set,
-//   2. on perpspad.fun / preview hosts: the server RPC proxy
+//   2. on perpspad.xyz / preview hosts: the server RPC proxy
 //      (/api/public/solana/rpc) so the real key stays server-side,
 //   3. otherwise the public mainnet RPC (rate-limited, no key).
 const PUBLIC_MAINNET_RPC_URL = "https://api.mainnet-beta.solana.com";
@@ -11,8 +11,8 @@ const isProxiedHost =
   typeof window !== "undefined" &&
   (window.location.hostname.endsWith("lovableproject.com") ||
     window.location.hostname.endsWith("lovable.app") ||
-    window.location.hostname === "perpspad.fun" ||
-    window.location.hostname === "www.perpspad.fun" ||
+    window.location.hostname === "perpspad.xyz" ||
+    window.location.hostname === "www.perpspad.xyz" ||
     // Local dev: route through the same-origin proxy (the dev server handles
     // /api/public/solana/rpc → real SOLANA_RPC_URL) so localhost doesn't fall back
     // to the public RPC, which 403s browser dApp calls.

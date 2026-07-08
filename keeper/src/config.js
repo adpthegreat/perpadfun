@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import "dotenv/config";
 
 function req(name) {
   const v = process.env[name];
@@ -14,9 +14,12 @@ function fingerprint(value) {
 export function describeRpcUrl(rawUrl) {
   try {
     const url = new URL(rawUrl);
-    const key = url.searchParams.get('api-key') ?? url.searchParams.get('apikey') ?? url.searchParams.get('key');
-    for (const name of ['api-key', 'apikey', 'key', 'token']) {
-      if (url.searchParams.has(name)) url.searchParams.set(name, '[redacted]');
+    const key =
+      url.searchParams.get("api-key") ??
+      url.searchParams.get("apikey") ??
+      url.searchParams.get("key");
+    for (const name of ["api-key", "apikey", "key", "token"]) {
+      if (url.searchParams.has(name)) url.searchParams.set(name, "[redacted]");
     }
     return {
       host: url.host,
@@ -26,9 +29,9 @@ export function describeRpcUrl(rawUrl) {
     };
   } catch {
     return {
-      host: 'invalid-url',
-      path: '',
-      redactedUrl: '[invalid RPC URL]',
+      host: "invalid-url",
+      path: "",
+      redactedUrl: "[invalid RPC URL]",
       keyFingerprint: null,
     };
   }
@@ -38,32 +41,50 @@ export function describeRpcUrl(rawUrl) {
 //   'off'      -> never build/submit perp tx. Stub only. (default, safest)
 //   'simulate' -> build real tx, RPC-simulate, log result. No submission.
 //   'live'     -> build, simulate, then submit. Real positions get opened.
-const RAW_MODE = (process.env.PERP_HEDGE_MODE || 'off').toLowerCase();
-const HEDGE_MODE = ['off', 'simulate', 'live'].includes(RAW_MODE) ? RAW_MODE : 'off';
+const RAW_MODE = (process.env.PERP_HEDGE_MODE || "off").toLowerCase();
+const HEDGE_MODE = ["off", "simulate", "live"].includes(RAW_MODE) ? RAW_MODE : "off";
 
 // --- Imperial Exchange (routing layer; off by default) ---
-const RAW_IMP_ROUTING = (process.env.IMPERIAL_ROUTING_MODE || 'off').toLowerCase();
-const IMP_ROUTING_MODE = ['off', 'shadow', 'live'].includes(RAW_IMP_ROUTING) ? RAW_IMP_ROUTING : 'off';
-const RAW_IMP_POSITION = (process.env.IMPERIAL_POSITION_MODE || 'off').toLowerCase();
-const IMP_POSITION_MODE = ['off', 'open-only', 'full'].includes(RAW_IMP_POSITION) ? RAW_IMP_POSITION : 'off';
+const RAW_IMP_ROUTING = (process.env.IMPERIAL_ROUTING_MODE || "off").toLowerCase();
+const IMP_ROUTING_MODE = ["off", "shadow", "live"].includes(RAW_IMP_ROUTING)
+  ? RAW_IMP_ROUTING
+  : "off";
+const RAW_IMP_POSITION = (process.env.IMPERIAL_POSITION_MODE || "off").toLowerCase();
+const IMP_POSITION_MODE = ["off", "open-only", "full"].includes(RAW_IMP_POSITION)
+  ? RAW_IMP_POSITION
+  : "off";
 // off    -> never deposit fees into Imperial profiles
 // shadow -> log what we WOULD deposit, no on-chain action
 // live   -> actually sign and submit /deposit/build-tx
-const RAW_IMP_DEPOSIT = (process.env.IMPERIAL_DEPOSIT_MODE || 'off').toLowerCase();
-const IMP_DEPOSIT_MODE = ['off', 'shadow', 'live'].includes(RAW_IMP_DEPOSIT) ? RAW_IMP_DEPOSIT : 'off';
+const RAW_IMP_DEPOSIT = (process.env.IMPERIAL_DEPOSIT_MODE || "off").toLowerCase();
+const IMP_DEPOSIT_MODE = ["off", "shadow", "live"].includes(RAW_IMP_DEPOSIT)
+  ? RAW_IMP_DEPOSIT
+  : "off";
 
-const RAW_BUYBACK_FROM_FEES_RATIO = Math.min(1, Math.max(0, Number(process.env.BUYBACK_FROM_FEES_RATIO ?? 0.25)));
-const RAW_PERP_MARGIN_RATIO = Math.min(1, Math.max(0, Number(process.env.PERP_MARGIN_RATIO ?? 0.5)));
-const RAW_TREASURY_HOLD_RATIO = Math.min(1, Math.max(0, Number(process.env.TREASURY_HOLD_RATIO ?? 0.25)));
+const RAW_BUYBACK_FROM_FEES_RATIO = Math.min(
+  1,
+  Math.max(0, Number(process.env.BUYBACK_FROM_FEES_RATIO ?? 0.25)),
+);
+const RAW_PERP_MARGIN_RATIO = Math.min(
+  1,
+  Math.max(0, Number(process.env.PERP_MARGIN_RATIO ?? 0.5)),
+);
+const RAW_TREASURY_HOLD_RATIO = Math.min(
+  1,
+  Math.max(0, Number(process.env.TREASURY_HOLD_RATIO ?? 0.25)),
+);
 const BUYBACK_FROM_FEES_RATIO = RAW_BUYBACK_FROM_FEES_RATIO;
 const PERP_MARGIN_RATIO = Math.min(RAW_PERP_MARGIN_RATIO, Math.max(0, 1 - BUYBACK_FROM_FEES_RATIO));
-const TREASURY_HOLD_RATIO = Math.min(RAW_TREASURY_HOLD_RATIO, Math.max(0, 1 - BUYBACK_FROM_FEES_RATIO - PERP_MARGIN_RATIO));
+const TREASURY_HOLD_RATIO = Math.min(
+  RAW_TREASURY_HOLD_RATIO,
+  Math.max(0, 1 - BUYBACK_FROM_FEES_RATIO - PERP_MARGIN_RATIO),
+);
 
 export const config = {
-  rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
-  treasuryKey: req('TREASURY_SOLANA_PRIVATE_KEY'),
-  perpadBaseUrl: process.env.PERPAD_BASE_URL || 'https://perpspad.fun',
-  keeperSecret: req('KEEPER_SECRET'),
+  rpcUrl: process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
+  treasuryKey: req("TREASURY_SOLANA_PRIVATE_KEY"),
+  perpadBaseUrl: process.env.PERPAD_BASE_URL || "https://perpspad.xyz",
+  keeperSecret: req("KEEPER_SECRET"),
   loopIntervalMs: Number(process.env.LOOP_INTERVAL_MS ?? 6_000),
   externalSweepTickMs: Number(process.env.EXTERNAL_SWEEP_TICK_MS ?? 30_000),
   port: Number(process.env.PORT ?? 8080),
@@ -101,8 +122,8 @@ export const config = {
 
   // --- Imperial Exchange routing layer ---
   imperial: {
-    enabled: String(process.env.IMPERIAL_ENABLED ?? 'false').toLowerCase() === 'true',
-    baseUrl: process.env.IMPERIAL_BASE_URL || 'https://api.imperial.space/api/v1',
+    enabled: String(process.env.IMPERIAL_ENABLED ?? "false").toLowerCase() === "true",
+    baseUrl: process.env.IMPERIAL_BASE_URL || "https://api.imperial.space/api/v1",
     apiKey: process.env.IMPERIAL_API_KEY || null,
     routingMode: IMP_ROUTING_MODE,
     positionMode: IMP_POSITION_MODE,
@@ -113,19 +134,20 @@ export const config = {
   // Pending-burn sweeper: scans every managed token's treasury ATA every tick
   // and burns any nonzero balance. This is the safety net that guarantees
   // every buyback ultimately gets burned, even if the original burn tx failed.
-  burnSweepEnabled: String(process.env.BURN_SWEEP_ENABLED ?? 'true').toLowerCase() === 'true',
+  burnSweepEnabled: String(process.env.BURN_SWEEP_ENABLED ?? "true").toLowerCase() === "true",
   burnSweepTickMs: Number(process.env.BURN_SWEEP_TICK_MS ?? 60_000),
   // Position reconcile: re-queries Imperial /positions for tokens opened in
   // the last RECONCILE_WINDOW_MIN minutes and corrects DB if venue differs.
-  reconcileEnabled: String(process.env.RECONCILE_ENABLED ?? 'true').toLowerCase() === 'true',
+  reconcileEnabled: String(process.env.RECONCILE_ENABLED ?? "true").toLowerCase() === "true",
   reconcileTickMs: Number(process.env.RECONCILE_TICK_MS ?? 90_000),
   reconcileWindowMin: Number(process.env.RECONCILE_WINDOW_MIN ?? 15),
   // State reconcile (Fix 3c): scans token_workflows and nudges stuck tokens back
   // into the forward tick (error->idle, clear stale pending, escalate blocked).
   // PASSIVE — never trades. See KEEPER_RECONCILE.md.
-  stateReconcileEnabled: String(process.env.STATE_RECONCILE_ENABLED ?? 'true').toLowerCase() === 'true',
+  stateReconcileEnabled:
+    String(process.env.STATE_RECONCILE_ENABLED ?? "true").toLowerCase() === "true",
   // Quiet the per-call Imperial handshake fallback log unless set.
-  logVerbose: String(process.env.LOG_VERBOSE ?? 'false').toLowerCase() === 'true',
+  logVerbose: String(process.env.LOG_VERBOSE ?? "false").toLowerCase() === "true",
 
   // Phoenix market catalog auto-sync (plan/PHOENIX_MARKET_SYNC.md).
   // Fetches Imperial /phoenix/markets every marketSyncTickMs; when the catalog
@@ -133,7 +155,7 @@ export const config = {
   // catalog. DEFAULT OFF — run a prod dry-run against live Imperial first, then
   // enable. When off, marketSync still loads the DB catalog on boot but never
   // fetches/mutates.
-  marketSyncEnabled: String(process.env.IMPERIAL_MARKET_SYNC_ENABLED ?? 'false').toLowerCase() === 'true',
+  marketSyncEnabled:
+    String(process.env.IMPERIAL_MARKET_SYNC_ENABLED ?? "false").toLowerCase() === "true",
   marketSyncTickMs: Number(process.env.MARKET_SYNC_TICK_MS ?? 129_600_000), // 36h
 };
-

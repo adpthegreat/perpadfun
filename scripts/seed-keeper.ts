@@ -29,7 +29,10 @@ import { makeTokenFleet, makeStuckFleet } from "../test/helpers/fleet";
 const URL = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || "";
 const LOCAL = /(@|\/\/)(127\.0\.0\.1|localhost)(:|\/)/.test(URL);
 if (!URL) throw new Error("TEST_DATABASE_URL not set - refusing to run.");
-if (!LOCAL) throw new Error(`TEST_DATABASE_URL is not local (${URL}) - refusing (this TRUNCATEs all tokens).`);
+if (!LOCAL)
+  throw new Error(
+    `TEST_DATABASE_URL is not local (${URL}) - refusing (this TRUNCATEs all tokens).`,
+  );
 if (!process.argv.includes("--yes")) {
   throw new Error("resetDb() wipes ALL tokens. Re-run with --yes to confirm against the LOCAL db.");
 }
@@ -56,16 +59,104 @@ type Showcase = {
   state: string; // token_workflows.state
 };
 const SHOWCASE: Showcase[] = [
-  { ticker: "DEGEN", name: "Degen Ape", underlying: "SOL", leverage: 50, direction: "long", sol_raised: 72, open: true, state: "position_open" },
-  { ticker: "MOON", name: "Moonshot", underlying: "BTC", leverage: 25, direction: "long", sol_raised: 84, open: true, state: "topup_pending" },
-  { ticker: "BEAR", name: "Bear Market", underlying: "ETH", leverage: 10, direction: "short", sol_raised: 41, open: true, state: "position_open" },
-  { ticker: "HYPER", name: "Hyper Liquid", underlying: "HYPE", leverage: 25, direction: "long", sol_raised: 85, migration_status: "graduated", open: true, state: "position_open" },
-  { ticker: "PEPE2", name: "Pepe Two", underlying: "SOL", leverage: 100, direction: "long", sol_raised: 18, state: "split_reserved" },
-  { ticker: "SAFE", name: "Safe Bet", underlying: "BTC", leverage: 3, direction: "long", sol_raised: 55, open: true, state: "position_open" },
-  { ticker: "CHOP", name: "Chop City", underlying: "ETH", leverage: 5, direction: "short", sol_raised: 9, state: "fees_claimed" },
-  { ticker: "GRAD", name: "Graduated Gem", underlying: "SOL", leverage: 10, direction: "long", sol_raised: 85, migration_status: "graduated", open: true, state: "position_open" },
-  { ticker: "CHAD", name: "Chad Coin", underlying: "SOL", leverage: 25, direction: "long", sol_raised: 33, state: "blocked" },
-  { ticker: "WOJAK", name: "Wojak World", underlying: "ETH", leverage: 50, direction: "short", sol_raised: 27, state: "error" },
+  {
+    ticker: "DEGEN",
+    name: "Degen Ape",
+    underlying: "SOL",
+    leverage: 50,
+    direction: "long",
+    sol_raised: 72,
+    open: true,
+    state: "position_open",
+  },
+  {
+    ticker: "MOON",
+    name: "Moonshot",
+    underlying: "BTC",
+    leverage: 25,
+    direction: "long",
+    sol_raised: 84,
+    open: true,
+    state: "topup_pending",
+  },
+  {
+    ticker: "BEAR",
+    name: "Bear Market",
+    underlying: "ETH",
+    leverage: 10,
+    direction: "short",
+    sol_raised: 41,
+    open: true,
+    state: "position_open",
+  },
+  {
+    ticker: "HYPER",
+    name: "Hyper Liquid",
+    underlying: "HYPE",
+    leverage: 25,
+    direction: "long",
+    sol_raised: 85,
+    migration_status: "graduated",
+    open: true,
+    state: "position_open",
+  },
+  {
+    ticker: "PEPE2",
+    name: "Pepe Two",
+    underlying: "SOL",
+    leverage: 100,
+    direction: "long",
+    sol_raised: 18,
+    state: "split_reserved",
+  },
+  {
+    ticker: "SAFE",
+    name: "Safe Bet",
+    underlying: "BTC",
+    leverage: 3,
+    direction: "long",
+    sol_raised: 55,
+    open: true,
+    state: "position_open",
+  },
+  {
+    ticker: "CHOP",
+    name: "Chop City",
+    underlying: "ETH",
+    leverage: 5,
+    direction: "short",
+    sol_raised: 9,
+    state: "fees_claimed",
+  },
+  {
+    ticker: "GRAD",
+    name: "Graduated Gem",
+    underlying: "SOL",
+    leverage: 10,
+    direction: "long",
+    sol_raised: 85,
+    migration_status: "graduated",
+    open: true,
+    state: "position_open",
+  },
+  {
+    ticker: "CHAD",
+    name: "Chad Coin",
+    underlying: "SOL",
+    leverage: 25,
+    direction: "long",
+    sol_raised: 33,
+    state: "blocked",
+  },
+  {
+    ticker: "WOJAK",
+    name: "Wojak World",
+    underlying: "ETH",
+    leverage: 50,
+    direction: "short",
+    sol_raised: 27,
+    state: "error",
+  },
 ];
 
 async function seedShowcase() {
@@ -86,7 +177,7 @@ async function seedShowcase() {
       status: "live",
       mint_address: mint(sc.ticker),
       creator_address: `Creator${sc.ticker}1111111111111111111111111`,
-      website_url: "https://perpspad.fun",
+      website_url: "https://perpspad.xyz",
       twitter_url: "https://x.com/perpspadfun",
       sol_raised: sc.sol_raised,
       current_price_sol: 0.0000004 * (i + 1),
@@ -132,7 +223,9 @@ async function seedActivity(rows: { id: string; sc: Showcase }[]) {
   for (const { id, sc } of rows) {
     h++;
     // treasury_events timeline
-    const events: Array<[string, number | null, number | null, number | null, number | null, string | null]> = [
+    const events: Array<
+      [string, number | null, number | null, number | null, number | null, string | null]
+    > = [
       ["claim", sc.sol_raised / 100, null, null, null, "fees claimed"],
       ["skim", 0.05 * h, null, null, 2.5, "treasury skim"],
       ["buyback", 0.1 * h, 250_000 * h, 0.0000004 * h, null, "buyback executed"],
@@ -143,9 +236,23 @@ async function seedActivity(rows: { id: string; sc: Showcase }[]) {
     // error-pattern notes so the /admin/logs keeper_issues tab populates (matches its
     // %backoff%/%wallet capacity%/%below floor%/%insufficient lamports% filter)
     if (sc.state === "blocked")
-      events.push(["tick", null, null, null, null, "imperial deposit err: wallet capacity below floor"]);
+      events.push([
+        "tick",
+        null,
+        null,
+        null,
+        null,
+        "imperial deposit err: wallet capacity below floor",
+      ]);
     if (sc.state === "error") {
-      events.push(["tick", null, null, null, null, "buyback drain err: insufficient lamports for tx fees"]);
+      events.push([
+        "tick",
+        null,
+        null,
+        null,
+        null,
+        "buyback drain err: insufficient lamports for tx fees",
+      ]);
       events.push(["tick", null, null, null, null, "fee claim error: rpc 429 backoff exhausted"]);
     }
     let ago = events.length;
@@ -156,29 +263,89 @@ async function seedActivity(rows: { id: string; sc: Showcase }[]) {
       );
     }
     // idempotent action ledger
-    await recordAction(id, { action_kind: "fee_claim_dbc", intent_hash: `h-${h}-claim`, status: "confirmed" });
-    await recordAction(id, { action_kind: "split_fees", intent_hash: `h-${h}-split`, status: "confirmed" });
+    await recordAction(id, {
+      action_kind: "fee_claim_dbc",
+      intent_hash: `h-${h}-claim`,
+      status: "confirmed",
+    });
+    await recordAction(id, {
+      action_kind: "split_fees",
+      intent_hash: `h-${h}-split`,
+      status: "confirmed",
+    });
     if (sc.open) {
-      await recordAction(id, { action_kind: "imperial_open", intent_hash: `h-${h}-open`, status: "confirmed" });
-      await recordTx(id, { kind: "imperial_open", intent_hash: `h-${h}-open`, status: "confirmed" });
+      await recordAction(id, {
+        action_kind: "imperial_open",
+        intent_hash: `h-${h}-open`,
+        status: "confirmed",
+      });
+      await recordTx(id, {
+        kind: "imperial_open",
+        intent_hash: `h-${h}-open`,
+        status: "confirmed",
+      });
     }
     if (sc.state === "error") {
-      await recordAction(id, { action_kind: "imperial_open", intent_hash: `h-${h}-openfail`, status: "failed" });
+      await recordAction(id, {
+        action_kind: "imperial_open",
+        intent_hash: `h-${h}-openfail`,
+        status: "failed",
+      });
       // a stuck pending tx_log row so the keeper_issues tab's "stuck pending tx" classification surfaces
-      await recordTx(id, { kind: "imperial_open", intent_hash: `h-${h}-pending`, status: "pending", error: "rpc 429 backoff exhausted" });
+      await recordTx(id, {
+        kind: "imperial_open",
+        intent_hash: `h-${h}-pending`,
+        status: "pending",
+        error: "rpc 429 backoff exhausted",
+      });
     }
     if (sc.state === "blocked") {
-      await recordTx(id, { kind: "fee_claim_dbc", intent_hash: `h-${h}-blocked`, status: "pending", error: "wallet capacity below floor" });
+      await recordTx(id, {
+        kind: "fee_claim_dbc",
+        intent_hash: `h-${h}-blocked`,
+        status: "pending",
+        error: "wallet capacity below floor",
+      });
     }
     // per-token structured log timeline (info/warn/error)
-    await insertKeeperLog(id, { level: "info", event: "tick", message: "tick processed", fields: { state: sc.state }, ageSec: 600 });
-    await insertKeeperLog(id, { level: "info", event: "fee_claim", message: "fees claimed", fields: { usd: 5 + h }, ageSec: 420 });
+    await insertKeeperLog(id, {
+      level: "info",
+      event: "tick",
+      message: "tick processed",
+      fields: { state: sc.state },
+      ageSec: 600,
+    });
+    await insertKeeperLog(id, {
+      level: "info",
+      event: "fee_claim",
+      message: "fees claimed",
+      fields: { usd: 5 + h },
+      ageSec: 420,
+    });
     if (sc.open)
-      await insertKeeperLog(id, { level: "info", event: "open", message: "imperial position opened", fields: { sizeUsd: 100 * h, tick_id: `tk-${h}` }, ageSec: 300 });
+      await insertKeeperLog(id, {
+        level: "info",
+        event: "open",
+        message: "imperial position opened",
+        fields: { sizeUsd: 100 * h, tick_id: `tk-${h}` },
+        ageSec: 300,
+      });
     if (sc.state === "blocked")
-      await insertKeeperLog(id, { level: "warn", event: "blocked", message: "blocked: capacity-below-floor", fields: { tick_id: `tk-${h}` }, ageSec: 120 });
+      await insertKeeperLog(id, {
+        level: "warn",
+        event: "blocked",
+        message: "blocked: capacity-below-floor",
+        fields: { tick_id: `tk-${h}` },
+        ageSec: 120,
+      });
     if (sc.state === "error")
-      await insertKeeperLog(id, { level: "error", event: "open", message: "imperial open failed", fields: { error: "simulated rpc 503", tick_id: `tk-${h}` }, ageSec: 90 });
+      await insertKeeperLog(id, {
+        level: "error",
+        event: "open",
+        message: "imperial open failed",
+        fields: { error: "simulated rpc 503", tick_id: `tk-${h}` },
+        ageSec: 90,
+      });
   }
 }
 
@@ -212,7 +379,8 @@ async function seedStateCoverage() {
   for (const state of ALL_STATES) {
     const [ticker, name] = COVERAGE_NAMES[i];
     i++;
-    const open = state === "position_open" || state === "position_open_pending" || state === "topup_pending";
+    const open =
+      state === "position_open" || state === "position_open_pending" || state === "topup_pending";
     const id = await seedToken({
       ticker,
       name,
@@ -226,7 +394,8 @@ async function seedStateCoverage() {
       total_supply: 1_000_000_000,
       fees_accrued_usd: state === "idle" ? 0 : 8,
       position_opened_at: open ? ISO(i * HOUR) : null,
-      pending_drift_sig: state === "position_open_pending" || state === "topup_pending" ? `sig-${i}` : null,
+      pending_drift_sig:
+        state === "position_open_pending" || state === "topup_pending" ? `sig-${i}` : null,
       position_size_usd: open ? 120 : 0,
       position_collateral_usd: open ? 24 : 0,
       launch_mid: open ? 100 : null,
@@ -288,7 +457,12 @@ async function main() {
   console.log(`[seed] ${fleet} cadence-mix tokens (keeper loop).`);
 
   // one global (unattributed) log row
-  await insertKeeperLog(null, { level: "warn", event: "boot", message: "keeper booted (seed)", ageSec: 30 });
+  await insertKeeperLog(null, {
+    level: "warn",
+    event: "boot",
+    message: "keeper booted (seed)",
+    ageSec: 30,
+  });
 
   const counts = await query(
     "select (select count(*) from public.tokens) tokens, (select count(*) from public.token_workflows) workflows, (select count(*) from public.keeper_actions) actions, (select count(*) from public.keeper_logs) logs, (select count(*) from public.treasury_events) events, (select count(*) from public.tx_log) txlog",
