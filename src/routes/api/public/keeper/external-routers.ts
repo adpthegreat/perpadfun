@@ -39,7 +39,7 @@ export const Route = createFileRoute("/api/public/keeper/external-routers")({
         const { data, error } = await supabaseAdmin
           .from("tokens")
           .select(
-            "id, ticker, external_platform, external_mint, underlying, leverage, direction, treasury_wallet_address, status, mint_pending, router, imperial_profile_index",
+            "id, ticker, external_platform, external_mint, underlying, leverage, direction, treasury_wallet_address, status, mint_pending, router, imperial_profile_index, first_fee_routed_at, last_fee_claim_at",
           )
           .eq("source", "external")
           .neq("status", "deprecated")

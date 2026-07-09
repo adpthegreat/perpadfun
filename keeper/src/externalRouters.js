@@ -114,6 +114,16 @@ const STRANDED_BURN_INTERVAL_MS = Number(process.env.EXTERNAL_STRANDED_BURN_INTE
 const _lastIdleLogAt = new Map();
 const _lastStrandedBurnProbeAt = new Map();
 
+// Cold-token cadence. Routers with no recent fee claim (and never-connected
+// routers) are the overwhelming majority and, when idle, cost several RPC reads
+// per sweep tick for nothing. We probe them on a slow cadence instead. A router
+// that actually claims promotes itself to "hot" (probed every tick) via
+// _recentClaimAt, and last_fee_claim_at from the DB keeps it hot across restarts.
+const COLD_SWEEP_INTERVAL_MS = Number(process.env.EXTERNAL_COLD_SWEEP_INTERVAL_SEC ?? 600) * 1000;
+const COLD_AFTER_MS = Number(process.env.EXTERNAL_COLD_AFTER_SEC ?? 900) * 1000;
+const _lastColdProbeAt = new Map();
+const _recentClaimAt = new Map();
+
 export function getExternalSweepStatus() {
   return _lastSweepStatus;
 }
@@ -426,6 +436,26 @@ export async function sweepExternalRouters() {
 
   for (const { r, sub, subAddr } of derivedRouters) {
     scanned++;
+
+    // Hot/cold gate. A router is "hot" if it claimed recently — either this
+    // process (_recentClaimAt) or per the DB (last_fee_claim_at). Hot routers
+    // are probed every tick as before. Cold routers (idle or never connected)
+    // only run the expensive claim/probe path every COLD_SWEEP_INTERVAL_MS, so
+    // steady-state RPC drops dramatically when most tokens aren't earning.
+    const nowMs = Date.now();
+    const parsedClaim = r.last_fee_claim_at ? Date.parse(r.last_fee_claim_at) : 0;
+    const lastClaimMs = Number.isFinite(parsedClaim) ? parsedClaim : 0;
+    const lastActivityMs = Math.max(lastClaimMs, _recentClaimAt.get(r.id) ?? 0);
+    const isHot = nowMs - lastActivityMs < COLD_AFTER_MS;
+    if (!isHot) {
+      if (!_lastColdProbeAt.has(r.id)) {
+        // Stagger the first cold probe across the window so a keeper restart
+        // doesn't fire every cold router on the same tick (RPC stampede).
+        _lastColdProbeAt.set(r.id, nowMs - Math.floor(Math.random() * COLD_SWEEP_INTERVAL_MS));
+      }
+      if (!shouldRunEvery(_lastColdProbeAt, r.id, COLD_SWEEP_INTERVAL_MS)) continue;
+    }
+
     try {
       // STEP 0: pump.fun creator-fee claim. The sub-wallet is set as the
       // pump.fun coin creator, so accrued creator fees live in the
@@ -485,7 +515,9 @@ export async function sweepExternalRouters() {
             kp: sub,
             label: r.ticker ?? r.id.slice(0, 6),
             solUsd,
-            routeWalletSol: (await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'))) / LAMPORTS_PER_SOL,
+            // Reuse the funded balance + STEP-0 pump.fun claim instead of a fresh
+            // per-tick getBalance (saves one RPC read per router/tick).
+            routeWalletSol: (beforeClaimLamports + claimedLamports) / LAMPORTS_PER_SOL,
           });
           if (ammClaim && ammClaim.vaultSol > 0) vaultClaimableSol = Math.max(vaultClaimableSol, ammClaim.vaultSol);
           if (ammClaim && ammClaim.solClaimed > 0) {
@@ -510,9 +542,18 @@ export async function sweepExternalRouters() {
       }
 
 
-      const lamports = await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'));
+      // Only re-read the on-chain balance when a claim actually added SOL.
+      // Otherwise the batched prefetch (beforeClaimLamports) is accurate — any
+      // directly-sent SOL is already reflected there — which saves one RPC read
+      // per idle router/tick.
+      const lamports =
+        claimedLamports > 0
+          ? await withRetry(() => conn().getBalance(sub.publicKey, 'confirmed'))
+          : beforeClaimLamports;
       const observedIncomingLamports = Math.max(0, lamports - beforeClaimLamports);
       claimedLamports = Math.max(claimedLamports, observedIncomingLamports);
+      // Any claim this tick promotes the router to hot for the next tick.
+      if (claimedLamports > 0) _recentClaimAt.set(r.id, Date.now());
       const solUi = lamports / LAMPORTS_PER_SOL;
       const walletUsd = solUsd > 0 ? solUi * solUsd : 0;
 
@@ -525,7 +566,15 @@ export async function sweepExternalRouters() {
       // sub-wallet) OR via pump.fun fee-sharing (the sub-wallet is listed inside
       // the fee-share config that bonding_curve.creator points at) — the helper
       // accepts both. See plan/FEE_ROUTING_AND_MINT_INDEX.md §6.
-      if (r.external_platform === 'pump_fun' && r.external_mint && !r.mint_pending) {
+      // Only probe recipiency until the token is connected. first_fee_routed_at
+      // is a permanent, unspoofable one-way flag once set, so re-checking a
+      // connected router every tick is pure RPC waste (1–2 reads each).
+      if (
+        r.external_platform === 'pump_fun' &&
+        r.external_mint &&
+        !r.mint_pending &&
+        !r.first_fee_routed_at
+      ) {
         const isRecipient = await isPumpfunFeeRecipient(r.external_mint, sub.publicKey);
         if (isRecipient) seenTokenIds.push(r.id);
       }

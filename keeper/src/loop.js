@@ -263,6 +263,34 @@ export function shouldSkipColdTick(t, now) {
   return false;
 }
 
+// --- 4c: per-token fee-claim cadence ------------------------------------------
+// Fees accrue in the pool continuously, but a token with a live position (or one
+// near the open gate) is "hot" per tokenHasWork and is processed EVERY tick — so
+// claimDbcFees / claimAmmFees fired every ~6s, producing dozens of dust claims
+// per hour (each a real tx: base fee + priority + several RPC reads) even on the
+// highest-volume coin. Throttle the on-chain claim to at most once per
+// FEE_CLAIM_INTERVAL_MS per token (~6x/hour by default): the same fees are
+// claimed in fewer, larger txs. This is independent of shouldSkipColdTick, which
+// deliberately lets hot tokens through every tick for position work (PnL, topups,
+// close) — that still runs; only the claim is gated.
+export const FEE_CLAIM_INTERVAL_MS = Number(process.env.FEE_CLAIM_INTERVAL_MS ?? 600_000);
+const _lastFeeClaim = new Map();
+
+// Test-only: clear the fee-claim clock so a suite can simulate ticks.
+export function _resetFeeClaim() {
+  _lastFeeClaim.clear();
+}
+
+// True => claim fees for this token this tick. Stamps the clock when it
+// green-lights, so the next call within the window skips (same probe-stamp
+// pattern as shouldSkipColdTick).
+export function shouldClaimFeesThisTick(tokenId, now) {
+  const last = _lastFeeClaim.get(tokenId) ?? 0;
+  if (now - last < FEE_CLAIM_INTERVAL_MS) return false;
+  _lastFeeClaim.set(tokenId, now);
+  return true;
+}
+
 // Startup banner so logs prove the keeper deployed the normalized 50/25/25 split
 // build plus master-principal protection.
 keeperLog(
@@ -864,7 +892,15 @@ export async function confirmPendingSigStep(ctx) {
 async function claimAndSplitFeesStep(ctx) {
   const { t, solUsd, bucket } = ctx;
   ctx.claimedSolUsd = 0;
-  if (t.mint_address && (t.dbc_pool_address || t.graduated_pool_address)) {
+  // Throttle the on-chain claim to ~6x/hour per token (FEE_CLAIM_INTERVAL_MS).
+  // When it's not due we skip the claim entirely; claimedSolUsd stays 0 and the
+  // split/skim/buyback-accrual below no-op naturally, while position mgmt and
+  // buyback-drain (separate steps) keep running every tick.
+  if (
+    t.mint_address &&
+    (t.dbc_pool_address || t.graduated_pool_address) &&
+    shouldClaimFeesThisTick(t.id, Date.now())
+  ) {
     try {
       let totalClaimedSol = 0;
       let lastSig = null;
