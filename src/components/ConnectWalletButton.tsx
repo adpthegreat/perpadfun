@@ -31,7 +31,7 @@ export function ConnectWalletButton() {
           <Button
             size="sm"
             variant="outline"
-            className="h-8 rounded-none border-foreground/40 px-4 font-mono text-[10px] uppercase tracking-[0.2em]"
+            className="h-8 rounded-none border-primary/40 bg-primary/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-primary hover:bg-primary/20"
           >
             <Wallet className="mr-1.5 h-3 w-3" />
             {truncateAddress(wallet.address)}
@@ -62,7 +62,7 @@ export function ConnectWalletButton() {
           size="sm"
           variant="outline"
           disabled={connecting}
-          className="h-8 rounded-none border-foreground/40 px-4 font-mono text-[10px] uppercase tracking-[0.2em]"
+          className="h-8 rounded-none border-primary/40 bg-primary/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-primary hover:bg-primary/20"
         >
           <Wallet className="mr-1.5 h-3 w-3" />
           {connecting ? "connecting." : "connect wallet"}

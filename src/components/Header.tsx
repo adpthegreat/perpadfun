@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ZapButton } from "@/components/ZapButton";
 import { searchTokens } from "@/lib/tokens.functions";
 import logo from "@/assets/logo.png";
 import logoDark from "@/assets/logo-dark.png";
@@ -35,7 +36,7 @@ function HeaderSearch() {
     enabled,
     staleTime: 10_000,
   });
-  const results = enabled ? suggestQ.data?.results ?? [] : [];
+  const results = enabled ? (suggestQ.data?.results ?? []) : [];
 
   // close on outside click
   useEffect(() => {
@@ -148,11 +149,21 @@ export function Header() {
         </Link>
 
         <nav className="hidden items-center gap-6 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground md:flex">
-          <Link to="/tokens" className="transition-colors hover:text-foreground">market</Link>
-          <Link to="/launch" className="transition-colors hover:text-foreground">create</Link>
-          <Link to="/route-fees" className="transition-colors hover:text-foreground">route fees</Link>
-          <Link to="/paper" className="transition-colors hover:text-foreground">paper</Link>
+          <Link to="/tokens" className="transition-colors hover:text-foreground">
+            market
+          </Link>
+          <Link to="/launch" className="transition-colors hover:text-foreground">
+            create
+          </Link>
+          <Link to="/route-fees" className="transition-colors hover:text-foreground">
+            route fees
+          </Link>
+          <Link to="/paper" className="transition-colors hover:text-foreground">
+            paper
+          </Link>
         </nav>
+
+        <ZapButton />
 
         <HeaderSearch />
 

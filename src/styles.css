@@ -229,6 +229,33 @@
   .reveal-up { animation: none; opacity: 1; transform: none; filter: none; }
 }
 
+/* Zap LP nav button — a light sweep that keeps drawing the eye */
+@keyframes zap-shimmer {
+  0%   { transform: translateX(-160%) skewX(-18deg); }
+  100% { transform: translateX(320%)  skewX(-18deg); }
+}
+.zap-shimmer { position: relative; overflow: hidden; }
+.zap-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  transform: translateX(-160%) skewX(-18deg);
+  animation: zap-shimmer 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .zap-shimmer::after { animation: none; opacity: 0; }
+}
+
 /* Slick scrollbars: ultra-thin, ghost until hover */
 * {
   scrollbar-width: thin;
