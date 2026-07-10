@@ -78,6 +78,14 @@ const PROBE_INTERVAL_SEC = Number(process.env.PUMPFUN_PROBE_INTERVAL_SEC ?? 60);
 const _lastAttempt = new Map();
 const _lastProbe = new Map();
 
+// isPumpfunFeeRecipient() has no natural claim/probe gate of its own — it's
+// called every tick for any router not yet marked connected (first_fee_routed_at
+// null), doing 2 getAccountInfo reads each time. Its throttled siblings
+// (claimPumpFunCreatorFees / claimPumpAmmCoinCreatorFees) use PROBE_INTERVAL_SEC;
+// reuse it here so recipiency checks don't hammer RPC unthrottled.
+// "mint:subWallet" -> last check epoch ms
+const _lastRecipientProbe = new Map();
+
 let _conn = null;
 function conn() {
   if (!_conn) _conn = new Connection(config.rpcUrl, 'confirmed');
@@ -160,6 +168,17 @@ export async function readPumpfunCreator(mint) {
 export async function isPumpfunFeeRecipient(mint, subWallet) {
   const subB58 = typeof subWallet === 'string' ? subWallet : subWallet?.toBase58?.();
   if (!subB58) return null;
+
+  // Throttle to PROBE_INTERVAL_SEC per (mint, subWallet). Returning null here is
+  // the same "couldn't check this time" signal callers already handle (network
+  // error path) — the call site treats it as falsy, so a connected router just
+  // gets stamped on the next probe instead of this tick.
+  const probeKey = `${mint}:${subB58}`;
+  const now = Date.now();
+  const lastProbe = _lastRecipientProbe.get(probeKey) ?? 0;
+  if (now - lastProbe < PROBE_INTERVAL_SEC * 1000) return null;
+  _lastRecipientProbe.set(probeKey, now);
+
   let configPk;
   try {
     const bondingCurve = deriveBondingCurve(new PublicKey(mint));
