@@ -157,6 +157,8 @@ export const getTreasury = createServerFn({ method: "GET" })
         treasuryPubkey: null as string | null,
         state: null,
         events: [] as TreasuryEvent[],
+        lastBuyback: null as { sol: number; at: string; tx: string | null } | null,
+        lastBurn: null as { tokens: number; at: string; tx: string | null } | null,
         error: "Not found",
       };
 
@@ -197,7 +199,7 @@ export const getTreasury = createServerFn({ method: "GET" })
     // external_buyback / buyback / burn events with tokens_amount).
     const { data: burnRows } = await supabaseAdmin
       .from("treasury_events")
-      .select("tokens_amount, sol_amount, pnl_delta_usd, kind")
+      .select("tokens_amount, sol_amount, pnl_delta_usd, kind, created_at, tx_sig")
       .eq("token_id", data.tokenId)
       .in("kind", ["burn", "buyback", "external_buyback"]);
     // Count each burn ONCE. The keeper emits a `buyback` AND a `burn` row for the
@@ -227,6 +229,37 @@ export const getTreasury = createServerFn({ method: "GET" })
       (acc, r) => (r.kind === "buyback" ? acc + Math.max(0, Number(r.pnl_delta_usd ?? 0)) : acc),
       0,
     );
+
+    // Most-recent buyback + burn from the COMPLETE per-token event set (not the
+    // truncated 60-row live feed, which drops these on active tokens — the
+    // "no buybacks yet" bug). A buyback = a SOL-spending buyback/external_buyback
+    // (excludes zero-SOL take-profit markers and stranded rows). A burn = a `burn`
+    // row or an external buy+burn carrying tokens. created_at is ISO, so string
+    // comparison is chronological.
+    const latestBy = <T extends { created_at: string }>(rows: T[]): T | null =>
+      rows.reduce<T | null>((a, r) => (!a || r.created_at > a.created_at ? r : a), null);
+    const lbRow = latestBy(
+      (burnRows ?? []).filter(
+        (r) =>
+          (r.kind === "buyback" || r.kind === "external_buyback") && Number(r.sol_amount ?? 0) > 0,
+      ),
+    );
+    const bnRow = latestBy(
+      (burnRows ?? []).filter(
+        (r) =>
+          r.kind === "burn" || (r.kind === "external_buyback" && Number(r.tokens_amount ?? 0) > 0),
+      ),
+    );
+    const lastBuyback = lbRow
+      ? { sol: Number(lbRow.sol_amount ?? 0), at: lbRow.created_at, tx: lbRow.tx_sig ?? null }
+      : null;
+    const lastBurn = bnRow
+      ? {
+          tokens: Number(bnRow.tokens_amount ?? 0) / 1e6,
+          at: bnRow.created_at,
+          tx: bnRow.tx_sig ?? null,
+        }
+      : null;
 
     const dir = String(t.direction ?? "long").toLowerCase() === "short" ? "short" : "long";
     const treasuryPubkey =
@@ -397,6 +430,8 @@ export const getTreasury = createServerFn({ method: "GET" })
         createdAt: e.created_at,
       })) as TreasuryEvent[],
 
+      lastBuyback,
+      lastBurn,
       error: null as string | null,
     };
   });

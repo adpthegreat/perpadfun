@@ -44,7 +44,10 @@ export function TreasuryPanel({
   const state = q.data?.state;
   const events = q.data?.events ?? [];
   const treasuryPubkey = q.data?.treasuryPubkey ?? null;
-  const lastBuyback = events.find((e) => e.kind === "buyback" || e.kind === "external_buyback");
+  // Reliable most-recent buyback/burn from the full per-token event set (server),
+  // not the truncated live feed which drops them on active tokens.
+  const lastBuyback = q.data?.lastBuyback ?? null;
+  const lastBurn = q.data?.lastBurn ?? null;
 
   const pnl = state?.pnlUsd ?? 0;
   const solscan = (sig: string) => `https://solscan.io/tx/${sig}`;
@@ -217,9 +220,17 @@ export function TreasuryPanel({
             Live feed
           </div>
           <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
-            {lastBuyback
-              ? `last buyback ${formatDistanceToNowStrict(new Date(lastBuyback.createdAt), { addSuffix: true })}`
-              : "no buybacks yet"}
+            {(() => {
+              const since = (at: string) =>
+                formatDistanceToNowStrict(new Date(at), { addSuffix: true });
+              if (lastBuyback && lastBurn) {
+                const at = lastBuyback.at > lastBurn.at ? lastBuyback.at : lastBurn.at;
+                return `last buyback & burn ${since(at)}`;
+              }
+              if (lastBuyback) return `last buyback ${since(lastBuyback.at)}`;
+              if (lastBurn) return `last burn ${since(lastBurn.at)}`;
+              return "no buybacks yet";
+            })()}
           </div>
         </div>
         <div className="max-h-56 space-y-1 overflow-y-auto text-xs">
@@ -432,6 +443,53 @@ export function TreasuryPanel({
               );
             })}
         </div>
+
+        {/* Pinned to the bottom: latest buyback + burn, always visible below the
+            scrolling feed (they're the milestone events, so they don't scroll away). */}
+        {(lastBuyback || lastBurn) && (
+          <div className="mt-1 space-y-1 border-t border-border/60 pt-2 text-xs">
+            {lastBuyback && (
+              <div className="flex items-center justify-between rounded bg-primary/10 px-2 py-1">
+                <span className="text-primary">
+                  last buyback {lastBuyback.sol > 0 ? fmtSol(lastBuyback.sol) : ""}
+                  {lastBuyback.tx && (
+                    <a
+                      href={solscan(lastBuyback.tx)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-2 text-[10px] uppercase tracking-[0.15em] underline underline-offset-2 opacity-70 hover:opacity-100"
+                    >
+                      tx
+                    </a>
+                  )}
+                </span>
+                <span className="text-muted-foreground">
+                  {formatDistanceToNowStrict(new Date(lastBuyback.at), { addSuffix: true })}
+                </span>
+              </div>
+            )}
+            {lastBurn && (
+              <div className="flex items-center justify-between rounded px-2 py-1">
+                <span>
+                  last burn {Math.round(lastBurn.tokens).toLocaleString()} tokens
+                  {lastBurn.tx && (
+                    <a
+                      href={solscan(lastBurn.tx)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-2 text-[10px] uppercase tracking-[0.15em] underline underline-offset-2 opacity-70 hover:opacity-100"
+                    >
+                      tx
+                    </a>
+                  )}
+                </span>
+                <span className="text-muted-foreground">
+                  {formatDistanceToNowStrict(new Date(lastBurn.at), { addSuffix: true })}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
