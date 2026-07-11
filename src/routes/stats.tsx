@@ -22,15 +22,21 @@ export const Route = createFileRoute("/stats")({
   head: () => ({
     meta: [
       { title: "Stats · perpspad" },
-      { name: "description", content: "Platform-wide stats for perpspad: assets, leverage, fees, buybacks, and more." },
+      {
+        name: "description",
+        content: "Platform-wide stats for perpspad: assets, leverage, fees, buybacks, and more.",
+      },
     ],
   }),
 });
 
-const sol = (n: number) => `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })} SOL`;
 const cnt = (n: number) => n.toLocaleString();
 const dirColors = (data: { label: string }[]) =>
   data.map((d) => (d.label === "long" ? POS : d.label === "short" ? NEG : GRAY[2]));
+
+// Platform launch — days live is computed live from the current date.
+const LAUNCH_DATE = new Date("2026-07-06T00:00:00Z");
+const daysLive = () => Math.max(0, Math.floor((Date.now() - LAUNCH_DATE.getTime()) / 86_400_000));
 
 function StatsPage() {
   const statsFn = useServerFn(getPlatformStats);
@@ -47,11 +53,15 @@ function StatsPage() {
     <div className="min-h-screen bg-background text-foreground">
       <Header />
       <main className="mx-auto w-full max-w-6xl px-4 py-8">
-        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">perpspad</div>
+        <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+          perpspad
+        </div>
         <h1 className="text-2xl font-semibold tracking-tight">Platform stats</h1>
         <p className="mt-1 font-mono text-[11px] text-muted-foreground">
           Aggregated across every token · auto-refresh 60s
-          {d?.solUsd ? ` · SOL $${d.solUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : ""}
+          {d?.solUsd
+            ? ` · SOL $${d.solUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+            : ""}
         </p>
 
         {q.isLoading && (
@@ -72,40 +82,57 @@ function StatsPage() {
           <div className="mt-8 space-y-4">
             {/* ── KPI cards ── */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+              <StatCard label="Days live" value={cnt(daysLive())} />
               <StatCard label="Tokens launched" value={cnt(d.kpis.total)} />
-              <StatCard label="Live" value={cnt(d.kpis.live)} />
               <StatCard label="Graduated" value={cnt(d.kpis.graduated)} />
+              <StatCard label="Total raised" value={formatUsd(d.kpis.raisedUsd)} />
               <StatCard label="Open interest" value={formatUsd(d.kpis.oiUsd)} />
               <StatCard label="Collateral deployed" value={formatUsd(d.kpis.collUsd)} />
-              <StatCard label="Treasury PnL" value={formatUsd(d.kpis.pnlUsd)} accent={d.kpis.pnlUsd >= 0 ? "pos" : "neg"} />
+              <StatCard
+                label="Treasury PnL"
+                value={formatUsd(d.kpis.pnlUsd)}
+                accent={d.kpis.pnlUsd >= 0 ? "pos" : "neg"}
+              />
               <StatCard label="Fees accrued" value={formatUsd(d.kpis.feesUsd)} />
-              <StatCard label="Bought back" value={sol(d.kpis.buybackSol)} />
-              <StatCard label="Volume routed" value={sol(d.kpis.volumeSol)} />
-              <StatCard label="Fees claimed" value={sol(d.kpis.claimSol)} />
-              <StatCard label="Burn events" value={cnt(d.kpis.burnEvents)} />
+              <StatCard label="Fees claimed" value={formatUsd(d.kpis.claimUsd)} />
+              <StatCard label="Bought back" value={formatUsd(d.kpis.buybackUsd)} />
+              <StatCard label="Value routed" value={formatUsd(d.kpis.routedUsd)} />
               <StatCard label="Buyback reserve" value={formatUsd(d.kpis.reserveUsd)} />
+              <StatCard label="Burn events" value={cnt(d.kpis.burnEvents)} />
+              <StatCard label="Tokens burned" value={cnt(Math.round(d.kpis.burnedTokens))} />
             </div>
 
             {/* ── assets + direction ── */}
             <div className="grid gap-4 lg:grid-cols-3">
-              <Panel title="Most-used assets" hint={`${d.distributions.assets.length} markets`} className="lg:col-span-2">
+              <Panel
+                title="Most-used assets"
+                hint={`${d.distributions.assets.length} markets`}
+                className="lg:col-span-2"
+              >
                 <HBars data={d.distributions.assets.slice(0, 12)} />
               </Panel>
               <Panel title="Direction" hint="long vs short">
-                <Donut data={d.distributions.direction} colors={dirColors(d.distributions.direction)} />
+                <Donut
+                  data={d.distributions.direction}
+                  colors={dirColors(d.distributions.direction)}
+                />
               </Panel>
             </div>
 
             {/* ── launches+buyback combo + leverage ── */}
             <div className="grid gap-4 lg:grid-cols-3">
-              <Panel title="Launches & cumulative buyback" hint="last 30d" className="lg:col-span-2">
+              <Panel
+                title="Launches & cumulative buyback"
+                hint="last 30d"
+                className="lg:col-span-2"
+              >
                 <ComboBarsLine
                   data={d.series.map((s) => ({ ...s, d: s.day.slice(5) }))}
                   xKey="d"
                   barKey="launches"
-                  lineKey="cumBuybackSol"
+                  lineKey="cumBuybackUsd"
                   barLabel="launches/day"
-                  lineLabel="cum buyback SOL"
+                  lineLabel="cum buyback USD"
                 />
               </Panel>
               <Panel title="Leverage used" hint="base · degen">
@@ -118,8 +145,12 @@ function StatsPage() {
 
             {/* ── fees area + source ── */}
             <div className="grid gap-4 lg:grid-cols-2">
-              <Panel title="Fees claimed / day" hint="SOL · last 30d">
-                <AreaTrend data={d.series.map((s) => ({ ...s, d: s.day.slice(5) }))} xKey="d" yKey="feeSol" />
+              <Panel title="Fees claimed / day" hint="USD · last 30d">
+                <AreaTrend
+                  data={d.series.map((s) => ({ ...s, d: s.day.slice(5) }))}
+                  xKey="d"
+                  yKey="feeUsd"
+                />
               </Panel>
               <Panel title="Source / lifecycle" hint="status">
                 <Donut data={d.distributions.status} />
@@ -128,15 +159,32 @@ function StatsPage() {
 
             {/* ── leaderboards ── */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Leaderboard title="Top by fees" rows={d.leaderboards!.fees} fmt={(v) => formatUsd(v)} />
-              <Leaderboard title="Top by treasury PnL" rows={d.leaderboards!.pnl} fmt={(v) => formatUsd(v)} signed />
-              <Leaderboard title="Top by position size" rows={d.leaderboards!.size} fmt={(v) => formatUsd(v)} />
-              <Leaderboard title="Most burned" rows={d.leaderboards!.burned} fmt={(v) => cnt(v)} />
+              <Leaderboard
+                title="Top by fees"
+                rows={d.leaderboards!.fees}
+                fmt={(v) => formatUsd(v)}
+              />
+              <Leaderboard
+                title="Top by treasury PnL"
+                rows={d.leaderboards!.pnl}
+                fmt={(v) => formatUsd(v)}
+                signed
+              />
+              <Leaderboard
+                title="Top by position size"
+                rows={d.leaderboards!.size}
+                fmt={(v) => formatUsd(v)}
+              />
+              <Leaderboard
+                title="Most burned"
+                rows={d.leaderboards!.burned}
+                fmt={(v) => cnt(Math.round(v))}
+              />
             </div>
 
             <p className="pt-2 font-mono text-[10px] leading-relaxed text-muted-foreground/70">
-              Note: the leverage chart includes legacy tokens above the current 25× Phoenix cap (created before the
-              leverage-cap fix), so a small 50×/100× slice is expected.
+              Note: the leverage chart includes legacy tokens above the current 25× Phoenix cap
+              (created before the leverage-cap fix), so a small 50×/100× slice is expected.
             </p>
           </div>
         )}
@@ -159,7 +207,9 @@ function Leaderboard({
   return (
     <Panel title={title}>
       <div className="space-y-1.5">
-        {rows.length === 0 && <div className="font-mono text-[11px] text-muted-foreground">no data</div>}
+        {rows.length === 0 && (
+          <div className="font-mono text-[11px] text-muted-foreground">no data</div>
+        )}
         {rows.map((r, i) => (
           <Link
             key={r.id}
