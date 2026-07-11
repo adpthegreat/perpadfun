@@ -80,7 +80,8 @@ async function auditExternalBuybacks({
         (balances ?? [])
           .filter((b) => b.mint === mintAddress && b.owner === walletAddress)
           .reduce((sum, b) => sum + Number(b.uiTokenAmount.amount ?? 0), 0);
-      const tokenDelta = tokenBalance(tx.meta.postTokenBalances) - tokenBalance(tx.meta.preTokenBalances);
+      const tokenDelta =
+        tokenBalance(tx.meta.postTokenBalances) - tokenBalance(tx.meta.preTokenBalances);
 
       if (tokenDelta > 0 && solDelta < -0.001) buybackSol += Math.abs(solDelta);
       if (tokenDelta < 0) tokensBurned += Math.abs(tokenDelta);
@@ -147,7 +148,7 @@ export const getTreasury = createServerFn({ method: "GET" })
     const { data: t, error: tErr } = await supabaseAdmin
       .from("tokens")
       .select(
-        "id, leverage, direction, underlying, launch_mid, treasury_sol, tokens_burned, position_size_usd, position_collateral_usd, position_opened_at, last_tick_mid, last_tick_at, treasury_pnl_usd, fees_accrued_usd, treasury_wallet_address, router, imperial_profile_pda, external_mint",
+        "id, leverage, direction, underlying, launch_mid, treasury_sol, tokens_burned, position_size_usd, position_collateral_usd, position_opened_at, last_tick_mid, last_tick_at, treasury_pnl_usd, fees_accrued_usd, treasury_wallet_address, router, imperial_profile_pda, external_mint, mint_address, total_supply",
       )
       .eq("id", data.tokenId)
       .maybeSingle();
@@ -199,8 +200,15 @@ export const getTreasury = createServerFn({ method: "GET" })
       .select("tokens_amount, sol_amount, pnl_delta_usd, kind")
       .eq("token_id", data.tokenId)
       .in("kind", ["burn", "buyback", "external_buyback"]);
+    // Count each burn ONCE. The keeper emits a `buyback` AND a `burn` row for the
+    // same internal burn (identical tokens_amount), so summing both double-counts.
+    // Take `burn` (internal) + `external_buyback` (external, single row); skip
+    // `buyback`. The sol/profit reducers below still use the `buyback` rows.
     const burnedFromEvents = (burnRows ?? []).reduce(
-      (acc, r) => acc + Number(r.tokens_amount ?? 0),
+      (acc, r) =>
+        r.kind === "burn" || r.kind === "external_buyback"
+          ? acc + Number(r.tokens_amount ?? 0)
+          : acc,
       0,
     );
     const buybackSol = (burnRows ?? []).reduce(
@@ -232,7 +240,13 @@ export const getTreasury = createServerFn({ method: "GET" })
     // For Imperial, launch_mid is maintained by the keeper as the venue's live
     // average entry. If older rows do not have it, fall back to tick history.
     const needsEntryFallback = isImperial && !t.launch_mid && !!t.position_opened_at;
-    const [jup, solUsd, mids, tickHistory, chainBuybacks] = await Promise.all([
+    // Mint whose on-chain supply we read to derive the exact burned amount
+    // (prefer the native mint; fall back to the external/pump.fun mint).
+    const supplyMint =
+      ((t as { mint_address?: string | null }).mint_address ??
+        (t as { external_mint?: string | null }).external_mint) ||
+      null;
+    const [jup, solUsd, mids, tickHistory, chainBuybacks, onChainSupply] = await Promise.all([
       isImperial ? Promise.resolve(null) : fetchJupiterPerpPosition(treasuryPubkey),
       buybackSol > 0 || t.external_mint ? fetchSolUsd() : Promise.resolve(0),
       isImperial ? fetchAllMids() : Promise.resolve({} as Record<string, string>),
@@ -251,9 +265,32 @@ export const getTreasury = createServerFn({ method: "GET" })
         walletAddress: treasuryPubkey,
         mintAddress: (t as { external_mint?: string | null }).external_mint ?? null,
       }),
+      supplyMint
+        ? getServerConnection()
+            .getTokenSupply(new PublicKey(supplyMint), "confirmed")
+            .catch(() => null)
+        : Promise.resolve(null),
     ]);
     const auditedBuybackSol = Math.max(buybackSol, chainBuybacks.buybackSol);
-    const auditedBurnedBaseUnits = Math.max(burnedFromEvents, chainBuybacks.tokensBurned);
+    // Burned amount, authoritative from on-chain supply: launch supply − current
+    // total supply (burns are real SPL burns that reduce supply, so this equals
+    // the amount burned and matches explorers exactly — no reliance on the
+    // event/counter estimate that can drift or double-count). Fall back to the
+    // event/counter max only when the supply read fails.
+    let auditedBurnedBaseUnits = Math.max(
+      burnedFromEvents,
+      chainBuybacks.tokensBurned,
+      Number(t.tokens_burned ?? 0),
+    );
+    const currentSupplyRaw = onChainSupply?.value?.amount
+      ? Number(onChainSupply.value.amount)
+      : NaN;
+    if (Number.isFinite(currentSupplyRaw)) {
+      const launchSupplyRaw =
+        Number((t as { total_supply?: number | null }).total_supply ?? 1e9) * 1e6;
+      const supplyDelta = launchSupplyRaw - currentSupplyRaw;
+      if (supplyDelta >= 0 && Number.isFinite(supplyDelta)) auditedBurnedBaseUnits = supplyDelta;
+    }
 
     // Walk tick history. Whenever parsed `coll=$X` increases vs prior tick,
     // attribute the delta-notional (delta_coll * leverage) as an entry at that
@@ -321,9 +358,9 @@ export const getTreasury = createServerFn({ method: "GET" })
       treasuryPubkey,
       state: {
         treasurySol: Number(t.treasury_sol ?? 0),
-        // tokens_amount in treasury_events is stored in base units (6 decimals
-        // for SPL tokens). Divide so the UI shows whole tokens, not raw lamports.
-        tokensBurned: Math.max(Number(t.tokens_burned ?? 0), auditedBurnedBaseUnits) / 1e6,
+        // Authoritative burned amount (on-chain supply delta when available,
+        // else the event/counter fallback). Base units → whole tokens.
+        tokensBurned: auditedBurnedBaseUnits / 1e6,
         buybackSol: auditedBuybackSol,
         buybackUsd: auditedBuybackSol * solUsd,
         profitsTakenUsd,
