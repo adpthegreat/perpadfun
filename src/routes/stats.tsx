@@ -88,11 +88,6 @@ function StatsPage() {
               <StatCard label="Total raised" value={formatUsd(d.kpis.raisedUsd)} />
               <StatCard label="Open interest" value={formatUsd(d.kpis.oiUsd)} />
               <StatCard label="Collateral deployed" value={formatUsd(d.kpis.collUsd)} />
-              <StatCard
-                label="Treasury PnL"
-                value={formatUsd(d.kpis.pnlUsd)}
-                accent={d.kpis.pnlUsd >= 0 ? "pos" : "neg"}
-              />
               <StatCard label="Fees accrued" value={formatUsd(d.kpis.feesUsd)} />
               <StatCard label="Fees claimed" value={formatUsd(d.kpis.claimUsd)} />
               <StatCard label="Bought back" value={formatUsd(d.kpis.buybackUsd)} />
@@ -181,11 +176,6 @@ function StatsPage() {
                 fmt={(v) => cnt(Math.round(v))}
               />
             </div>
-
-            <p className="pt-2 font-mono text-[10px] leading-relaxed text-muted-foreground/70">
-              Note: the leverage chart includes legacy tokens above the current 25× Phoenix cap
-              (created before the leverage-cap fix), so a small 50×/100× slice is expected.
-            </p>
           </div>
         )}
       </main>
