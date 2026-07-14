@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -525,16 +525,31 @@ function RouteFeesPage() {
                 )}
               </>
             ) : (
-              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  Next step on pump.fun
+              <>
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    Next step on pump.fun
+                  </div>
+                  <ol className="mt-2 list-decimal pl-5 text-sm text-muted-foreground space-y-1">
+                    <li>Edit your token.</li>
+                    <li>Paste the address above into the "Creator fee receiver" field.</li>
+                    <li>Save. All future creator fees land here automatically.</li>
+                  </ol>
                 </div>
-                <ol className="mt-2 list-decimal pl-5 text-sm text-muted-foreground space-y-1">
-                  <li>Edit your token.</li>
-                  <li>Paste the address above into the "Creator fee receiver" field.</li>
-                  <li>Save. All future creator fees land here automatically.</li>
-                </ol>
-              </div>
+
+                {/* Confirmation + link so the user knows the router was created
+                    and can track routing instead of hunting the tokens page. */}
+                <Button asChild size="lg" className="w-full">
+                  <Link
+                    to="/route-fees/$claimToken"
+                    params={{ claimToken: result.claimToken }}
+                    search={{ linked: undefined }}
+                  >
+                    See your token & fee-routing status
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </>
             )}
           </div>
         )}
