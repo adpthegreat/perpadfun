@@ -25,7 +25,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useWallet } from "@/lib/wallet/WalletContext";
+import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import {
   buildPerpspadZap,
   buildUnzapTx,
@@ -52,7 +52,6 @@ type Phase = "idle" | "building" | "zapping" | "done";
 export function ZapButton() {
   const { connection } = useConnection();
   const { publicKey, signTransaction } = useAdapterWallet();
-  const { connectSolana, connecting } = useWallet();
 
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("0.1");
@@ -106,16 +105,18 @@ export function ZapButton() {
         slippageBps,
       });
 
-      // One atomic transaction: stamp a fresh blockhash, the position-NFT
-      // keypair partial-signs, then the wallet signs and we send + confirm.
+      // One atomic transaction with two signers. Phantom's Lighthouse flags
+      // multi-signer txs unless the WALLET signs first and additional keypairs
+      // partial-sign after — so: stamp blockhash/feePayer, wallet-sign, THEN the
+      // position-NFT keypair partial-signs, then send + confirm.
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
       const tx = built.transaction;
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
-      tx.partialSign(built.positionNftKeypair);
 
       setPhase("zapping");
       const signed = await signTransaction(tx);
+      signed.partialSign(built.positionNftKeypair);
       const txid = await connection.sendRawTransaction(signed.serialize(), {
         skipPreflight: false,
         maxRetries: 3,
@@ -372,14 +373,16 @@ export function ZapButton() {
             </label>
             <input
               type="number"
-              min="10"
-              step="10"
-              value={slippageBps}
-              onChange={(e) => setSlippageBps(Math.max(10, Number(e.target.value) || 300))}
+              min="0.1"
+              step="0.1"
+              value={slippageBps / 100}
+              onChange={(e) =>
+                setSlippageBps(Math.max(10, Math.round((Number(e.target.value) || 3) * 100)))
+              }
               disabled={busy}
               className="w-20 rounded-md border border-border bg-secondary/40 px-2 py-1 text-xs tabular-nums outline-none"
             />
-            <span className="font-mono text-[10px] text-muted-foreground">bps</span>
+            <span className="font-mono text-[10px] text-muted-foreground">%</span>
           </div>
 
           {err && (
@@ -413,26 +416,28 @@ export function ZapButton() {
             <Button className="w-full" variant="outline" onClick={() => setPhase("idle")}>
               Zap again
             </Button>
+          ) : !publicKey ? (
+            <div className="flex justify-center pt-1">
+              <ConnectWalletButton />
+            </div>
           ) : (
             <Button
               className="w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={busy || connecting || belowFloor || !!unzapping || !!claiming}
-              onClick={publicKey ? handleZap : connectSolana}
+              disabled={busy || belowFloor || !!unzapping || !!claiming}
+              onClick={handleZap}
             >
               {busy ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {phase === "building" ? "Building…" : "Zapping…"}
                 </>
-              ) : publicKey && belowFloor ? (
+              ) : belowFloor ? (
                 `Min ${MIN_ZAP_SOL} SOL`
-              ) : publicKey ? (
+              ) : (
                 <>
                   <ZapIcon className="h-4 w-4" />
                   {hasPositions ? "Zap in more" : `Zap ${amount || "0"} SOL`}
                 </>
-              ) : (
-                "Connect wallet"
               )}
             </Button>
           )}
