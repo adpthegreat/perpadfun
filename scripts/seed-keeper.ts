@@ -177,7 +177,7 @@ async function seedShowcase() {
       status: "live",
       mint_address: mint(sc.ticker),
       creator_address: `Creator${sc.ticker}1111111111111111111111111`,
-      website_url: "https://perpspad.xyz",
+      website_url: "https://perpspad.fun",
       twitter_url: "https://x.com/perpspadfun",
       sol_raised: sc.sol_raised,
       current_price_sol: 0.0000004 * (i + 1),

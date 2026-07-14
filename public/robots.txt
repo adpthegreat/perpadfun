@@ -5,4 +5,4 @@ Disallow: /route-fees/
 Disallow: /route-fees/*
 Allow: /
 
-Sitemap: https://perpspad.xyz/sitemap.xml
+Sitemap: https://perpspad.fun/sitemap.xml

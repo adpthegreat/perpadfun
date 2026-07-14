@@ -136,6 +136,6 @@ export function publicBaseUrl(): string {
   return (
     process.env.PUBLIC_BASE_URL ||
     process.env.PERPAD_BASE_URL ||
-    "https://perpspad.xyz"
+    "https://perpspad.fun"
   ).replace(/\/$/, "");
 }

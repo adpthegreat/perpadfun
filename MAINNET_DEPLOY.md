@@ -18,7 +18,7 @@ solana-keygen new --no-bip39-passphrase --outfile treasury.json  # treasury wall
 Obtain: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (Supabase dashboard);
 `SOLANA_RPC_URL` (mainnet RPC provider). For the collab onboarding (`/onboarding`):
 `TELEGRAM_BOT_TOKEN` + the bot username from **@BotFather** — and in @BotFather run **`/setdomain`
-→ `perpspad.xyz`** (the Telegram Login Widget is rejected otherwise); `TELEGRAM_CHAT_ID` = your
+→ `perpspad.fun`** (the Telegram Login Widget is rejected otherwise); `TELEGRAM_CHAT_ID` = your
 channel/group (`@handle` or numeric id) with **the bot added as an ADMIN**.
 
 Where each goes:
@@ -71,10 +71,10 @@ npx wrangler secret put TELEGRAM_CHAT_ID       # channel/group; bot must be an a
 >
 > Worker secrets (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `SUPABASE_SERVICE_ROLE_KEY`, …) are the
 > opposite: read at runtime on the server via `process.env`, never in the bundle.
-> Also: @BotFather `/setdomain → perpspad.xyz`, or the Login Widget won't load.
+> Also: @BotFather `/setdomain → perpspad.fun`, or the Login Widget won't load.
 
-Custom domain: Cloudflare → Add site `perpspad.xyz` → point registrar nameservers → Worker → Settings
-→ Domains & Routes → Custom Domain → `perpspad.xyz`.
+Custom domain: Cloudflare → Add site `perpspad.fun` → point registrar nameservers → Worker → Settings
+→ Domains & Routes → Custom Domain → `perpspad.fun`.
 
 ---
 
@@ -84,7 +84,7 @@ Custom domain: Cloudflare → Add site `perpspad.xyz` → point registrar namese
 cd keeper
 fly secrets set \
   KEEPER_SECRET="<match app>" \
-  PERPAD_BASE_URL="https://perpspad.xyz" \
+  PERPAD_BASE_URL="https://perpspad.fun" \
   SOLANA_RPC_URL="<mainnet rpc>" \
   TREASURY_SOLANA_PRIVATE_KEY="<treasury>" \
   --app perpspad-keeper
@@ -98,9 +98,9 @@ Optional TP knobs: `TP_TRIGGER_RATIO=0.25 TP_CLOSE_FRACTION=0.20 TP_MASTER_SHARE
 ## 4. Smoke
 
 ```bash
-curl -sI https://perpspad.xyz/ | head -1
+curl -sI https://perpspad.fun/ | head -1
 S=<KEEPER_SECRET>
-curl -s -H "x-keeper-secret: $S" "https://perpspad.xyz/api/public/keeper/workflows?limit=3" | head
+curl -s -H "x-keeper-secret: $S" "https://perpspad.fun/api/public/keeper/workflows?limit=3" | head
 fly logs --app perpspad-keeper | head -50
 ```
 

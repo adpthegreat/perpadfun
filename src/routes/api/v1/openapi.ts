@@ -12,7 +12,7 @@ const spec = {
     description:
       "Permissionless token launches on perpspad. **No API key** — the caller's wallet is the identity and a 0.01 SOL fee (charged on-chain) is the rate-limiter.\n\nFlow: 1) POST /launch → get unsigned `config` + `pool` txs. 2) sign + send both with your wallet (pays rent, dev-buy, and the 0.01 SOL fee). The launch is recorded server-side and promoted to `live` once the pool confirms on-chain — no callback needed. Poll GET /launch/{tokenId} for status.",
   },
-  servers: [{ url: "https://perpspad.xyz" }],
+  servers: [{ url: "https://perpspad.fun" }],
   paths: {
     "/api/v1/markets": {
       get: {

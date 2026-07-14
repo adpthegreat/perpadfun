@@ -83,7 +83,7 @@ const TREASURY_HOLD_RATIO = Math.min(
 export const config = {
   rpcUrl: process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
   treasuryKey: req("TREASURY_SOLANA_PRIVATE_KEY"),
-  perpadBaseUrl: process.env.PERPAD_BASE_URL || "https://perpspad.xyz",
+  perpadBaseUrl: process.env.PERPAD_BASE_URL || "https://perpspad.fun",
   keeperSecret: req("KEEPER_SECRET"),
   loopIntervalMs: Number(process.env.LOOP_INTERVAL_MS ?? 6_000),
   externalSweepTickMs: Number(process.env.EXTERNAL_SWEEP_TICK_MS ?? 30_000),
