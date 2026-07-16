@@ -279,10 +279,11 @@ export async function getRoute({
 // seeded from this and then kept fresh at runtime by marketSync.js (every 36h)
 // so a new Phoenix market like NVDA/TSLA appears without a hand-edit + redeploy.
 const SUPPORTED_MARKETS_SNAPSHOT = Object.freeze({
-  // ─── Primary 8 (UI-prominent) ───
-  BTC:      { venue: 'phoenix', maxLeverage: 20 },
-  ETH:      { venue: 'phoenix', maxLeverage: 20 },
-  SOL:      { venue: 'phoenix', maxLeverage: 15 },
+  // ─── Primary (UI-prominent) ───
+  BTC:      { venue: 'phoenix', maxLeverage: 40 },
+  ETH:      { venue: 'phoenix', maxLeverage: 25 },
+  SOL:      { venue: 'phoenix', maxLeverage: 25 },
+  ANSEM:    { venue: 'phoenix', maxLeverage: 3 },
   SPCX:   { venue: 'phoenix', maxLeverage: 15 },                  // direct passthrough
   ZEC:      { venue: 'phoenix', maxLeverage: 10 },
   HYPE:     { venue: 'phoenix', maxLeverage: 10 },

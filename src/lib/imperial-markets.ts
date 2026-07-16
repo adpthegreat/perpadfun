@@ -3,16 +3,17 @@
 // Used by /launch and /route-fees to hide leverage tiers the venue would
 // reject at open. After the Phoenix venue lock (plan/KEEPER_PHOENIX_LOCK.md)
 // every market routes to Phoenix; gmtrade/flash_trade/jupiter are legacy
-// fallbacks only. Phoenix's max-leverage table caps everything below 25×.
+// fallbacks only. Phoenix's max-leverage table tops out at 40× (BTC).
 //
 // Source of truth for routing remains keeper/src/imperial.js. Re-sync this
 // file whenever SUPPORTED_MARKETS changes there (test/live/discover-phoenix-markets.live.test.ts
 // regenerates the snippet).
 export const IMPERIAL_MAX_LEVERAGE: Record<string, number> = {
-  // ─── Primary 8 (UI-prominent) ───
-  BTC: 20,
-  ETH: 20,
-  SOL: 15,
+  // ─── Primary (UI-prominent) ───
+  BTC: 40,
+  ETH: 25,
+  SOL: 25,
+  ANSEM: 3,
   ZEC: 10,
   HYPE: 10,
   SILVER: 25,
@@ -73,11 +74,11 @@ export const IMPERIAL_MAX_LEVERAGE: Record<string, number> = {
   CRWV: 10,
 };
 
-// Phoenix's max across all listed markets is 25× (GOLD, SILVER). Drop the
-// 50× / 100× tiers from the picker entirely — they would never show under
-// any Phoenix-routed asset.
+// Phoenix's max across all listed markets is 40× (BTC); most crypto majors sit
+// at 25× (ETH, SOL, GOLD, SILVER). Drop the 50× / 100× tiers from the picker
+// entirely — they would never show under any Phoenix-routed asset.
 export const BASE_LEVERAGES = [2, 3, 5] as const;
-export const DEGEN_LEVERAGES = [10, 15, 20, 25] as const;
+export const DEGEN_LEVERAGES = [10, 15, 20, 25, 40] as const;
 
 // Every discrete leverage tier the UI can show, ascending. Single source of
 // truth shared by the picker and the server-side validators, so the two can
@@ -117,7 +118,7 @@ const MARKET_ALIASES: ReadonlySet<string> = new Set(["WTIOIL"]);
 // Phoenix whitelist that isn't listed here still shows (appended after), so a
 // newly-added market is never silently dropped.
 const MARKET_PRIORITY: readonly string[] = [
-  "BTC", "ETH", "SOL", "HYPE", "ZEC", "GOLD", "SILVER", "OIL",
+  "BTC", "ETH", "SOL", "ANSEM", "HYPE", "ZEC", "GOLD", "SILVER", "OIL",
   "XRP", "BNB", "DOGE", "ADA", "SUI", "TRX", "NEAR", "TON", "XLM", "XPL",
   "AAVE", "JTO", "JUP", "ENA", "ONDO", "MORPHO", "LIT",
   "FET", "RENDER", "VIRTUAL", "TAO", "WLD",

@@ -33,6 +33,8 @@ const ICONS: Record<string, IconDef> = {
   SHIB: hl("SHIB"), TRUMP: hl("TRUMP"), MELANIA: hl("MELANIA"), APE: hl("APE"),
   // Privacy / AI
   ZEC: hl("ZEC"), TAO: hl("TAO"),
+  // Sol memes (pump.fun, no HL icon)
+  ANSEM: textIcon("ANS", "#16a34a", "#fff", "system-ui", 7),
   WLD: textIcon("WLD", "#000", "#fff", "system-ui", 7),
   KMNO: textIcon("KMN", "#ff5a1f", "#fff", "system-ui", 7),
   // Stocks (no HL icon, use branded text badges)
