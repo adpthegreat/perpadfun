@@ -98,6 +98,25 @@ export async function getUsdPriceFor(symbol) {
   }
 }
 
+// USD price for an ARBITRARY SPL mint via Jupiter price v3 (accepts any mint —
+// unlike getUsdPriceFor which is symbol/feed-gated). Cached like the others.
+// Returns 0 on failure so the caller can decide (e.g. skip the USD gate).
+export async function getMintUsdPrice(mint) {
+  if (!mint) return 0;
+  const key = `mint:${mint}`;
+  try {
+    const json = await fetchJsonWithTimeout(`${JUP_PRICE}?ids=${mint}`, 'jupiter price');
+    const price = Number(json?.[mint]?.usdPrice);
+    if (!Number.isFinite(price) || price <= 0) throw new Error(`invalid price for ${mint}`);
+    return remember(key, price, 'jupiter');
+  } catch (e) {
+    const fallback = cached(key);
+    if (fallback) return fallback;
+    console.warn(`[prices] mint ${mint}/USD unavailable: ${e.message}`);
+    return 0;
+  }
+}
+
 // Given a swap that traded `solIn` SOL for `tokensOut` of an SPL mint,
 // the implied per-token USD price is (solIn * solUsd) / tokensOut.
 export function impliedTokenUsd({ solIn, tokensOut, solUsd }) {

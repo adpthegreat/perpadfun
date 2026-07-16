@@ -29,7 +29,8 @@ import {
 } from "@solana/web3.js";
 import { getAssociatedTokenAddress } from "@solana/spl-token";
 import { listActiveTokens, sendReport } from "./perpad.js";
-import { getSolUsd } from "./prices.js";
+import { getSolUsd, getMintUsdPrice } from "./prices.js";
+import { quoteTokenInfo, WSOL_MINT } from "./constants.js";
 import { claimDbcFees, claimAmmFees, detectGraduation } from "./fees.js";
 import {
   BUYBACK_BASE_FLOOR_LAMPORTS,
@@ -780,7 +781,9 @@ async function detectGraduationStep(ctx) {
       baseMintAddress: t.mint_address,
       // USDC-quoted pools graduate to a token/USDC DAMM v2 pool; the
       // derived pool address keys off the quote mint. Defaults to SOL.
-      quoteMintAddress: t.quote_token === "USDC" ? USDC_MINT : null,
+      // Non-SOL quotes (USDC, ANSEM, UWU, …) need their mint so the graduated
+      // DAMM v2 pool derives correctly; SOL stays null (native).
+      quoteMintAddress: (t.quote_mint || quoteTokenInfo(t.quote_token).mint) !== WSOL_MINT ? (t.quote_mint || quoteTokenInfo(t.quote_token).mint) : null,
     });
     if (det?.graduated && det.graduatedPoolAddress) {
       keeperLog(
@@ -905,6 +908,18 @@ async function claimAndSplitFeesStep(ctx) {
       let totalClaimedSol = 0;
       let lastSig = null;
 
+      // Resolve the pool's quote token generically. Prefer the stored quote_mint
+      // (authoritative — supports arbitrary CUSTOM pairings); fall back to the
+      // registry for legacy rows. SOL is native; every other quote is an SPL quote
+      // whose fees the claim helper swaps to SOL. Only non-SOL/USDC quotes need a
+      // live USD price for the claim's USD gate.
+      const quoteMintArg = t.quote_mint || quoteTokenInfo(t.quote_token).mint;
+      const quoteDecimalsArg = t.quote_decimals ?? quoteTokenInfo(t.quote_token).decimals;
+      const isSplQuote = quoteMintArg !== WSOL_MINT;
+      const isUsdcQuote = quoteMintArg === USDC_MINT;
+      const quoteUsdArg =
+        isSplQuote && !isUsdcQuote ? await getMintUsdPrice(quoteMintArg) : 0;
+
       // DBC claim: always attempt while a DBC pool exists. Partner trading
       // fees accrued pre-graduation are still claimable after migration,
       // and the SDK no-ops cleanly when there's nothing to claim.
@@ -914,8 +929,9 @@ async function claimAndSplitFeesStep(ctx) {
           dbcPoolAddress: t.dbc_pool_address,
           solUsd,
           kp: ctx.kp,
-          // USDC pools accrue fees in USDC; the claim helper converts to SOL.
-          quoteMint: t.quote_token === "USDC" ? USDC_MINT : undefined,
+          quoteMint: quoteMintArg,
+          quoteUsd: quoteUsdArg,
+          quoteDecimals: quoteDecimalsArg,
         });
         if (claim) {
           const usd = claim.solClaimed * solUsd;
@@ -943,7 +959,9 @@ async function claimAndSplitFeesStep(ctx) {
           lpPositionAddress: t.lp_position_address,
           solUsd,
           kp: ctx.kp,
-          quoteMint: t.quote_token === "USDC" ? USDC_MINT : undefined,
+          quoteMint: quoteMintArg,
+          quoteUsd: quoteUsdArg,
+          quoteDecimals: quoteDecimalsArg,
         });
 
         if (claim) {

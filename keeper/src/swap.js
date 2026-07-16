@@ -51,6 +51,17 @@ async function readUsdcRaw(c, owner) {
   }
 }
 
+// Read any SPL token's ATA balance (raw base units) for a wallet. 0 if absent.
+async function readTokenRaw(c, mintPk, owner) {
+  try {
+    const ata = await getAssociatedTokenAddress(mintPk, owner);
+    const bal = await c.getTokenAccountBalance(ata, 'confirmed');
+    return Number(bal.value.amount ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 let _conn = null;
 function conn() {
   if (!_conn) _conn = new Connection(config.rpcUrl, 'confirmed');
@@ -189,6 +200,48 @@ export async function swapSolToUsdc({ wantUsdc, solUsd, kp }) {
  * @param {import('@solana/web3.js').Keypair} args.kp wallet to swap from
  * @returns {Promise<null | { swapSig: string, solReceived: number, usdcSpent: number }>}
  */
+/**
+ * Generic: swap the wallet's balance of `inputMint` (up to `maxRaw` base units,
+ * or all of it) into native SOL via Jupiter. Used to normalize an arbitrary SPL
+ * quote token's claimed fees (ANSEM, UWU, …) into SOL so the rest of the keeper's
+ * SOL-denominated economics run unchanged. USDC keeps its own swapUsdcToSol path.
+ *
+ * @param {object} args
+ * @param {string} args.inputMint   mint to swap FROM
+ * @param {number} [args.inputDecimals=6] the token's decimals (for the dust floor)
+ * @param {import('@solana/web3.js').Keypair} args.kp wallet to swap from
+ * @param {number|null} [args.maxRaw=null] cap the swap at this many base units
+ * @returns {Promise<null | { swapSig: string, solReceived: number, inputSpentRaw: number }>}
+ */
+export async function swapTokenToSol({ inputMint, inputDecimals = 6, kp, maxRaw = null }) {
+  const c = conn();
+  const balRaw = await readTokenRaw(c, new PublicKey(inputMint), kp.publicKey);
+  if (balRaw <= 0) return null;
+  const amountRaw = maxRaw != null ? Math.min(balRaw, Math.floor(maxRaw)) : balRaw;
+  // Dust floor: ~0.0001 of one whole token isn't worth the swap fee. The caller
+  // already gates on USD, so this is just a hard floor.
+  if (amountRaw < Math.max(1, Math.floor(10 ** inputDecimals * 0.0001))) return null;
+
+  const quote = await jupQuote({ inputMint, outputMint: SOL_MINT, amountLamports: amountRaw });
+  const solOutRaw = Number(quote.outAmount);
+  if (!solOutRaw) throw new Error(`jupiter returned zero SOL outAmount for ${inputMint}`);
+  const priceImpact = Number(quote.priceImpactPct ?? 0);
+  if (priceImpact > MAX_PRICE_IMPACT_PCT) {
+    throw new Error(
+      `${inputMint}->SOL price impact ${(priceImpact * 100).toFixed(2)}% > max ${(MAX_PRICE_IMPACT_PCT * 100).toFixed(2)}%`,
+    );
+  }
+  const swapResp = await jupSwap(quote, kp.publicKey.toBase58());
+  const swapTx = VersionedTransaction.deserialize(Buffer.from(swapResp.swapTransaction, 'base64'));
+  swapTx.sign([kp]);
+  const swapSig = await c.sendTransaction(swapTx, { skipPreflight: false, maxRetries: 3 });
+  const swapConfirm = await c.confirmTransaction(swapSig, 'confirmed');
+  if (swapConfirm.value.err) {
+    throw new Error(`${inputMint}->SOL swap failed on-chain: ${JSON.stringify(swapConfirm.value.err)}`);
+  }
+  return { swapSig, solReceived: solOutRaw / 1e9, inputSpentRaw: amountRaw };
+}
+
 export async function swapUsdcToSol({ wantUsd, kp }) {
   if (!(wantUsd > 0)) return null;
 
