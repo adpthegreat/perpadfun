@@ -576,7 +576,9 @@ function LaunchPage() {
 
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <Label>Direction</Label>
+              <div className="flex h-5 items-center">
+                <Label>Direction</Label>
+              </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {(["long", "short"] as const).map((d) => (
                   <button
@@ -595,7 +597,7 @@ function LaunchPage() {
               </div>
             </div>
             <div>
-              <div className="flex items-center justify-between">
+              <div className="flex h-5 items-center justify-between">
                 <Label>Leverage</Label>
                 {degenOpts.length > 0 && (
                   <button
