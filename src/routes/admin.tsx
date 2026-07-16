@@ -36,8 +36,7 @@ const num = (v: unknown): number => {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : 0;
 };
-const usd = (n: number) =>
-  `$${num(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+const usd = (n: number) => `$${num(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const cnt = (n: number) => num(n).toLocaleString();
 
 function Panel({
@@ -119,9 +118,7 @@ function AdminCockpit() {
   });
 
   const locked =
-    !adminKey ||
-    tokensQ.error instanceof AdminKeyError ||
-    logsQ.error instanceof AdminKeyError;
+    !adminKey || tokensQ.error instanceof AdminKeyError || logsQ.error instanceof AdminKeyError;
 
   const tokens = tokensQ.data ?? [];
   const stuck = stuckQ.data ?? [];
@@ -257,8 +254,8 @@ function AdminCockpit() {
           />
           <Stat label="Σ fees accrued" value={enabled ? usd(totals.fees) : "·"} />
           <Stat label="Σ buyback reserve" value={enabled ? usd(totals.reserve) : "·"} />
-          <Stat label="bought back" value={stats?.kpis ? `${num(stats.kpis.buybackSol).toFixed(2)} SOL` : "·"} />
-          <Stat label="fees claimed" value={stats?.kpis ? `${num(stats.kpis.claimSol).toFixed(2)} SOL` : "·"} />
+          <Stat label="bought back" value={stats?.kpis ? usd(stats.kpis.buybackUsd) : "·"} />
+          <Stat label="fees claimed" value={stats?.kpis ? usd(stats.kpis.claimUsd) : "·"} />
           <Stat label="burn events" value={stats?.kpis ? cnt(stats.kpis.burnEvents) : "·"} />
           <Stat label="graduated" value={stats?.kpis ? cnt(stats.kpis.graduated) : "·"} />
         </div>
@@ -267,9 +264,7 @@ function AdminCockpit() {
         <div className="mb-4 grid gap-4 lg:grid-cols-2">
           <Panel title="Workflow states" hint={`${tokens.length} managed`}>
             {wfCounts.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {enabled ? "no tokens" : "locked"}
-              </p>
+              <p className="text-xs text-muted-foreground">{enabled ? "no tokens" : "locked"}</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {wfCounts.map(([state, c]) => (
@@ -438,9 +433,7 @@ function AdminCockpit() {
                             ? `${routerQ.data.subWalletBalanceSol.toFixed(4)}`
                             : "·"
                         }
-                        tone={
-                          (routerQ.data.subWalletBalanceSol ?? 0) > 0 ? "good" : undefined
-                        }
+                        tone={(routerQ.data.subWalletBalanceSol ?? 0) > 0 ? "good" : undefined}
                       />
                       <Stat
                         label="first fee routed"
