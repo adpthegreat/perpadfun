@@ -297,6 +297,8 @@ export type Database = {
           position_opened_at: string | null
           position_size_usd: number
           quote_token: string
+          quote_mint: string | null
+          quote_decimals: number | null
           router: string
           sol_raised: number
           source: string
@@ -354,6 +356,8 @@ export type Database = {
           position_opened_at?: string | null
           position_size_usd?: number
           quote_token?: string
+          quote_mint?: string | null
+          quote_decimals?: number | null
           router?: string
           sol_raised?: number
           source?: string
@@ -411,6 +415,8 @@ export type Database = {
           position_opened_at?: string | null
           position_size_usd?: number
           quote_token?: string
+          quote_mint?: string | null
+          quote_decimals?: number | null
           router?: string
           sol_raised?: number
           source?: string
