@@ -16,6 +16,12 @@ import { getServerSolanaRpcUrl } from "@/lib/wallet/solanaConfig";
 import { isLaunchableMarket, isValidLeverageFor, maxLeverageFor } from "@/lib/imperial-markets";
 import { newTokenIdentity, tokenInvariantsFor } from "@/lib/solana/subWallet.server";
 import { transitionLaunch, markLaunchFailed } from "@/lib/launch/launchState";
+import {
+  quoteMintFor,
+  fetchQuoteUsdPrice,
+  resolveQuote,
+  type Quote,
+} from "@/lib/launch/config-builder";
 import { nextSolRaised, nextMigrationStatus } from "@/lib/launch/poolState";
 import { backOff } from "@/lib/backoff";
 
@@ -50,43 +56,52 @@ async function tryGetMid(coin: string): Promise<number | null> {
   }
 }
 
-const launchInput = z.object({
-  ticker: z
-    .string()
-    .min(2)
-    .max(10)
-    .regex(/^[A-Z0-9]+$/, "Letters and numbers only"),
-  name: z.string().min(1).max(32),
-  description: z.string().max(500).optional(),
-  imageUrl: z.string().url().max(500).optional(),
-  websiteUrl: z.string().url().max(300).optional(),
-  twitterUrl: z.string().url().max(300).optional(),
-  underlying: z
-    .string()
-    .min(1)
-    .max(20)
-    .refine(isLaunchableMarket, {
+const launchInput = z
+  .object({
+    ticker: z
+      .string()
+      .min(2)
+      .max(10)
+      .regex(/^[A-Z0-9]+$/, "Letters and numbers only"),
+    name: z.string().min(1).max(32),
+    description: z.string().max(500).optional(),
+    imageUrl: z.string().url().max(500).optional(),
+    websiteUrl: z.string().url().max(300).optional(),
+    twitterUrl: z.string().url().max(300).optional(),
+    underlying: z.string().min(1).max(20).refine(isLaunchableMarket, {
       message: "Unsupported or unavailable market for Imperial routing",
     }),
-  leverage: z.number().int().positive(),
-  direction: z.enum(["long", "short"]),
-  creatorAddress: z.string().min(32).max(44),
-  // Quote token the bonding curve is denominated in. Default SOL (legacy).
-  // USDC pairs the curve + graduated DAMM pool against USDC. See
-  // plan/USDC_PAIRING.md.
-  quote: z.enum(["SOL", "USDC"]).default("SOL"),
-}).superRefine((d, ctx) => {
-  // Leverage must be an allowed tier AND at or below the market's venue cap.
-  // The picker enforces this client-side; re-check here so a stale/crafted
-  // request can't launch an over-cap (e.g. 50×/100×) or off-tier position.
-  if (!isValidLeverageFor(d.underlying, d.leverage)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["leverage"],
-      message: `Unsupported leverage ${d.leverage}x for ${d.underlying} (Phoenix cap ${maxLeverageFor(d.underlying)}x)`,
-    });
-  }
-});
+    leverage: z.number().int().positive(),
+    direction: z.enum(["long", "short"]),
+    creatorAddress: z.string().min(32).max(44),
+    // Quote token the bonding curve is denominated in. Default SOL (legacy).
+    // USDC pairs the curve + graduated DAMM pool against USDC. See
+    // plan/USDC_PAIRING.md.
+    quote: z.enum(["SOL", "USDC", "ANSEM", "UWU", "CUSTOM"]).default("SOL"),
+    // Only for quote === "CUSTOM": the verified SPL mint + its decimals
+    // (from verifyQuoteToken). Ignored for preset quotes.
+    quoteMint: z.string().min(32).max(44).optional(),
+    quoteDecimals: z.number().int().min(0).max(9).optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (d.quote === "CUSTOM" && (!d.quoteMint || d.quoteDecimals == null)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["quoteMint"],
+        message: "Custom quote requires a verified mint + decimals.",
+      });
+    }
+    // Leverage must be an allowed tier AND at or below the market's venue cap.
+    // The picker enforces this client-side; re-check here so a stale/crafted
+    // request can't launch an over-cap (e.g. 50×/100×) or off-tier position.
+    if (!isValidLeverageFor(d.underlying, d.leverage)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["leverage"],
+        message: `Unsupported leverage ${d.leverage}x for ${d.underlying} (Phoenix cap ${maxLeverageFor(d.underlying)}x)`,
+      });
+    }
+  });
 
 export const createDraftToken = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => launchInput.parse(d))
@@ -94,8 +109,10 @@ export const createDraftToken = createServerFn({ method: "POST" })
     try {
       assertAllowedLauncher(data.creatorAddress);
       const mid = await tryGetMid(data.underlying);
-      const preset =
-        data.leverage === 2 ? "gentle" : data.leverage >= 5 ? "parabolic" : "standard";
+      const preset = data.leverage === 2 ? "gentle" : data.leverage >= 5 ? "parabolic" : "standard";
+      // Resolve the quote's mint + decimals now and store them authoritatively —
+      // preset quotes from the registry, CUSTOM from the verified input.
+      const q = resolveQuote(data.quote, data.quoteMint, data.quoteDecimals);
 
       // Atomic creation: the id + sub-wallet + profile index are derived
       // up-front and written in the SAME insert, so a token row can never
@@ -121,6 +138,8 @@ export const createDraftToken = createServerFn({ method: "POST" })
           curve_preset: preset,
           status: "launching",
           quote_token: data.quote,
+          quote_mint: q.mint,
+          quote_decimals: q.decimals,
           migration_status: "pending",
         })
         .select()
@@ -137,8 +156,7 @@ export const createDraftToken = createServerFn({ method: "POST" })
             .select("id, mint_address, status, creator_address")
             .eq("ticker", data.ticker)
             .maybeSingle();
-          const reusable =
-            existing && (existing.status === "deprecated" || !existing.mint_address);
+          const reusable = existing && (existing.status === "deprecated" || !existing.mint_address);
           if (reusable) {
             await supabaseAdmin
               .from("tokens")
@@ -157,6 +175,8 @@ export const createDraftToken = createServerFn({ method: "POST" })
                 curve_preset: preset,
                 status: "launching",
                 quote_token: data.quote,
+                quote_mint: q.mint,
+                quote_decimals: q.decimals,
                 migration_status: "pending",
                 mint_address: null,
                 dbc_pool_address: null,
@@ -238,12 +258,22 @@ export const recordLaunch = createServerFn({ method: "POST" })
               confirmedErr = c.err; // terminal on-chain failure → stop polling
               return;
             }
-            if (c && (c.confirmationStatus === "confirmed" || c.confirmationStatus === "finalized")) {
+            if (
+              c &&
+              (c.confirmationStatus === "confirmed" || c.confirmationStatus === "finalized")
+            ) {
               return; // confirmed → stop
             }
             throw new Error("not yet confirmed"); // pending → poll again
           },
-          { numOfAttempts: 12, startingDelay: 1000, timeMultiple: 1.5, maxDelay: 8000, jitter: "full", retry: () => true },
+          {
+            numOfAttempts: 12,
+            startingDelay: 1000,
+            timeMultiple: 1.5,
+            maxDelay: 8000,
+            jitter: "full",
+            retry: () => true,
+          },
         );
       } catch {
         // Exhausted the poll budget without confirmation; proceed best-effort.
@@ -281,7 +311,7 @@ export const refreshPoolState = createServerFn({ method: "POST" })
       const { data: t, error } = await supabaseAdmin
         .from("tokens")
         .select(
-          "dbc_pool_address, pool_state_refreshed_at, migration_status, sol_raised, graduated_pool_address, current_price_sol, total_supply, quote_token",
+          "dbc_pool_address, pool_state_refreshed_at, migration_status, sol_raised, graduated_pool_address, current_price_sol, total_supply, quote_token, quote_decimals",
         )
         .eq("id", data.tokenId)
         .single();
@@ -316,16 +346,18 @@ export const refreshPoolState = createServerFn({ method: "POST" })
       const poolPk = new PublicKey(t.dbc_pool_address);
       const pool = await client.state.getPool(poolPk);
 
-      // Quote decimals: SOL = 9, USDC = 6. sol_raised is reused as the
-      // quote-denominated raised amount (see plan/USDC_PAIRING.md, decision 3).
-      const isUsdcQuote = t.quote_token === "USDC";
-      const quoteDecimals = isUsdcQuote ? 6 : 9;
+      // Quote decimals: SOL = 9, every SPL quote (USDC, ANSEM, …) = 6.
+      // sol_raised is reused as the quote-denominated raised amount (see
+      // plan/USDC_PAIRING.md, decision 3).
+      const quoteDecimals = t.quote_decimals ?? (t.quote_token === "SOL" ? 9 : 6);
       const quoteDivisor = 10 ** quoteDecimals;
 
       // pool.quoteReserve is in the quote token's base units. If the read doesn't
       // expose it (e.g. a graduated DBC pool whose reserve migrated to DAMM v2),
       // keep the last known value instead of overwriting sol_raised with 0.
-      const freshSol = pool?.quoteReserve ? Number(BigInt(pool.quoteReserve.toString())) / quoteDivisor : null;
+      const freshSol = pool?.quoteReserve
+        ? Number(BigInt(pool.quoteReserve.toString())) / quoteDivisor
+        : null;
       const solRaised = nextSolRaised(freshSol, Number(t.sol_raised ?? 0));
 
       // Current spot price in quote per base token, derived from sqrtPrice.
@@ -384,7 +416,6 @@ export const refreshPoolState = createServerFn({ method: "POST" })
         .eq("id", data.tokenId);
       if (upErr) throw upErr;
 
-
       return {
         ok: true as const,
         cached: false,
@@ -402,7 +433,6 @@ export const refreshPoolState = createServerFn({ method: "POST" })
         error: e instanceof Error ? e.message : "Failed to refresh pool",
       };
     }
-
   });
 
 export const deleteDraft = createServerFn({ method: "POST" })
@@ -424,7 +454,11 @@ export const recoverLaunch = createServerFn({ method: "POST" })
     z
       .object({
         mintAddress: z.string().min(32).max(44),
-        ticker: z.string().min(1).max(12).regex(/^[A-Z0-9]+$/),
+        ticker: z
+          .string()
+          .min(1)
+          .max(12)
+          .regex(/^[A-Z0-9]+$/),
         name: z.string().min(1).max(64),
         description: z.string().max(500).optional(),
         imageUrl: z.string().url().max(500).optional(),
@@ -499,9 +533,6 @@ export const recoverLaunch = createServerFn({ method: "POST" })
     }
   });
 
-
-
-
 // Sub-wallet-signed launch. The user funds the deterministic token sub-wallet,
 // which creates the config + pool, dev-buys in the same atomic pool tx with the
 // USER as token receiver (so the creator wallet shows as the dev holder), and
@@ -514,7 +545,11 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
     z
       .object({
         tokenId: z.string().uuid(),
-        ticker: z.string().min(1).max(12).regex(/^[A-Z0-9]+$/),
+        ticker: z
+          .string()
+          .min(1)
+          .max(12)
+          .regex(/^[A-Z0-9]+$/),
         name: z.string().min(1).max(64),
         imageUrl: z.string().url().max(500).optional(),
         creatorAddress: z.string().min(32).max(44),
@@ -559,7 +594,8 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
         if (!expected || !provided || expected !== provided) {
           return {
             ok: false as const,
-            error: "unauthorized: admin extras (leftoverTokens or vanityMintPrivateKey) require a valid keeper secret",
+            error:
+              "unauthorized: admin extras (leftoverTokens or vanityMintPrivateKey) require a valid keeper secret",
           };
         }
       }
@@ -577,22 +613,27 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
       const { deriveSubWalletKeypair } = await import("@/lib/solana/subWallet.server");
       const subWallet = deriveSubWalletKeypair(data.tokenId);
 
-      // Quote token the curve is denominated in (set at createDraftToken).
+      // Quote token the curve is denominated in (set at createDraftToken). The
+      // mint + decimals are stored authoritatively so CUSTOM pairings work.
       const { data: quoteRow } = await supabaseAdmin
         .from("tokens")
-        .select("quote_token")
+        .select("quote_token, quote_mint, quote_decimals")
         .eq("id", data.tokenId)
         .single();
-      const quote = quoteRow?.quote_token === "USDC" ? "USDC" : "SOL";
-      const quoteMintStr = quote === "USDC" ? USDC_MINT_STR : NATIVE_SOL_MINT_STR;
+      const quote = (quoteRow?.quote_token ?? "SOL") as Quote;
+      const quoteMintStr = quoteRow?.quote_mint ?? quoteMintFor(quote).toBase58();
+      const quoteDecimals = quoteRow?.quote_decimals ?? (quote === "SOL" ? 9 : 6);
 
-      // Quote-specific dev-buy bounds (in the quote token's base units). SOL:
-      // 0.1–5 SOL. USDC: 5–5000 USDC. Re-checked here so a crafted request
-      // can't bypass the client bounds.
-      const QUOTE_BUY_BOUNDS = {
+      // Dev-buy bounds in the quote token's base units. Preset quotes have tuned
+      // ranges; CUSTOM is permissive (its value is unknown up front — the client
+      // enforces sensible amounts and verifyQuoteToken already vetted liquidity).
+      const QUOTE_BUY_BOUNDS: Record<Quote, { min: number; max: number }> = {
         SOL: { min: 100_000_000, max: 5_000_000_000 },
         USDC: { min: 5_000_000, max: 5_000_000_000 },
-      } as const;
+        ANSEM: { min: 10_000_000, max: 50_000_000_000 },
+        UWU: { min: 50_000_000, max: 500_000_000_000 },
+        CUSTOM: { min: 0, max: Number.MAX_SAFE_INTEGER },
+      };
       const bounds = QUOTE_BUY_BOUNDS[quote];
       if (data.buyAmount < bounds.min || data.buyAmount > bounds.max) {
         return {
@@ -617,18 +658,29 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
         try {
           await backOff(
             async () => {
-              const v = (await conn.getSignatureStatus(sig, { searchTransactionHistory: true })).value;
+              const v = (await conn.getSignatureStatus(sig, { searchTransactionHistory: true }))
+                .value;
               if (v?.err) {
                 prefundErr = v.err; // terminal on-chain failure → stop polling
                 return;
               }
-              if (v && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")) {
+              if (
+                v &&
+                (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")
+              ) {
                 prefundOk = true; // confirmed → stop
                 return;
               }
               throw new Error("not yet confirmed"); // pending → poll again
             },
-            { numOfAttempts: 16, startingDelay: 1000, timeMultiple: 1.5, maxDelay: 4000, jitter: "full", retry: () => true },
+            {
+              numOfAttempts: 16,
+              startingDelay: 1000,
+              timeMultiple: 1.5,
+              maxDelay: 4000,
+              jitter: "full",
+              retry: () => true,
+            },
           );
         } catch {
           // Exhausted the 16-attempt budget without a confirmed/finalized status.
@@ -648,10 +700,10 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
       const LAUNCH_RENT_AND_FEES_LAMPORTS = 100_000_000; // 0.10 SOL: covers rent + 2 tx fees + ~0.04 SOL retry buffer
 
       const subWalletBal = await conn.getBalance(subWallet.publicKey, "confirmed");
-      if (quote === "USDC") {
-        // USDC pools: SOL only covers rent + 2 tx fees + the USDC ATA the SDK
-        // uses + keeper seed. The dev-buy itself is pulled from the sub-wallet's
-        // USDC ATA (funded by the user in the prefund step).
+      if (quote !== "SOL") {
+        // SPL-quote pools (USDC, ANSEM): SOL only covers rent + 2 tx fees + the
+        // quote ATA the SDK uses + keeper seed. The dev-buy itself is pulled from
+        // the sub-wallet's quote-token ATA (funded by the user in the prefund).
         const solNeeded = LAUNCH_RENT_AND_FEES_LAMPORTS + SUB_WALLET_OPS_SEED_LAMPORTS;
         if (subWalletBal < solNeeded) {
           return {
@@ -660,22 +712,22 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
           };
         }
         const { getAssociatedTokenAddressSync } = await import("@solana/spl-token");
-        const subUsdcAta = getAssociatedTokenAddressSync(
-          new PublicKey(USDC_MINT_STR),
+        const subQuoteAta = getAssociatedTokenAddressSync(
+          new PublicKey(quoteMintStr),
           subWallet.publicKey,
           true,
         );
-        let usdcBal = 0;
+        let quoteBal = 0;
         try {
-          const b = await conn.getTokenAccountBalance(subUsdcAta, "confirmed");
-          usdcBal = Number(b.value.amount ?? 0);
+          const b = await conn.getTokenAccountBalance(subQuoteAta, "confirmed");
+          quoteBal = Number(b.value.amount ?? 0);
         } catch {
-          usdcBal = 0;
+          quoteBal = 0;
         }
-        if (usdcBal < data.buyAmount) {
+        if (quoteBal < data.buyAmount) {
           return {
             ok: false as const,
-            error: `Token sub-wallet USDC too low (${usdcBal} < ${data.buyAmount} base units). USDC prefund may not have credited yet.`,
+            error: `Token sub-wallet ${quote} too low (${quoteBal} < ${data.buyAmount} base units). ${quote} prefund may not have credited yet.`,
           };
         }
       } else {
@@ -747,16 +799,31 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
           parabolic: { initialMarketCap: 3000, migrationMarketCap: 49000 },
         },
       } as const;
-      const preset = PRESETS[quote][data.curvePreset];
+      // Market caps in quote units: fixed for SOL/USDC, else derived from the
+      // USDC USD targets ÷ the quote's live price (Option B).
+      let initialMarketCap: number;
+      let migrationMarketCap: number;
+      if (quote === "SOL" || quote === "USDC") {
+        const preset = PRESETS[quote][data.curvePreset];
+        initialMarketCap = preset.initialMarketCap;
+        migrationMarketCap = preset.migrationMarketCap;
+      } else {
+        const usd = PRESETS.USDC[data.curvePreset];
+        const price = await fetchQuoteUsdPrice(quoteMintStr);
+        if (!price)
+          throw new Error(`No live ${quote} price available — can't set market-cap targets.`);
+        initialMarketCap = usd.initialMarketCap / price;
+        migrationMarketCap = usd.migrationMarketCap / price;
+      }
 
       const configParams = buildCurveWithMarketCap({
-        initialMarketCap: preset.initialMarketCap,
-        migrationMarketCap: preset.migrationMarketCap,
+        initialMarketCap,
+        migrationMarketCap,
         activationType: ActivationType.Slot,
         token: {
           tokenType: TokenType.SPL,
           tokenBaseDecimal: TokenDecimal.SIX,
-          tokenQuoteDecimal: quote === "USDC" ? TokenDecimal.SIX : TokenDecimal.NINE,
+          tokenQuoteDecimal: quoteDecimals === 9 ? TokenDecimal.NINE : TokenDecimal.SIX,
           tokenUpdateAuthority: TokenUpdateAuthorityOption.CreatorUpdateAuthority,
           totalTokenSupply: 1_000_000_000,
           leftover: data.leftoverTokens ?? 0,
@@ -769,10 +836,10 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
             // activity settles. See launchAsTreasury field defense in chat.
             baseFeeMode: BaseFeeMode.FeeSchedulerExponential,
             feeSchedulerParam: {
-              startingFeeBps: 400,   // TEMPORARY 95% (was 400 = 4%)
-              endingFeeBps: 250,      // 2.5% steady-state
-              numberOfPeriod: 60,     // TEMPORARY step every ~2s (was 24)
-              totalDuration: 300,     // TEMPORARY 300 slots = ~2 min (was 216_000 = ~24h)
+              startingFeeBps: 400, // TEMPORARY 95% (was 400 = 4%)
+              endingFeeBps: 250, // 2.5% steady-state
+              numberOfPeriod: 60, // TEMPORARY step every ~2s (was 24)
+              totalDuration: 300, // TEMPORARY 300 slots = ~2 min (was 216_000 = ~24h)
             },
           },
           dynamicFeeEnabled: true,
@@ -833,12 +900,13 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
             upsert: true,
           });
         if (upJsonErr) throw upJsonErr;
-        const { data: pub } = supabaseAdmin.storage
-          .from("token-images")
-          .getPublicUrl(jsonPath);
+        const { data: pub } = supabaseAdmin.storage.from("token-images").getPublicUrl(jsonPath);
         if (pub?.publicUrl) uri = pub.publicUrl;
       } catch (jsonErr) {
-        console.warn("[launchAsTreasury] metadata json upload failed, falling back to image URL", jsonErr);
+        console.warn(
+          "[launchAsTreasury] metadata json upload failed, falling back to image URL",
+          jsonErr,
+        );
       }
 
       const { createConfigTx, createPoolWithFirstBuyTx } =
@@ -895,7 +963,8 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
       let configConfirmed = false;
       await backOff(
         async () => {
-          const v = (await conn.getSignatureStatus(configSig, { searchTransactionHistory: true })).value;
+          const v = (await conn.getSignatureStatus(configSig, { searchTransactionHistory: true }))
+            .value;
           if (v?.err) {
             configOnChainErr = v.err;
             return;
@@ -906,7 +975,14 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
           }
           throw new Error("not yet confirmed");
         },
-        { numOfAttempts: 16, startingDelay: 1000, timeMultiple: 1.5, maxDelay: 4000, jitter: "full", retry: () => true },
+        {
+          numOfAttempts: 16,
+          startingDelay: 1000,
+          timeMultiple: 1.5,
+          maxDelay: 4000,
+          jitter: "full",
+          retry: () => true,
+        },
       ).catch(() => {});
       if (configOnChainErr) {
         return {
@@ -950,12 +1026,14 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
       // 7. Best-effort confirm (don't block success).
       conn
         .confirmTransaction(
-          { signature: poolSig, blockhash: bh2.blockhash, lastValidBlockHeight: bh2.lastValidBlockHeight },
+          {
+            signature: poolSig,
+            blockhash: bh2.blockhash,
+            lastValidBlockHeight: bh2.lastValidBlockHeight,
+          },
           "confirmed",
         )
         .catch((e) => console.warn("confirm poolTx", e));
-
-
 
       return {
         ok: true as const,
@@ -973,6 +1051,4 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
         error: e instanceof Error ? e.message : "Treasury launch failed",
       };
     }
-
   });
-

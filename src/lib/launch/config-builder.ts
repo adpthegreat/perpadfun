@@ -12,7 +12,9 @@ import {
 } from "@/lib/launch/supplyBreakdown";
 
 export type CurvePreset = "gentle" | "standard" | "parabolic";
-export type Quote = "SOL" | "USDC";
+// Preset quick-picks, plus "CUSTOM" for an arbitrary verified SPL mint whose
+// mint + decimals are supplied at launch (from verifyQuoteToken).
+export type Quote = "SOL" | "USDC" | "ANSEM" | "UWU" | "CUSTOM";
 export type FeeSchedule = {
   startingFeeBps: number;
   endingFeeBps: number;
@@ -36,6 +38,11 @@ export const SUB_WALLET_OPS_SEED_LAMPORTS = 10_000_000;
 const USDC_MINT_STR = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const NATIVE_SOL_MINT_STR = "So11111111111111111111111111111111111111112";
 
+// Market-cap presets are denominated in the QUOTE token's whole units. SOL/USDC
+// use fixed numbers; arbitrary SPL quotes (memecoins like $ANSEM) can't — a fixed
+// token amount would swing wildly in USD — so they derive from the USDC USD
+// targets ÷ the quote's live price at launch (Option B). USDC ≈ $1, so the USDC
+// presets double as the canonical USD targets.
 const PRESETS = {
   SOL: {
     gentle: { initialMarketCap: 34, migrationMarketCap: 400 },
@@ -49,12 +56,82 @@ const PRESETS = {
   },
 } as const;
 
+// USD market-cap targets used for priced (arbitrary-SPL) quotes — same as the
+// USDC presets ($1 ≈ 1 USDC).
+const USD_TARGETS = PRESETS.USDC;
+
+type QuoteToken = {
+  label: string;
+  mint: string;
+  quoteDecimal: 6 | 9;
+  // Fixed presets in quote units (native/stable quotes), or null → derive per
+  // launch from USD_TARGETS ÷ live price.
+  presets: Record<CurvePreset, { initialMarketCap: number; migrationMarketCap: number }> | null;
+};
+
+// Quote-token registry. Add a new SPL quote by dropping in one entry
+// (mint + decimals, presets: null to price it live).
+export const QUOTE_TOKENS: Record<Exclude<Quote, "CUSTOM">, QuoteToken> = {
+  SOL: { label: "SOL", mint: NATIVE_SOL_MINT_STR, quoteDecimal: 9, presets: PRESETS.SOL },
+  USDC: { label: "USDC", mint: USDC_MINT_STR, quoteDecimal: 6, presets: PRESETS.USDC },
+  ANSEM: {
+    label: "ANSEM",
+    mint: "9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump",
+    quoteDecimal: 6,
+    presets: null,
+  },
+  UWU: {
+    label: "UWU",
+    mint: "UWUy7J86LUiBv5SjAUZ53LMGhtnqvbQ7QNSSkyupump",
+    quoteDecimal: 6,
+    presets: null,
+  },
+};
+
 export function presetForLeverage(leverage: number): CurvePreset {
   return leverage === 2 ? "gentle" : leverage >= 5 ? "parabolic" : "standard";
 }
 
-export function quoteMintFor(quote: Quote): PublicKey {
-  return new PublicKey(quote === "USDC" ? USDC_MINT_STR : NATIVE_SOL_MINT_STR);
+// Resolve a quote to { mint, decimals, presets }. Preset quotes come from the
+// registry; CUSTOM uses the mint + decimals passed in (from verifyQuoteToken)
+// and is always live-priced (presets: null).
+export function resolveQuote(
+  quote: Quote,
+  customMint?: string,
+  customDecimals?: number,
+): { mint: string; decimals: number; presets: QuoteToken["presets"] } {
+  if (quote === "CUSTOM") {
+    if (!customMint || customDecimals == null) {
+      throw new Error("Custom quote requires a verified mint + decimals.");
+    }
+    return { mint: customMint, decimals: customDecimals, presets: null };
+  }
+  const qt = QUOTE_TOKENS[quote];
+  return { mint: qt.mint, decimals: qt.quoteDecimal, presets: qt.presets };
+}
+
+export function quoteMintFor(quote: Quote, customMint?: string): PublicKey {
+  return new PublicKey(resolveQuote(quote, customMint, 0).mint);
+}
+
+export function quoteDecimalsFor(quote: Quote, customDecimals?: number): number {
+  return resolveQuote(quote, "x", customDecimals).decimals;
+}
+
+// Live USD price for an arbitrary quote mint (Jupiter price v3 — accepts any
+// mint). Returns 0 on failure so callers can decide to block the launch.
+export async function fetchQuoteUsdPrice(mint: string): Promise<number> {
+  try {
+    const res = await fetch(`https://lite-api.jup.ag/price/v3?ids=${mint}`, {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return 0;
+    const j = (await res.json()) as Record<string, { usdPrice?: number }>;
+    const p = j[mint]?.usdPrice;
+    return typeof p === "number" && p > 0 ? p : 0;
+  } catch {
+    return 0;
+  }
 }
 
 export async function loadSdk() {
@@ -72,21 +149,42 @@ export async function buildConfigParams(
     curvePreset: CurvePreset;
     leftoverTokens?: number;
     feeSchedule?: FeeSchedule;
+    // Optional override for the quote's live USD price (priced quotes only);
+    // when omitted, buildConfigParams fetches it.
+    quoteUsdPrice?: number;
+    // For quote === "CUSTOM": the verified mint + decimals to pair against.
+    customMint?: string;
+    customDecimals?: number;
   },
 ) {
-  const preset = PRESETS[cfg.quote][cfg.curvePreset];
+  const qt = resolveQuote(cfg.quote, cfg.customMint, cfg.customDecimals);
+  // Market caps in quote-token units: fixed for SOL/USDC, else derived from the
+  // USD targets ÷ the quote's live price (Option B).
+  let initialMarketCap: number;
+  let migrationMarketCap: number;
+  if (qt.presets) {
+    ({ initialMarketCap, migrationMarketCap } = qt.presets[cfg.curvePreset]);
+  } else {
+    const usd = USD_TARGETS[cfg.curvePreset];
+    const price = cfg.quoteUsdPrice ?? (await fetchQuoteUsdPrice(qt.mint));
+    if (!price || price <= 0) {
+      throw new Error(`No live ${cfg.quote} price available — can't set market-cap targets.`);
+    }
+    initialMarketCap = usd.initialMarketCap / price;
+    migrationMarketCap = usd.migrationMarketCap / price;
+  }
   const fee = cfg.feeSchedule ?? STANDARD_FEE_SCHEDULE;
   const leftover = cfg.leftoverTokens ?? 0;
   const lvErr = validateLeftover(leftover, TOTAL_SUPPLY);
   if (lvErr) throw new Error(lvErr);
   return sdk.buildCurveWithMarketCap({
-    initialMarketCap: preset.initialMarketCap,
-    migrationMarketCap: preset.migrationMarketCap,
+    initialMarketCap,
+    migrationMarketCap,
     activationType: sdk.ActivationType.Slot,
     token: {
       tokenType: sdk.TokenType.SPL,
       tokenBaseDecimal: sdk.TokenDecimal.SIX,
-      tokenQuoteDecimal: cfg.quote === "USDC" ? sdk.TokenDecimal.SIX : sdk.TokenDecimal.NINE,
+      tokenQuoteDecimal: qt.decimals === 6 ? sdk.TokenDecimal.SIX : sdk.TokenDecimal.NINE,
       tokenUpdateAuthority: sdk.TokenUpdateAuthorityOption.CreatorUpdateAuthority,
       totalTokenSupply: TOTAL_SUPPLY,
       leftover,

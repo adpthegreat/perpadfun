@@ -9,27 +9,17 @@
 import { ensureBufferPolyfill } from "@/lib/buffer-polyfill";
 
 import { useCallback, useState } from "react";
-import {
-  useWallet as useSolanaAdapterWallet,
-  useConnection,
-} from "@solana/wallet-adapter-react";
-import {
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from "@solana/web3.js";
+import { useWallet as useSolanaAdapterWallet, useConnection } from "@solana/wallet-adapter-react";
+import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
 } from "@solana/spl-token";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  createDraftToken,
-  deleteDraft,
-  launchAsTreasury,
-} from "@/lib/meteora/dbc.functions";
+import { createDraftToken, deleteDraft, launchAsTreasury } from "@/lib/meteora/dbc.functions";
 import { getLaunchFundingTarget } from "@/lib/treasury.functions";
+import { QUOTE_TOKENS, fetchQuoteUsdPrice } from "@/lib/launch/config-builder";
 
 export type LaunchStatus =
   | "idle"
@@ -53,22 +43,26 @@ export type LaunchInput = {
   direction: "long" | "short";
   creatorAddress?: string;
   // Admin-only knobs (exposed by /admin-launch; /launch omits them).
-  leftoverTokens?: number;         // held back from the bonding curve, 0..1B
-  vanityMintPrivateKey?: string;   // base58 or JSON array of 64 ints; server decodes
-  adminSecret?: string;            // required when either admin knob above is set
+  leftoverTokens?: number; // held back from the bonding curve, 0..1B
+  vanityMintPrivateKey?: string; // base58 or JSON array of 64 ints; server decodes
+  adminSecret?: string; // required when either admin knob above is set
   // Quote token the bonding curve is denominated in (default SOL).
-  quote?: "SOL" | "USDC";
+  quote?: "SOL" | "USDC" | "ANSEM" | "UWU" | "CUSTOM";
+  // For quote === "CUSTOM": the verified mint + decimals (from verifyQuoteToken).
+  quoteMint?: string;
+  quoteDecimals?: number;
   // Creator dev-buy, in the QUOTE token's UI units. SOL: 0.1–5. USDC: 5–5000.
   initialBuy: number;
 };
 
-// Dev-buy bounds + base-unit scale per quote token.
+// Dev-buy bounds + base-unit scale per quote token (amounts in the quote's units).
 const DEV_BUY_BOUNDS = {
   SOL: { min: 0.1, max: 5, decimals: 9 },
   USDC: { min: 5, max: 5000, decimals: 6 },
+  ANSEM: { min: 10, max: 50000, decimals: 6 },
+  UWU: { min: 50, max: 500000, decimals: 6 },
 } as const;
 const LAMPORTS_PER_SOL = 1_000_000_000;
-const USDC_MINT_PK = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 // Extra SOL the user sends to treasury to cover rent + tx fees for the two
 // transactions treasury signs (config init + pool+buy), plus a retry buffer
 // so a partial failure (config landed, pool didn't) can be retried. Must
@@ -91,13 +85,35 @@ export function useMeteoraLaunch() {
       }
 
       const quote = input.quote ?? "SOL";
-      const bounds = DEV_BUY_BOUNDS[quote];
+      // CUSTOM: mint + decimals come from the verified input; bounds are permissive
+      // (verifyQuoteToken already vetted the token). Presets use the registry.
+      let decimals: number;
+      let bounds: { min: number; max: number };
+      let quoteMintStr: string;
+      if (quote === "CUSTOM") {
+        decimals = input.quoteDecimals ?? 6;
+        quoteMintStr = input.quoteMint!;
+        // Cap the custom dev-buy at ~$5,000 worth (the same USD ceiling as the
+        // USDC quote), derived from the live price — never leave it unbounded.
+        // If the price is momentarily unavailable, fall back to a finite,
+        // decimals-scaled cap (cheaper high-decimal coins allow a bigger count).
+        const priceUsd = await fetchQuoteUsdPrice(quoteMintStr);
+        const maxUnits =
+          priceUsd > 0 ? Math.max(1, Math.floor(5000 / priceUsd)) : 10 ** decimals;
+        bounds = { min: 0, max: maxUnits };
+      } else {
+        const b = DEV_BUY_BOUNDS[quote];
+        decimals = b.decimals;
+        bounds = { min: b.min, max: b.max };
+        quoteMintStr = QUOTE_TOKENS[quote].mint;
+      }
+      const quoteMintPk = new PublicKey(quoteMintStr);
       const buy = input.initialBuy;
       if (!Number.isFinite(buy) || buy < bounds.min || buy > bounds.max) {
-        throw new Error(`Initial buy must be between ${bounds.min} and ${bounds.max} ${quote}`);
+        throw new Error(`Initial buy must be between ${bounds.min} and ${bounds.max}`);
       }
-      // Dev-buy in the quote token's base units (lamports for SOL, 6dp for USDC).
-      const buyAmount = Math.floor(buy * 10 ** bounds.decimals);
+      // Dev-buy in the quote token's base units.
+      const buyAmount = Math.floor(buy * 10 ** decimals);
 
       setStatus("creating-draft");
       const draft = await draftFn({
@@ -121,7 +137,7 @@ export function useMeteoraLaunch() {
 
         // SOL leg: SOL pools fund buy + slack; USDC pools fund only rent/fees.
         const solRequiredLamports =
-          quote === "USDC" ? TX_SLACK_LAMPORTS : buyAmount + TX_SLACK_LAMPORTS;
+          quote !== "SOL" ? TX_SLACK_LAMPORTS : buyAmount + TX_SLACK_LAMPORTS;
         const fundingTarget = await fundingTargetFn({
           data: { tokenId: draft.tokenId, requiredLamports: solRequiredLamports },
         });
@@ -138,9 +154,9 @@ export function useMeteoraLaunch() {
 
         // USDC leg: create the sub-wallet's USDC ATA (user pays its rent) and
         // transfer the missing dev-buy amount into it.
-        if (quote === "USDC") {
-          const subUsdcAta = getAssociatedTokenAddressSync(USDC_MINT_PK, subWalletPubkey, true);
-          const userUsdcAta = getAssociatedTokenAddressSync(USDC_MINT_PK, publicKey, false);
+        if (quote !== "SOL") {
+          const subUsdcAta = getAssociatedTokenAddressSync(quoteMintPk, subWalletPubkey, true);
+          const userUsdcAta = getAssociatedTokenAddressSync(quoteMintPk, publicKey, false);
           let subUsdcRaw = 0;
           try {
             const b = await connection.getTokenAccountBalance(subUsdcAta, "confirmed");
@@ -159,7 +175,7 @@ export function useMeteoraLaunch() {
             }
             if (userUsdcRaw < usdcToSend) {
               throw new Error(
-                `Insufficient USDC: need ${(usdcToSend / 1e6).toFixed(2)}, wallet has ${(userUsdcRaw / 1e6).toFixed(2)}`,
+                `Insufficient ${quote}: need ${(usdcToSend / 10 ** decimals).toFixed(2)}, wallet has ${(userUsdcRaw / 10 ** decimals).toFixed(2)}`,
               );
             }
             prefundIxs.push(
@@ -167,15 +183,15 @@ export function useMeteoraLaunch() {
                 publicKey,
                 subUsdcAta,
                 subWalletPubkey,
-                USDC_MINT_PK,
+                quoteMintPk,
               ),
               createTransferCheckedInstruction(
                 userUsdcAta,
-                USDC_MINT_PK,
+                quoteMintPk,
                 subUsdcAta,
                 publicKey,
                 usdcToSend,
-                6,
+                decimals,
               ),
             );
           }
@@ -213,13 +229,18 @@ export function useMeteoraLaunch() {
             });
             const v = st.value;
             if (v?.err) throw new Error("Prefund transfer failed on-chain");
-            if (v && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")) {
+            if (
+              v &&
+              (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized")
+            ) {
               landed = true;
               break;
             }
             const currentHeight = await connection.getBlockHeight("confirmed").catch(() => 0);
             if (currentHeight > bh.lastValidBlockHeight) break;
-            await connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {});
+            await connection
+              .sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 })
+              .catch(() => {});
             await new Promise((r) => setTimeout(r, 2000));
           }
           if (!landed) {

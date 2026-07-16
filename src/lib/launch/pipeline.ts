@@ -6,7 +6,14 @@
 //     reconciler promotes it to `live` once the pool appears on-chain, or deletes it
 //     if the pool never materializes (TTL). No half-states survive.
 import { randomUUID } from "node:crypto";
-import { Connection, Keypair, PublicKey, SystemProgram, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+  Transaction,
+} from "@solana/web3.js";
 import { getServerSolanaRpcUrl } from "@/lib/wallet/solanaConfig";
 import { getTreasuryKeypair } from "@/lib/solana/treasury.server";
 import { backOff } from "@/lib/backoff";
@@ -23,6 +30,7 @@ import {
   presetForLeverage,
   publicBaseUrl,
   quoteMintFor,
+  quoteDecimalsFor,
   STANDARD_FEE_SCHEDULE,
   SUB_WALLET_OPS_SEED_LAMPORTS,
   type CurvePreset,
@@ -30,7 +38,6 @@ import {
   type Quote,
 } from "@/lib/launch/config-builder";
 
-const USDC_MINT_STR = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 export const PUBLIC_LAUNCH_FEE_SOL = Number(process.env.PUBLIC_LAUNCH_FEE_SOL ?? 0.01);
 
 export {
@@ -61,19 +68,33 @@ export type BaseLaunchFields = {
   creatorAddress: string;
 };
 export type PublicLaunchInput = BaseLaunchFields & { devBuy: number };
-export type AdminLaunchInput = BaseLaunchFields & { devBuy: number; leftoverTokens?: number; feeSchedule?: FeeSchedule; tokenId?: string };
+export type AdminLaunchInput = BaseLaunchFields & {
+  devBuy: number;
+  leftoverTokens?: number;
+  feeSchedule?: FeeSchedule;
+  tokenId?: string;
+};
 
 export function assertMarket(underlying: string, leverage: number) {
   if (!isLaunchableMarket(underlying)) throw new Error(`unsupported market: ${underlying}`);
   if (!isValidLeverageFor(underlying, leverage))
-    throw new Error(`unsupported leverage ${leverage}x for ${underlying} (cap ${maxLeverageFor(underlying)}x)`);
+    throw new Error(
+      `unsupported leverage ${leverage}x for ${underlying} (cap ${maxLeverageFor(underlying)}x)`,
+    );
 }
 
 // Worker-safe confirmation — the SAME technique launchAsTreasury uses for its prefund: poll
 // getSignatureStatus with exponential backoff (HTTP, no WebSocket signatureSubscribe to stall on a
 // Cloudflare Worker). Throws on a terminal on-chain error or if it never reaches confirmed/finalized.
-export async function pollConfirmed(conn: Connection, sig: string, minStatus: "processed" | "confirmed" = "confirmed"): Promise<void> {
-  const accept = minStatus === "processed" ? ["processed", "confirmed", "finalized"] : ["confirmed", "finalized"];
+export async function pollConfirmed(
+  conn: Connection,
+  sig: string,
+  minStatus: "processed" | "confirmed" = "confirmed",
+): Promise<void> {
+  const accept =
+    minStatus === "processed"
+      ? ["processed", "confirmed", "finalized"]
+      : ["confirmed", "finalized"];
   let ok = false;
   let onChainErr: unknown = null;
   await backOff(
@@ -89,12 +110,18 @@ export async function pollConfirmed(conn: Connection, sig: string, minStatus: "p
       }
       throw new Error("not yet confirmed");
     },
-    { numOfAttempts: 16, startingDelay: 1000, timeMultiple: 1.5, maxDelay: 4000, jitter: "full", retry: () => true },
+    {
+      numOfAttempts: 16,
+      startingDelay: 1000,
+      timeMultiple: 1.5,
+      maxDelay: 4000,
+      jitter: "full",
+      retry: () => true,
+    },
   ).catch(() => {});
   if (onChainErr) throw new Error(`tx ${sig} failed on-chain: ${JSON.stringify(onChainErr)}`);
   if (!ok) throw new Error(`tx ${sig} not confirmed in time`);
 }
-
 
 // Single row writer. status='live' for a confirmed launch; status='launching' for a
 // public pending row awaiting on-chain confirmation. on-conflict(id) keeps it idempotent.
@@ -139,9 +166,19 @@ async function upsertTokenRow(args: {
 }
 
 // Dry-run: supply breakdown only (no writes / no chain). Admin ?dryRun=1.
-export async function previewLaunch(input: { quote: Quote; leverage: number; leftoverTokens?: number; feeSchedule?: FeeSchedule }): Promise<{ supplyBreakdown: SupplyBreakdown }> {
+export async function previewLaunch(input: {
+  quote: Quote;
+  leverage: number;
+  leftoverTokens?: number;
+  feeSchedule?: FeeSchedule;
+}): Promise<{ supplyBreakdown: SupplyBreakdown }> {
   const sdk = await loadSdk();
-  const configParams = await buildConfigParams(sdk, { quote: input.quote, curvePreset: presetForLeverage(input.leverage), leftoverTokens: input.leftoverTokens, feeSchedule: input.feeSchedule });
+  const configParams = await buildConfigParams(sdk, {
+    quote: input.quote,
+    curvePreset: presetForLeverage(input.leverage),
+    leftoverTokens: input.leftoverTokens,
+    feeSchedule: input.feeSchedule,
+  });
   return { supplyBreakdown: breakdownFor(configParams, input.leftoverTokens ?? 0) };
 }
 
@@ -175,32 +212,56 @@ export async function launchAdmin(input: AdminLaunchInput): Promise<{
   const subBal = await conn.getBalance(subWallet.publicKey, "confirmed");
   if (subBal < requiredSol) {
     fundIxs.push(
-      SystemProgram.transfer({ fromPubkey: treasury.publicKey, toPubkey: subWallet.publicKey, lamports: requiredSol - subBal }),
+      SystemProgram.transfer({
+        fromPubkey: treasury.publicKey,
+        toPubkey: subWallet.publicKey,
+        lamports: requiredSol - subBal,
+      }),
     );
   }
-  if (input.quote === "USDC") {
+  if (input.quote !== "SOL") {
+    // Any SPL quote (USDC, ANSEM, …): fund the sub-wallet's quote-token ATA with
+    // the dev-buy amount from the treasury. NOTE: the treasury must hold that
+    // token — for ANSEM launches with a dev-buy, seed the treasury with ANSEM or
+    // set devBuy=0.
     const spl = await import("@solana/spl-token");
-    const usdcMint = new PublicKey(USDC_MINT_STR);
-    const usdcAmount = Math.round(input.devBuy * 1_000_000);
-    const subAta = spl.getAssociatedTokenAddressSync(usdcMint, subWallet.publicKey, true);
-    let subUsdc = 0;
+    const qMint = quoteMintFor(input.quote);
+    const qDec = quoteDecimalsFor(input.quote);
+    const qAmount = Math.round(input.devBuy * 10 ** qDec);
+    const subAta = spl.getAssociatedTokenAddressSync(qMint, subWallet.publicKey, true);
+    let subQuote = 0;
     try {
-      subUsdc = Number((await conn.getTokenAccountBalance(subAta, "confirmed")).value.amount ?? 0);
+      subQuote = Number((await conn.getTokenAccountBalance(subAta, "confirmed")).value.amount ?? 0);
     } catch {
-      subUsdc = 0; // ATA not created yet
+      subQuote = 0; // ATA not created yet
     }
-    const usdcToSend = Math.max(0, usdcAmount - subUsdc);
-    if (usdcToSend > 0) {
-      const treAta = spl.getAssociatedTokenAddressSync(usdcMint, treasury.publicKey, false);
+    const quoteToSend = Math.max(0, qAmount - subQuote);
+    if (quoteToSend > 0) {
+      const treAta = spl.getAssociatedTokenAddressSync(qMint, treasury.publicKey, false);
       fundIxs.push(
-        spl.createAssociatedTokenAccountIdempotentInstruction(treasury.publicKey, subAta, subWallet.publicKey, usdcMint),
-        spl.createTransferCheckedInstruction(treAta, usdcMint, subAta, treasury.publicKey, usdcToSend, 6),
+        spl.createAssociatedTokenAccountIdempotentInstruction(
+          treasury.publicKey,
+          subAta,
+          subWallet.publicKey,
+          qMint,
+        ),
+        spl.createTransferCheckedInstruction(
+          treAta,
+          qMint,
+          subAta,
+          treasury.publicKey,
+          quoteToSend,
+          qDec,
+        ),
       );
     }
   }
   if (fundIxs.length > 0) {
     const fundBh = await conn.getLatestBlockhash("confirmed");
-    const fundTx = new Transaction({ recentBlockhash: fundBh.blockhash, feePayer: treasury.publicKey }).add(...fundIxs);
+    const fundTx = new Transaction({
+      recentBlockhash: fundBh.blockhash,
+      feePayer: treasury.publicKey,
+    }).add(...fundIxs);
     fundTx.sign(treasury);
     const fundSig = await conn.sendRawTransaction(fundTx.serialize(), { skipPreflight: false });
     await pollConfirmed(conn, fundSig);
@@ -211,30 +272,52 @@ export async function launchAdmin(input: AdminLaunchInput): Promise<{
   const userPk = new PublicKey(input.creatorAddress);
   const quoteMint = quoteMintFor(input.quote);
   const curvePreset = presetForLeverage(input.leverage);
-  const dec = input.quote === "USDC" ? 6 : 9;
+  const dec = quoteDecimalsFor(input.quote);
   const metadataUri = `${publicBaseUrl()}/api/v1/launch/${tokenId}/metadata`;
-  const configParams = await buildConfigParams(sdk, { quote: input.quote, curvePreset, leftoverTokens: input.leftoverTokens, feeSchedule: input.feeSchedule });
+  const configParams = await buildConfigParams(sdk, {
+    quote: input.quote,
+    curvePreset,
+    leftoverTokens: input.leftoverTokens,
+    feeSchedule: input.feeSchedule,
+  });
   const client = new sdk.DynamicBondingCurveClient(conn, "confirmed");
 
-  const { createConfigTx, createPoolWithFirstBuyTx } = await client.pool.createConfigAndPoolWithFirstBuy({
-    config: config.publicKey,
-    feeClaimer: subWallet.publicKey,
-    leftoverReceiver: subWallet.publicKey,
-    quoteMint,
-    payer: subWallet.publicKey,
-    ...configParams,
-    preCreatePoolParam: { name: input.name, symbol: input.ticker, uri: metadataUri, poolCreator: subWallet.publicKey, baseMint: baseMint.publicKey },
-    firstBuyParam: { buyer: subWallet.publicKey, receiver: userPk, buyAmount: new BN(Math.round(input.devBuy * 10 ** dec)), minimumAmountOut: new BN(0), referralTokenAccount: null },
-  });
+  const { createConfigTx, createPoolWithFirstBuyTx } =
+    await client.pool.createConfigAndPoolWithFirstBuy({
+      config: config.publicKey,
+      feeClaimer: subWallet.publicKey,
+      leftoverReceiver: subWallet.publicKey,
+      quoteMint,
+      payer: subWallet.publicKey,
+      ...configParams,
+      preCreatePoolParam: {
+        name: input.name,
+        symbol: input.ticker,
+        uri: metadataUri,
+        poolCreator: subWallet.publicKey,
+        baseMint: baseMint.publicKey,
+      },
+      firstBuyParam: {
+        buyer: subWallet.publicKey,
+        receiver: userPk,
+        buyAmount: new BN(Math.round(input.devBuy * 10 ** dec)),
+        minimumAmountOut: new BN(0),
+        referralTokenAccount: null,
+      },
+    });
 
   const bh1 = await conn.getLatestBlockhash("confirmed");
   createConfigTx.recentBlockhash = bh1.blockhash;
   createConfigTx.feePayer = subWallet.publicKey;
   createConfigTx.partialSign(config, subWallet);
-  const configSig = await conn.sendRawTransaction(createConfigTx.serialize(), { skipPreflight: false });
+  const configSig = await conn.sendRawTransaction(createConfigTx.serialize(), {
+    skipPreflight: false,
+  });
   // HTTP poll for "processed" (no WebSocket — confirmTransaction's signatureSubscribe stalls on a
   // Worker and is what hung us). Non-fatal: the pool send's preflight below fails if config didn't land.
-  await pollConfirmed(conn, configSig, "processed").catch((e) => console.warn("[launchAdmin] config confirm", e));
+  await pollConfirmed(conn, configSig, "processed").catch((e) =>
+    console.warn("[launchAdmin] config confirm", e),
+  );
 
   const bh2 = await conn.getLatestBlockhash("confirmed");
   createPoolWithFirstBuyTx.recentBlockhash = bh2.blockhash;
@@ -242,8 +325,12 @@ export async function launchAdmin(input: AdminLaunchInput): Promise<{
   createPoolWithFirstBuyTx.partialSign(baseMint, subWallet);
   // send with preflight: a tx that would fail throws HERE (no row written), so a successful send
   // means it will land. RPC lag must never orphan it → persist live now, confirm best-effort after.
-  const poolSig = await conn.sendRawTransaction(createPoolWithFirstBuyTx.serialize(), { skipPreflight: false });
-  const poolAddress = sdk.deriveDbcPoolAddress(quoteMint, baseMint.publicKey, config.publicKey).toBase58();
+  const poolSig = await conn.sendRawTransaction(createPoolWithFirstBuyTx.serialize(), {
+    skipPreflight: false,
+  });
+  const poolAddress = sdk
+    .deriveDbcPoolAddress(quoteMint, baseMint.publicKey, config.publicKey)
+    .toBase58();
 
   await upsertTokenRow({
     tokenId,
@@ -266,7 +353,6 @@ export async function launchAdmin(input: AdminLaunchInput): Promise<{
     status: "live",
   };
 }
-
 
 // ── Public mode (keyless, fee-gated): build the caller-signed config + pool txs
 // (leftover=0, standard fee, + 0.01 SOL caller→treasury fee) and insert a TRANSIENT
@@ -295,21 +381,39 @@ export async function buildPublicLaunchTx(input: PublicLaunchInput): Promise<{
   const callerPk = new PublicKey(input.creatorAddress);
   const quoteMint = quoteMintFor(input.quote);
   const curvePreset = presetForLeverage(input.leverage);
-  const dec = input.quote === "USDC" ? 6 : 9;
+  const dec = quoteDecimalsFor(input.quote);
   const metadataUri = `${publicBaseUrl()}/api/v1/launch/${tokenId}/metadata`;
-  const configParams = await buildConfigParams(sdk, { quote: input.quote, curvePreset, leftoverTokens: 0, feeSchedule: STANDARD_FEE_SCHEDULE });
+  const configParams = await buildConfigParams(sdk, {
+    quote: input.quote,
+    curvePreset,
+    leftoverTokens: 0,
+    feeSchedule: STANDARD_FEE_SCHEDULE,
+  });
   const client = new sdk.DynamicBondingCurveClient(conn, "confirmed");
 
-  const { createConfigTx, createPoolWithFirstBuyTx } = await client.pool.createConfigAndPoolWithFirstBuy({
-    config: config.publicKey,
-    feeClaimer: subWallet.publicKey,
-    leftoverReceiver: subWallet.publicKey,
-    quoteMint,
-    payer: callerPk, // CALLER pays all rent
-    ...configParams,
-    preCreatePoolParam: { name: input.name, symbol: input.ticker, uri: metadataUri, poolCreator: subWallet.publicKey, baseMint: baseMint.publicKey },
-    firstBuyParam: { buyer: callerPk, receiver: callerPk, buyAmount: new BN(Math.round(input.devBuy * 10 ** dec)), minimumAmountOut: new BN(0), referralTokenAccount: null },
-  });
+  const { createConfigTx, createPoolWithFirstBuyTx } =
+    await client.pool.createConfigAndPoolWithFirstBuy({
+      config: config.publicKey,
+      feeClaimer: subWallet.publicKey,
+      leftoverReceiver: subWallet.publicKey,
+      quoteMint,
+      payer: callerPk, // CALLER pays all rent
+      ...configParams,
+      preCreatePoolParam: {
+        name: input.name,
+        symbol: input.ticker,
+        uri: metadataUri,
+        poolCreator: subWallet.publicKey,
+        baseMint: baseMint.publicKey,
+      },
+      firstBuyParam: {
+        buyer: callerPk,
+        receiver: callerPk,
+        buyAmount: new BN(Math.round(input.devBuy * 10 ** dec)),
+        minimumAmountOut: new BN(0),
+        referralTokenAccount: null,
+      },
+    });
 
   const bh = await conn.getLatestBlockhash("confirmed");
   createConfigTx.recentBlockhash = bh.blockhash;
@@ -317,13 +421,19 @@ export async function buildPublicLaunchTx(input: PublicLaunchInput): Promise<{
   createConfigTx.partialSign(config);
 
   createPoolWithFirstBuyTx.add(
-    SystemProgram.transfer({ fromPubkey: callerPk, toPubkey: treasury.publicKey, lamports: Math.round(PUBLIC_LAUNCH_FEE_SOL * LAMPORTS_PER_SOL) }),
+    SystemProgram.transfer({
+      fromPubkey: callerPk,
+      toPubkey: treasury.publicKey,
+      lamports: Math.round(PUBLIC_LAUNCH_FEE_SOL * LAMPORTS_PER_SOL),
+    }),
   );
   createPoolWithFirstBuyTx.recentBlockhash = bh.blockhash;
   createPoolWithFirstBuyTx.feePayer = callerPk;
   createPoolWithFirstBuyTx.partialSign(baseMint, subWallet);
 
-  const poolAddress = sdk.deriveDbcPoolAddress(quoteMint, baseMint.publicKey, config.publicKey).toBase58();
+  const poolAddress = sdk
+    .deriveDbcPoolAddress(quoteMint, baseMint.publicKey, config.publicKey)
+    .toBase58();
 
   // transient pending row — keeper promotes (pool on-chain) or expires (TTL). Captures
   // metadata so /metadata resolves immediately and nothing depends on a client callback.
@@ -337,7 +447,8 @@ export async function buildPublicLaunchTx(input: PublicLaunchInput): Promise<{
     configAddress: config.publicKey.toBase58(),
   });
 
-  const ser = (tx: any) => tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64");
+  const ser = (tx: any) =>
+    tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64");
   return {
     tokenId,
     mint: baseMint.publicKey.toBase58(),
@@ -355,7 +466,9 @@ export async function buildPublicLaunchTx(input: PublicLaunchInput): Promise<{
 // Server-owned promotion: for each transient `launching` row, promote to `live` once
 // its (deterministic) pool exists on-chain, else delete it past the TTL. Runs from the
 // keeper tick (POST /api/admin/reconcile-launches). Guarantees no orphaned/half states.
-export async function reconcilePendingLaunches(opts?: { ttlMinutes?: number }): Promise<{ promoted: string[]; expired: string[] }> {
+export async function reconcilePendingLaunches(opts?: {
+  ttlMinutes?: number;
+}): Promise<{ promoted: string[]; expired: string[] }> {
   const ttlMs = (opts?.ttlMinutes ?? 20) * 60_000;
   const { data } = await supabaseAdmin
     .from("tokens")
@@ -379,7 +492,11 @@ export async function reconcilePendingLaunches(opts?: { ttlMinutes?: number }): 
       }
     }
     if (exists) {
-      await supabaseAdmin.from("tokens").update({ status: "live" }).eq("id", r.id).eq("status", "launching");
+      await supabaseAdmin
+        .from("tokens")
+        .update({ status: "live" })
+        .eq("id", r.id)
+        .eq("status", "launching");
       promoted.push(r.id as string);
     } else if (r.created_at && new Date(r.created_at as string).getTime() < cutoff) {
       await supabaseAdmin.from("tokens").delete().eq("id", r.id).eq("status", "launching");

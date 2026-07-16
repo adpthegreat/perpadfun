@@ -14,7 +14,24 @@ import { toast } from "sonner";
 import { MarketIcon } from "@/lib/market-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { useMeteoraLaunch } from "@/hooks/useMeteoraLaunch";
-import { BASE_LEVERAGES, DEGEN_LEVERAGES, maxLeverageFor, MARKET_DISPLAY_NAMES, isMarketUnavailable, isSupportedMarket, launchableMarketsInOrder, priceFeedSymbol } from "@/lib/imperial-markets";
+import { verifyQuoteToken, type VerifiedQuoteToken } from "@/lib/launch/verifyQuoteToken.functions";
+
+// Client-side pre-check so obviously bad input never round-trips to the server.
+const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]+$/;
+function isLikelySolanaAddress(s: string): boolean {
+  const t = s.trim();
+  return t.length >= 32 && t.length <= 44 && BASE58_RE.test(t);
+}
+import {
+  BASE_LEVERAGES,
+  DEGEN_LEVERAGES,
+  maxLeverageFor,
+  MARKET_DISPLAY_NAMES,
+  isMarketUnavailable,
+  isSupportedMarket,
+  launchableMarketsInOrder,
+  priceFeedSymbol,
+} from "@/lib/imperial-markets";
 import { usePythSnapshot, formatUsdPrice } from "@/hooks/usePythPrices";
 
 export const Route = createFileRoute("/launch")({
@@ -73,7 +90,32 @@ function LaunchPage() {
   const [twitterUrl, setTwitterUrl] = useState("");
   const [underlying, setUnderlying] = useState("BTC");
   const [direction, setDirection] = useState<"long" | "short">("long");
-  const [quote, setQuote] = useState<"SOL" | "USDC">("SOL");
+  const [quote, setQuote] = useState<"SOL" | "USDC" | "ANSEM" | "UWU" | "CUSTOM">("SOL");
+  const verifyFn = useServerFn(verifyQuoteToken);
+  const [customMint, setCustomMint] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verified, setVerified] = useState<VerifiedQuoteToken | null>(null);
+  const [verifyErr, setVerifyErr] = useState<string | null>(null);
+
+  async function verifyCustom() {
+    setVerifyErr(null);
+    setVerified(null);
+    const mint = customMint.trim();
+    if (!isLikelySolanaAddress(mint)) {
+      setVerifyErr("Enter a valid Solana mint address.");
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await verifyFn({ data: { mint } });
+      if (res.ok) setVerified(res);
+      else setVerifyErr(res.error);
+    } catch (e) {
+      setVerifyErr(e instanceof Error ? e.message : "Verification failed");
+    } finally {
+      setVerifying(false);
+    }
+  }
   const [leverage, setLeverage] = useState<number>(3);
   const [degenMode, setDegenMode] = useState(false);
   const [initialBuySol, setInitialBuySol] = useState<string>("0.1");
@@ -81,18 +123,55 @@ function LaunchPage() {
   const [showAllMarkets, setShowAllMarkets] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Dev-buy bounds + quick-pick presets per quote token.
+  // Dev-buy bounds + quick-pick presets per quote token (amounts are in the
+  // quote token's own units).
   const BUY_BOUNDS = {
     SOL: { min: 0.1, max: 5, default: "0.1", presets: ["0.1", "0.5", "1", "2", "5"], step: 0.1 },
     USDC: { min: 5, max: 5000, default: "20", presets: ["5", "20", "50", "100", "500"], step: 1 },
+    ANSEM: {
+      min: 10,
+      max: 50000,
+      default: "100",
+      presets: ["10", "100", "500", "1000", "5000"],
+      step: 1,
+    },
+    UWU: {
+      min: 50,
+      max: 500000,
+      default: "1000",
+      presets: ["50", "500", "1000", "10000", "50000"],
+      step: 1,
+    },
+    // Custom token's value is unknown before verify → permissive placeholder;
+    // once verified we replace this with a price-derived bound (see activeBounds).
+    CUSTOM: { min: 0, max: 1e15, default: "0", presets: ["0"], step: 1 },
   } as const;
+  // Effective dev-buy bounds. For CUSTOM we don't know the token's value until
+  // it's verified, so we cap the dev buy at the same ~$5,000 USD ceiling as the
+  // USDC quote (max units = $5,000 ÷ live price) instead of the placeholder 1e15.
+  const activeBounds =
+    quote === "CUSTOM" && verified
+      ? {
+          min: 0,
+          max:
+            verified.priceUsd > 0 ? Math.max(1, Math.floor(5000 / verified.priceUsd)) : 1_000_000,
+          default: "0",
+          presets: ["0"] as readonly string[],
+          step: 1,
+        }
+      : BUY_BOUNDS[quote];
+  // Unit label shown next to the dev-buy field: the token's symbol for CUSTOM
+  // (falls back to "token" pre-verify), otherwise the quick-pick name.
+  const quoteUnitLabel = quote === "CUSTOM" ? (verified?.symbol ?? "token") : quote;
   // Switching the quote resets the dev-buy to a valid default for that token.
-  const selectQuote = (q: "SOL" | "USDC") => {
+  const selectQuote = (q: "SOL" | "USDC" | "ANSEM" | "UWU" | "CUSTOM") => {
     setQuote(q);
     setInitialBuySol(BUY_BOUNDS[q].default);
   };
 
-  const currentMid = markets.find((m) => m.name === priceFeedSymbol(underlying))?.markPx ?? pythSnap[priceFeedSymbol(underlying)]?.markPx;
+  const currentMid =
+    markets.find((m) => m.name === priceFeedSymbol(underlying))?.markPx ??
+    pythSnap[priceFeedSymbol(underlying)]?.markPx;
   const maxLev = maxLeverageFor(underlying);
   const baseOpts = BASE_LEVERAGES.filter((l) => l <= maxLev);
   const degenOpts = DEGEN_LEVERAGES.filter((l) => l <= maxLev);
@@ -123,10 +202,14 @@ function LaunchPage() {
       toast.error("Upload a coin image");
       return;
     }
+    if (quote === "CUSTOM" && !verified) {
+      toast.error("Verify the custom pairing token first.");
+      return;
+    }
     const buyNum = parseFloat(initialBuySol);
-    const buyBounds = BUY_BOUNDS[quote];
+    const buyBounds = activeBounds;
     if (!Number.isFinite(buyNum) || buyNum < buyBounds.min || buyNum > buyBounds.max) {
-      toast.error(`Initial buy must be between ${buyBounds.min} and ${buyBounds.max} ${quote}`);
+      toast.error(`Initial buy must be between ${buyBounds.min} and ${buyBounds.max}`);
       return;
     }
     setSubmitting(true);
@@ -143,6 +226,8 @@ function LaunchPage() {
         leverage,
         direction,
         quote,
+        quoteMint: quote === "CUSTOM" ? verified!.mint : undefined,
+        quoteDecimals: quote === "CUSTOM" ? verified!.decimals : undefined,
         creatorAddress: wallet.address,
         initialBuy: buyNum,
       });
@@ -181,17 +266,19 @@ function LaunchPage() {
     );
   }
 
-
-
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <div className="mx-auto max-w-3xl px-6 py-12">
         <div className="mb-10">
-          <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">← Back</Link>
+          <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">
+            ← Back
+          </Link>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight">Create a coin</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Launches on Solana via Meteora's bonding curve, quoted in {quote}. Your reserve powers a leveraged perp tied to the market you pick, so the coin price tracks it 24/7. Starts around $3k market cap and graduates to Meteora DAMM near $40k.
+            Launches on Solana via Meteora's bonding curve, quoted in {quote}. Your reserve powers a
+            leveraged perp tied to the market you pick, so the coin price tracks it 24/7. Starts
+            around $3k market cap and graduates to Meteora DAMM near $40k.
           </p>
         </div>
 
@@ -213,18 +300,36 @@ function LaunchPage() {
             </div>
             <div>
               <Label htmlFor="name">Name</Label>
-              <Input id="name" required maxLength={50} value={name} onChange={(e) => setName(e.target.value)} placeholder="Perpspad" className="mt-1.5" />
+              <Input
+                id="name"
+                required
+                maxLength={50}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Perpspad"
+                className="mt-1.5"
+              />
             </div>
           </div>
 
           <div>
             <Label htmlFor="desc">Description</Label>
-            <Textarea id="desc" maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's this coin about?" className="mt-1.5" rows={3} />
+            <Textarea
+              id="desc"
+              maxLength={500}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What's this coin about?"
+              className="mt-1.5"
+              rows={3}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="website">Website <span className="font-normal text-muted-foreground">(optional)</span></Label>
+              <Label htmlFor="website">
+                Website <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
               <Input
                 id="website"
                 type="url"
@@ -236,7 +341,9 @@ function LaunchPage() {
               />
             </div>
             <div>
-              <Label htmlFor="twitter">X / Twitter <span className="font-normal text-muted-foreground">(optional)</span></Label>
+              <Label htmlFor="twitter">
+                X / Twitter <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
               <Input
                 id="twitter"
                 type="url"
@@ -274,7 +381,9 @@ function LaunchPage() {
                     setUploading(true);
                     const ext = file.name.split(".").pop() ?? "png";
                     const path = `${crypto.randomUUID()}.${ext}`;
-                    const { error } = await supabase.storage.from("token-images").upload(path, file, { contentType: file.type });
+                    const { error } = await supabase.storage
+                      .from("token-images")
+                      .upload(path, file, { contentType: file.type });
                     if (error) {
                       toast.error("Upload failed");
                       setUploading(false);
@@ -288,7 +397,11 @@ function LaunchPage() {
               </label>
               <div className="text-xs text-muted-foreground">
                 {imageUrl ? (
-                  <button type="button" onClick={() => setImageUrl("")} className="underline hover:text-foreground">
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl("")}
+                    className="underline hover:text-foreground"
+                  >
                     remove
                   </button>
                 ) : (
@@ -304,62 +417,74 @@ function LaunchPage() {
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {marketsQuery.isLoading ? (
                 Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="h-16 animate-pulse border border-border bg-secondary/30" />
+                  <div
+                    key={i}
+                    className="h-16 animate-pulse border border-border bg-secondary/30"
+                  />
                 ))
               ) : (
                 <>
                   {(showAllMarkets ? top : top.slice(0, 12)).map((m) => {
                     const unlocked = m.supported && !m.unavailable;
-                    const label = m.unavailable ? "UNAVAILABLE" : (!m.supported ? "SOON" : null);
+                    const label = m.unavailable ? "UNAVAILABLE" : !m.supported ? "SOON" : null;
                     const title = m.unavailable
                       ? "Unavailable: venue not yet supported by the keeper."
                       : !m.supported
-                      ? "Not on Phoenix yet. Coming soon."
-                      : undefined;
+                        ? "Not on Phoenix yet. Coming soon."
+                        : undefined;
                     return (
-                    <button
-                      key={m.name}
-                      type="button"
-                      disabled={!unlocked}
-                      onClick={() => unlocked && setUnderlying(m.name)}
-                      title={title}
-                      className={`relative border px-3 py-2.5 text-left transition-all ${
-                        !unlocked
-                          ? "cursor-not-allowed border-border/50 opacity-50"
-                          : underlying === m.name
-                          ? "border-foreground bg-accent"
-                          : "border-border hover:border-foreground/40"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <MarketIcon name={m.name} size={16} />
-                        <div className="font-mono text-sm font-semibold">{m.displayName}</div>
-                        {label ? (
-                          <span className="ml-auto font-mono text-[9px] text-muted-foreground">{label}</span>
+                      <button
+                        key={m.name}
+                        type="button"
+                        disabled={!unlocked}
+                        onClick={() => unlocked && setUnderlying(m.name)}
+                        title={title}
+                        className={`relative border px-3 py-2.5 text-left transition-all ${
+                          !unlocked
+                            ? "cursor-not-allowed border-border/50 opacity-50"
+                            : underlying === m.name
+                              ? "border-foreground bg-accent"
+                              : "border-border hover:border-foreground/40"
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <MarketIcon name={m.name} size={16} />
+                          <div className="font-mono text-sm font-semibold">{m.displayName}</div>
+                          {label ? (
+                            <span className="ml-auto font-mono text-[9px] text-muted-foreground">
+                              {label}
+                            </span>
+                          ) : (
+                            <span
+                              className="ml-auto rounded-sm bg-amber-400/15 px-1 py-0.5 font-mono text-[9px] font-semibold text-amber-500"
+                              title={`Max leverage ${m.maxLeverage}x on Phoenix`}
+                            >
+                              {m.maxLeverage}x
+                            </span>
+                          )}
+                        </div>
+                        {m.markPx != null ? (
+                          <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                            {formatUsdPrice(m.markPx)}
+                          </div>
                         ) : (
-                          <span
-                            className="ml-auto rounded-sm bg-amber-400/15 px-1 py-0.5 font-mono text-[9px] font-semibold text-amber-500"
-                            title={`Max leverage ${m.maxLeverage}x on Phoenix`}
-                          >
-                            {m.maxLeverage}x
-                          </span>
+                          <div className="font-mono text-[10px] tabular-nums text-muted-foreground/60 animate-pulse">
+                            loading.
+                          </div>
                         )}
-                      </div>
-                      {m.markPx != null ? (
-                        <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                          {formatUsdPrice(m.markPx)}
-                        </div>
-                      ) : (
-                        <div className="font-mono text-[10px] tabular-nums text-muted-foreground/60 animate-pulse">loading.</div>
-                      )}
-                      {m.change24h != null ? (
-                        <div className={`font-mono text-[10px] tabular-nums ${m.change24h >= 0 ? "text-primary" : "text-destructive"}`}>
-                          {m.change24h >= 0 ? "+" : ""}{m.change24h.toFixed(1)}%
-                        </div>
-                      ) : (
-                        <div className="font-mono text-[10px] tabular-nums text-muted-foreground">&nbsp;</div>
-                      )}
-                    </button>
+                        {m.change24h != null ? (
+                          <div
+                            className={`font-mono text-[10px] tabular-nums ${m.change24h >= 0 ? "text-primary" : "text-destructive"}`}
+                          >
+                            {m.change24h >= 0 ? "+" : ""}
+                            {m.change24h.toFixed(1)}%
+                          </div>
+                        ) : (
+                          <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                            &nbsp;
+                          </div>
+                        )}
+                      </button>
                     );
                   })}
                 </>
@@ -378,22 +503,74 @@ function LaunchPage() {
 
           <div>
             <Label>Pair / quote token</Label>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {(["SOL", "USDC"] as const).map((q) => (
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {(["SOL", "USDC", "ANSEM", "UWU", "CUSTOM"] as const).map((q) => (
                 <button
                   key={q}
                   type="button"
                   onClick={() => selectQuote(q)}
                   className={`border py-2.5 text-sm font-medium transition-all ${
-                    quote === q ? "border-foreground bg-accent" : "border-border hover:border-foreground/40"
+                    quote === q
+                      ? "border-foreground bg-accent"
+                      : "border-border hover:border-foreground/40"
                   }`}
                 >
-                  {q}
+                  {q === "CUSTOM" ? "Custom" : q}
                 </button>
               ))}
             </div>
+
+            {quote === "CUSTOM" && (
+              <div className="mt-3 space-y-2 rounded-lg border border-border bg-secondary/30 p-3">
+                <Label htmlFor="customMint">Paste any SPL / Token-2022 mint to pair with</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="customMint"
+                    placeholder="Mint address"
+                    value={customMint}
+                    onChange={(e) => {
+                      setCustomMint(e.target.value);
+                      setVerified(null);
+                      setVerifyErr(null);
+                    }}
+                    className={`font-mono text-xs ${
+                      customMint && !isLikelySolanaAddress(customMint) ? "border-destructive" : ""
+                    }`}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={verifying || !isLikelySolanaAddress(customMint)}
+                    onClick={verifyCustom}
+                  >
+                    {verifying ? "Verifying…" : "Verify"}
+                  </Button>
+                </div>
+                {customMint && !isLikelySolanaAddress(customMint) && (
+                  <p className="text-[11px] text-destructive">Not a valid mint address format.</p>
+                )}
+                {verifyErr && <p className="text-[11px] text-destructive">{verifyErr}</p>}
+                {verified && (
+                  <div className="rounded border border-primary/40 bg-primary/5 p-2 text-[11px]">
+                    <div className="font-medium text-primary">
+                      ✓ {verified.name ?? "Pairable"}
+                      {verified.symbol ? ` ($${verified.symbol})` : ""}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {verified.program}, {verified.decimals} decimals · $
+                      {verified.priceUsd.toFixed(6)} · fee→SOL impact{" "}
+                      {(verified.priceImpactPct * 100).toFixed(2)}%
+                      {verified.hasFreezeAuthority ? " · ⚠ freeze authority set" : ""}
+                      {verified.hasMintAuthority ? " · ⚠ mint authority set" : ""}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-              The bonding curve and graduated pool are denominated in {quote}. Your initial buy is in {quote}.
+              The bonding curve and graduated pool are denominated in{" "}
+              {quote === "CUSTOM" ? "your chosen token" : quote}.
             </p>
           </div>
 
@@ -407,7 +584,9 @@ function LaunchPage() {
                     type="button"
                     onClick={() => setDirection(d)}
                     className={`border py-2.5 text-sm font-medium capitalize transition-all ${
-                      direction === d ? "border-foreground bg-accent" : "border-border hover:border-foreground/40"
+                      direction === d
+                        ? "border-foreground bg-accent"
+                        : "border-border hover:border-foreground/40"
                     }`}
                   >
                     {d}
@@ -440,7 +619,8 @@ function LaunchPage() {
                 </p>
               ) : baseOpts.length === 0 ? (
                 <p className="mt-3 text-xs text-muted-foreground">
-                  This market's venue caps below 2x. Enable Degen mode to see higher options, or pick a different perp.
+                  This market's venue caps below 2x. Enable Degen mode to see higher options, or
+                  pick a different perp.
                 </p>
               ) : (
                 <div className="mt-3 grid grid-cols-3 gap-2">
@@ -479,40 +659,42 @@ function LaunchPage() {
                     ))}
                   </div>
                   <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-                    {underlying} routes through Phoenix with a venue cap of {maxLev}x. Only leverages at or below the cap are shown.
+                    {underlying} routes through Phoenix with a venue cap of {maxLev}x. Only
+                    leverages at or below the cap are shown.
                   </p>
                 </>
               )}
             </div>
           </div>
 
-
-
           <div>
-            <Label htmlFor="initialBuy">Initial buy ({quote})</Label>
+            <Label htmlFor="initialBuy">Initial buy ({quoteUnitLabel})</Label>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your dev buy on launch. Min {BUY_BOUNDS[quote].min}, max {BUY_BOUNDS[quote].max} {quote}. Seeds the curve and gives you the first bag.
+              Your dev buy on launch. Min {activeBounds.min}, max {activeBounds.max}{" "}
+              {quoteUnitLabel}. Seeds the curve and gives you the first bag.
             </p>
             <div className="mt-3 flex items-center gap-2">
               <Input
                 id="initialBuy"
                 type="number"
-                min={BUY_BOUNDS[quote].min}
-                max={BUY_BOUNDS[quote].max}
-                step={BUY_BOUNDS[quote].step}
+                min={activeBounds.min}
+                max={activeBounds.max}
+                step={activeBounds.step}
                 required
                 value={initialBuySol}
                 onChange={(e) => setInitialBuySol(e.target.value)}
                 className="font-mono"
               />
               <div className="flex gap-1">
-                {BUY_BOUNDS[quote].presets.map((v) => (
+                {activeBounds.presets.map((v) => (
                   <button
                     key={v}
                     type="button"
                     onClick={() => setInitialBuySol(v)}
                     className={`border px-2.5 py-2 font-mono text-[11px] transition-all ${
-                      initialBuySol === v ? "border-foreground bg-accent" : "border-border hover:border-foreground/40"
+                      initialBuySol === v
+                        ? "border-foreground bg-accent"
+                        : "border-border hover:border-foreground/40"
                     }`}
                   >
                     {v}
@@ -535,24 +717,35 @@ function LaunchPage() {
             </div>
           </div>
 
-
-          <Button type="submit" size="lg" className="w-full rounded-none" disabled={submitting || !wallet || !isAllowed}>
-            {submitting
-              ? launchStatus === "awaiting-signature"
-                ? "Awaiting wallet…"
-                : launchStatus === "sending-prefund"
-                  ? "Sending funds to treasury…"
-                  : launchStatus === "confirming-prefund"
-                    ? "Confirming transfer…"
-                    : launchStatus === "launching"
-                      ? "Treasury deploying pool…"
-                      : "Preparing…"
-              : !wallet
-                ? "Connect wallet to deploy"
-                : <>Deploy coin <ArrowRight className="ml-1 h-4 w-4" /></>}
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full rounded-none"
+            disabled={submitting || !wallet || !isAllowed}
+          >
+            {submitting ? (
+              launchStatus === "awaiting-signature" ? (
+                "Awaiting wallet…"
+              ) : launchStatus === "sending-prefund" ? (
+                "Sending funds to treasury…"
+              ) : launchStatus === "confirming-prefund" ? (
+                "Confirming transfer…"
+              ) : launchStatus === "launching" ? (
+                "Treasury deploying pool…"
+              ) : (
+                "Preparing…"
+              )
+            ) : !wallet ? (
+              "Connect wallet to deploy"
+            ) : (
+              <>
+                Deploy coin <ArrowRight className="ml-1 h-4 w-4" />
+              </>
+            )}
           </Button>
           <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Creator pays 0.02 SOL launch fee + ~0.012 SOL mint and ATA rent + your initial buy. Supply locked at 1B.
+            Creator pays 0.02 SOL launch fee + ~0.012 SOL mint and ATA rent + your initial buy.
+            Supply locked at 1B.
           </p>
         </form>
       </div>
