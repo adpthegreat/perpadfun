@@ -11,6 +11,7 @@ import { getToken } from "@/lib/tokens.functions";
 import { BirdeyeChart } from "@/components/BirdeyeChart";
 import { refreshPoolState } from "@/lib/meteora/dbc.functions";
 import { formatUsd } from "@/lib/tokens";
+import { formatUsdPrice } from "@/hooks/usePythPrices";
 
 import { toast } from "sonner";
 
@@ -140,7 +141,12 @@ function TokenPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-semibold tracking-tight">${token.ticker}</h1>
+                <h1 className="text-3xl font-semibold tracking-tight">
+                  ${token.ticker}
+                  <span className="ml-1 text-xl font-normal text-muted-foreground">
+                    / {(token as any).quoteSymbol ?? "SOL"}
+                  </span>
+                </h1>
                 <Badge variant="outline" className="rounded-none font-mono text-[10px]">
                   {token.leverage}x {token.direction} {token.underlying}
                 </Badge>
@@ -191,7 +197,7 @@ function TokenPage() {
               {formatUsd(token.marketCap)}
             </div>
             <div className="font-mono text-xs tabular-nums text-muted-foreground">
-              {(token.graduationProgress * 100).toFixed(1)}% to graduation
+              {Math.max(0, 100 - token.graduationProgress * 100).toFixed(1)}% to graduation
             </div>
             <div className="font-mono text-[10px] text-muted-foreground">
               {token.underlying} mid ${liveMid.toLocaleString(undefined, { maximumFractionDigits: liveMid > 100 ? 0 : 4 })}
@@ -227,7 +233,9 @@ function TokenPage() {
             <div className="grid gap-px overflow-hidden border border-border bg-border sm:grid-cols-2">
               {[
                 ["Market cap", formatUsd(token.marketCap)],
+                ["Price", formatUsdPrice(token.priceUsd)],
                 ["Underlying", `${token.underlying}`],
+                ["Paired with", `${(token as any).quoteSymbol ?? "SOL"}`],
               ].map(([k, v]) => (
                 <div key={k} className="bg-card p-4">
                   <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{k}</div>
