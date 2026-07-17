@@ -14,6 +14,25 @@ const STANDARD_MIGRATION_SOL = 85; // rough threshold for graduation progress UI
 // realises that value once supply trades. We surface a flat $2.9k floor so a
 // freshly-launched token isn't shown at $0 mcap on our site.
 const INITIAL_MCAP_FLOOR_USD = 2900;
+const WSOL_MINT = "So11111111111111111111111111111111111111112";
+
+// USD price of a token's QUOTE asset. Pools store `sol_raised` /
+// `current_price_sol` in the quote token's own units (SOL for SOL pools, but
+// USDC for USDC pools, ANSEM for ANSEM pools, etc. — the column names are
+// legacy). Valuing those at the SOL price for a non-SOL quote inflates market
+// cap by solUsd/quoteUsd (e.g. ~77× for a $1 quote). Resolve the real quote
+// price: SOL → live SOL mid; others → Jupiter USD price, USDC pinned to $1.
+function resolveQuoteUsd(
+  t: { quote_token?: string | null; quote_mint?: string | null },
+  solUsd: number,
+  quotePrices: Record<string, number>,
+): number {
+  const qm = t.quote_mint;
+  if (!qm || qm === WSOL_MINT || (t.quote_token ?? "SOL") === "SOL") return solUsd;
+  const p = Number(quotePrices[qm] ?? 0);
+  if (p > 0) return p;
+  return (t.quote_token ?? "") === "USDC" ? 1 : 0;
+}
 
 async function fetchJupiterPrices(mints: string[]): Promise<Record<string, number>> {
   const ids = [...new Set(mints.filter(Boolean))];
@@ -27,6 +46,26 @@ async function fetchJupiterPrices(mints: string[]): Promise<Record<string, numbe
     );
   } catch {
     return {};
+  }
+}
+
+// Best-effort ticker/symbol for an arbitrary quote mint (Jupiter token search).
+// Used to label the pairing token on the token page for custom quotes; presets
+// (SOL/USDC/ANSEM/UWU) already carry their own symbol. Null on any failure.
+async function fetchTokenSymbol(mint: string): Promise<string | null> {
+  try {
+    const r = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${mint}`, {
+      headers: { accept: "application/json" },
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as unknown;
+    const arr = Array.isArray(j) ? j : [];
+    const found = (arr.find((x) => (x as { id?: string })?.id === mint) ?? arr[0]) as
+      | { symbol?: string }
+      | undefined;
+    return found?.symbol ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -180,22 +219,27 @@ export const listTokens = createServerFn({ method: "GET" })
           (t) => t.source === "external" && t.external_platform === "pump_fun" && t.external_mint,
         )
         .map((t) => t.external_mint as string);
-      const [jupPrices, pumpFunMcaps] = await Promise.all([
+      const quoteMints = (rows ?? [])
+        .map((t) => t.quote_mint)
+        .filter((m): m is string => !!m && m !== WSOL_MINT);
+      const [jupPrices, pumpFunMcaps, quotePrices] = await Promise.all([
         fetchJupiterPrices(priceMints),
         fetchPumpFunMarketCaps(pumpFunMints, solUsd),
+        fetchJupiterPrices(quoteMints),
       ]);
 
       const enriched = (rows ?? []).map((t) => {
         const isExternal = t.source === "external";
         const mid = Number(mids[t.underlying] ?? 0);
         const solRaised = Number(t.sol_raised ?? 0);
-        const reserveUsd = solRaised * solUsd;
+        const quoteUsd = resolveQuoteUsd(t, solUsd, quotePrices);
+        const reserveUsd = solRaised * quoteUsd;
         const graduated = t.migration_status === "graduated" || t.migration_status === "completed";
         const priceSol = Number(t.current_price_sol ?? 0);
         const supply = Number(t.total_supply ?? 1_000_000_000);
         const lookupMint = t.mint_address || t.external_mint;
         const jupPriceUsd = lookupMint ? Number(jupPrices[lookupMint] ?? 0) : 0;
-        const priceUsd = jupPriceUsd || priceSol * solUsd;
+        const priceUsd = jupPriceUsd || priceSol * quoteUsd;
         const fdvUsd = priceUsd * supply;
         const pumpFunMcap =
           t.external_platform === "pump_fun" && t.external_mint
@@ -394,7 +438,6 @@ export const getToken = createServerFn({ method: "GET" })
       // ignore
     }
     const solRaised = Number(t.sol_raised ?? 0);
-    const reserveUsd = solRaised * solUsd;
     const graduated = t.migration_status === "graduated" || t.migration_status === "completed";
     const launchMid = Number(t.launch_mid ?? 0);
     const priceSol = Number(t.current_price_sol ?? 0);
@@ -402,14 +445,29 @@ export const getToken = createServerFn({ method: "GET" })
     const isExternal = t.source === "external";
     const lookupMint = t.mint_address || t.external_mint;
     const isPumpFun = isExternal && t.external_platform === "pump_fun" && !!t.external_mint;
-    const [jupPrices, pumpFunMcaps] = await Promise.all([
+    const quoteMint = (t.quote_mint as string | null) ?? null;
+    const [jupPrices, pumpFunMcaps, quotePrices] = await Promise.all([
       fetchJupiterPrices(lookupMint ? [lookupMint] : []),
       isPumpFun
         ? fetchPumpFunMarketCaps([t.external_mint as string], solUsd)
         : Promise.resolve({} as Record<string, number>),
+      fetchJupiterPrices(quoteMint && quoteMint !== WSOL_MINT ? [quoteMint] : []),
     ]);
     const jupPriceUsd = lookupMint ? Number(jupPrices[lookupMint] ?? 0) : 0;
-    const priceUsd = jupPriceUsd || priceSol * solUsd;
+    const quoteUsd = resolveQuoteUsd(t, solUsd, quotePrices);
+    const reserveUsd = solRaised * quoteUsd;
+    const priceUsd = jupPriceUsd || priceSol * quoteUsd;
+
+    // Pairing (quote) token shown on the token page. Presets use their label as
+    // the symbol; a custom quote resolves its symbol from Jupiter (fallback to a
+    // truncated mint) so the page can say what the coin is actually paired with.
+    const quoteLabel = (t.quote_token ?? "SOL") as string;
+    let quoteSymbol = quoteLabel;
+    if (quoteLabel === "CUSTOM" && quoteMint) {
+      quoteSymbol =
+        (await fetchTokenSymbol(quoteMint)) ??
+        `${quoteMint.slice(0, 4)}…${quoteMint.slice(-4)}`;
+    }
     const fdvUsd = priceUsd * supply;
     const pumpFunMcap = isPumpFun ? Number(pumpFunMcaps[t.external_mint as string] ?? 0) : 0;
     const realProxy = Math.max(pumpFunMcap, fdvUsd);
@@ -458,6 +516,9 @@ export const getToken = createServerFn({ method: "GET" })
         dbcConfigAddress: t.dbc_config_address as string | null,
         graduatedPoolAddress: t.graduated_pool_address as string | null,
         quoteToken: (t.quote_token === "USDC" ? "USDC" : "SOL") as "SOL" | "USDC",
+        // Display-only pairing info (the real quote, incl. ANSEM/UWU/custom).
+        quoteSymbol,
+        quoteMint,
         curvePreset: t.curve_preset as string,
         raydiumPoolId: null as string | null,
         poolSeededAt: null as string | null,
