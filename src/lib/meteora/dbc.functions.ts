@@ -711,11 +711,23 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
             error: `Token sub-wallet SOL too low for rent/fees (${subWalletBal} < ${solNeeded} lamports). Prefund may not have credited yet.`,
           };
         }
-        const { getAssociatedTokenAddressSync } = await import("@solana/spl-token");
+        const { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } =
+          await import("@solana/spl-token");
+        // The quote token may be classic SPL or Token-2022 (e.g. ANSEM). Its ATA
+        // address depends on the owning program, so derive with the right one —
+        // the classic default reads an empty address for a Token-2022 quote and
+        // wrongly reports the prefund as uncredited.
+        const quoteMintPk = new PublicKey(quoteMintStr);
+        const quoteMintInfo = await conn.getAccountInfo(quoteMintPk, "confirmed");
+        const quoteProgramId =
+          quoteMintInfo && quoteMintInfo.owner.equals(TOKEN_2022_PROGRAM_ID)
+            ? TOKEN_2022_PROGRAM_ID
+            : TOKEN_PROGRAM_ID;
         const subQuoteAta = getAssociatedTokenAddressSync(
-          new PublicKey(quoteMintStr),
+          quoteMintPk,
           subWallet.publicKey,
           true,
+          quoteProgramId,
         );
         let quoteBal = 0;
         try {
@@ -757,6 +769,7 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
         CollectFeeMode,
         BaseFeeMode,
         deriveDbcPoolAddress,
+        DYNAMIC_BONDING_CURVE_PROGRAM_ID,
       } = await import("@meteora-ag/dynamic-bonding-curve-sdk");
 
       const client = new DynamicBondingCurveClient(conn, "confirmed");
@@ -941,6 +954,54 @@ export const launchAsTreasury = createServerFn({ method: "POST" })
             referralTokenAccount: null,
           },
         });
+
+      // ── Token-2022 quote fix ────────────────────────────────────────────
+      // The SDK's initializeVirtualPoolWithSplToken hardcodes the QUOTE token
+      // program to classic SPL (tokenQuoteProgram: TOKEN_PROGRAM_ID). For a
+      // Token-2022 quote (e.g. ANSEM) that makes the DBC program CPI into the
+      // classic Token program against a Token-2022 mint → IncorrectProgramId at
+      // pool deploy. The on-chain instruction leaves token_quote_program
+      // unconstrained (verified in the IDL — no address lock), so we patch that
+      // one account meta to the correct program. It is account index 11 of
+      // initialize_virtual_pool_with_spl_token; index 12 is the base
+      // token_program (classic). Guard on both being classic so a future SDK
+      // layout change aborts loudly instead of sending a malformed tx.
+      {
+        const { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } = await import("@solana/spl-token");
+        const quoteOwner = (await conn.getAccountInfo(new PublicKey(quoteMintStr), "confirmed"))
+          ?.owner;
+        if (quoteOwner && quoteOwner.equals(TOKEN_2022_PROGRAM_ID)) {
+          const SPL_POOL_INIT_DISC = Buffer.from([140, 85, 215, 176, 102, 54, 104, 79]);
+          const TOKEN_QUOTE_PROGRAM_INDEX = 11;
+          let patched = false;
+          for (const ix of createPoolWithFirstBuyTx.instructions) {
+            if (
+              !ix.programId.equals(DYNAMIC_BONDING_CURVE_PROGRAM_ID) ||
+              ix.data.length < 8 ||
+              !Buffer.from(ix.data.subarray(0, 8)).equals(SPL_POOL_INIT_DISC)
+            ) {
+              continue;
+            }
+            const quoteSlot = ix.keys[TOKEN_QUOTE_PROGRAM_INDEX];
+            const baseSlot = ix.keys[TOKEN_QUOTE_PROGRAM_INDEX + 1];
+            if (
+              quoteSlot?.pubkey.equals(TOKEN_PROGRAM_ID) &&
+              baseSlot?.pubkey.equals(TOKEN_PROGRAM_ID)
+            ) {
+              ix.keys[TOKEN_QUOTE_PROGRAM_INDEX] = { ...quoteSlot, pubkey: TOKEN_2022_PROGRAM_ID };
+              patched = true;
+            }
+            break;
+          }
+          if (!patched) {
+            return {
+              ok: false as const,
+              error:
+                "Could not apply the Token-2022 quote fix (SDK pool-init layout changed). Aborting to avoid a bad transaction.",
+            };
+          }
+        }
+      }
 
       // 4. Sign + send config tx. Sub-wallet is fee payer + signer.
       const bh1 = await conn.getLatestBlockhash("confirmed");

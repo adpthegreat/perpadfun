@@ -15,6 +15,8 @@ import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
 import { useServerFn } from "@tanstack/react-start";
 import { createDraftToken, deleteDraft, launchAsTreasury } from "@/lib/meteora/dbc.functions";
@@ -155,8 +157,27 @@ export function useMeteoraLaunch() {
         // USDC leg: create the sub-wallet's USDC ATA (user pays its rent) and
         // transfer the missing dev-buy amount into it.
         if (quote !== "SOL") {
-          const subUsdcAta = getAssociatedTokenAddressSync(quoteMintPk, subWalletPubkey, true);
-          const userUsdcAta = getAssociatedTokenAddressSync(quoteMintPk, publicKey, false);
+          // The quote token may be classic SPL or Token-2022 (e.g. ANSEM). The
+          // ATA address + transfer/create instructions must use the mint's own
+          // program; the default (classic) would derive an unusable ATA and a
+          // transfer that fails on-chain for a Token-2022 quote.
+          const mintInfo = await connection.getAccountInfo(quoteMintPk, "confirmed");
+          const quoteProgramId =
+            mintInfo && mintInfo.owner.equals(TOKEN_2022_PROGRAM_ID)
+              ? TOKEN_2022_PROGRAM_ID
+              : TOKEN_PROGRAM_ID;
+          const subUsdcAta = getAssociatedTokenAddressSync(
+            quoteMintPk,
+            subWalletPubkey,
+            true,
+            quoteProgramId,
+          );
+          const userUsdcAta = getAssociatedTokenAddressSync(
+            quoteMintPk,
+            publicKey,
+            false,
+            quoteProgramId,
+          );
           let subUsdcRaw = 0;
           try {
             const b = await connection.getTokenAccountBalance(subUsdcAta, "confirmed");
@@ -184,6 +205,7 @@ export function useMeteoraLaunch() {
                 subUsdcAta,
                 subWalletPubkey,
                 quoteMintPk,
+                quoteProgramId,
               ),
               createTransferCheckedInstruction(
                 userUsdcAta,
@@ -192,6 +214,8 @@ export function useMeteoraLaunch() {
                 publicKey,
                 usdcToSend,
                 decimals,
+                [],
+                quoteProgramId,
               ),
             );
           }
