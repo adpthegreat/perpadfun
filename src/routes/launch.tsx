@@ -15,6 +15,14 @@ import { MarketIcon } from "@/lib/market-icons";
 import { supabase } from "@/integrations/supabase/client";
 import { useMeteoraLaunch } from "@/hooks/useMeteoraLaunch";
 import { verifyQuoteToken, type VerifiedQuoteToken } from "@/lib/launch/verifyQuoteToken.functions";
+import { useWallet as useSolanaAdapterWallet, useConnection } from "@solana/wallet-adapter-react";
+import { QUOTE_TOKENS } from "@/lib/launch/config-builder";
+import {
+  planSwapForTarget,
+  executeSwap,
+  quoteTokenBalanceRaw,
+  type SwapPlan,
+} from "@/lib/launch/quoteSwap";
 
 // Client-side pre-check so obviously bad input never round-trips to the server.
 const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]+$/;
@@ -122,6 +130,14 @@ function LaunchPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showAllMarkets, setShowAllMarkets] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Wallet-adapter primitives for the "acquire the quote token" swap (separate
+  // from the app WalletContext, which doesn't expose signTransaction).
+  const { publicKey: adapterPk, signTransaction: adapterSign } = useSolanaAdapterWallet();
+  const { connection } = useConnection();
+  const [quoteBalRaw, setQuoteBalRaw] = useState<number | null>(null);
+  const [balNonce, setBalNonce] = useState(0); // bump to re-read balance after a swap
+  const [swapping, setSwapping] = useState(false);
+  const [swapEst, setSwapEst] = useState<SwapPlan | null>(null);
 
   // Dev-buy bounds + quick-pick presets per quote token (amounts are in the
   // quote token's own units).
@@ -168,6 +184,92 @@ function LaunchPage() {
     setQuote(q);
     setInitialBuySol(BUY_BOUNDS[q].default);
   };
+
+  // Resolved mint/decimals/symbol for the selected NON-SOL quote (null for SOL,
+  // which the dev-buy already pays in — no swap needed). CUSTOM resolves from
+  // the verified token; presets from the registry.
+  const activeQuote =
+    quote === "SOL"
+      ? null
+      : quote === "CUSTOM"
+        ? verified
+          ? { mint: verified.mint, decimals: verified.decimals, symbol: verified.symbol ?? "token" }
+          : null
+        : {
+            mint: QUOTE_TOKENS[quote].mint,
+            decimals: QUOTE_TOKENS[quote].quoteDecimal,
+            symbol: QUOTE_TOKENS[quote].label,
+          };
+
+  // Read the creator's balance of the selected quote token (program-agnostic).
+  useEffect(() => {
+    let cancelled = false;
+    if (!adapterPk || !activeQuote) {
+      setQuoteBalRaw(null);
+      return;
+    }
+    quoteTokenBalanceRaw(connection, adapterPk, activeQuote.mint)
+      .then((raw) => !cancelled && setQuoteBalRaw(raw))
+      .catch(() => !cancelled && setQuoteBalRaw(null));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adapterPk, activeQuote?.mint, balNonce]);
+
+  const devBuyNum = parseFloat(initialBuySol);
+  const devBuyRaw =
+    activeQuote && Number.isFinite(devBuyNum) && devBuyNum > 0
+      ? Math.floor(devBuyNum * 10 ** activeQuote.decimals)
+      : 0;
+  // Shortfall (in raw units) between the dev-buy and what the wallet holds. Only
+  // computed once the balance has loaded, so the swap CTA never flashes.
+  const shortfallRaw =
+    activeQuote && quoteBalRaw != null ? Math.max(0, devBuyRaw - quoteBalRaw) : 0;
+
+  // Price the shortfall swap so the CTA can show "~N SOL". Debounced so typing
+  // in the dev-buy field doesn't spray Jupiter quote requests.
+  useEffect(() => {
+    if (!activeQuote || shortfallRaw <= 0) {
+      setSwapEst(null);
+      return;
+    }
+    let cancelled = false;
+    const mint = activeQuote.mint;
+    const t = setTimeout(() => {
+      planSwapForTarget(mint, shortfallRaw)
+        .then((q) => !cancelled && setSwapEst(q))
+        .catch(() => !cancelled && setSwapEst(null));
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeQuote?.mint, shortfallRaw]);
+
+  async function acquireQuoteToken() {
+    if (!adapterPk || !adapterSign || !activeQuote || shortfallRaw <= 0) return;
+    setSwapping(true);
+    try {
+      const plan = await planSwapForTarget(activeQuote.mint, shortfallRaw);
+      if (!plan) throw new Error("No swap route available right now — try again.");
+      const sig = await executeSwap({
+        connection,
+        publicKey: adapterPk,
+        signTransaction: adapterSign,
+        plan,
+      });
+      toast.success(`Swapped for ${activeQuote.symbol}`, { description: `${sig.slice(0, 8)}…` });
+      setBalNonce((n) => n + 1);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Swap failed");
+    } finally {
+      setSwapping(false);
+    }
+  }
+  const fmtUnits = (raw: number, decimals: number) =>
+    (raw / 10 ** decimals).toLocaleString(undefined, { maximumFractionDigits: 4 });
 
   const currentMid =
     markets.find((m) => m.name === priceFeedSymbol(underlying))?.markPx ??
@@ -704,6 +806,28 @@ function LaunchPage() {
                 ))}
               </div>
             </div>
+            {activeQuote && shortfallRaw > 0 && (
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-primary/40 bg-primary/5 p-2 text-[11px]">
+                <span className="text-muted-foreground">
+                  You hold {fmtUnits(quoteBalRaw ?? 0, activeQuote.decimals)} {activeQuote.symbol} —{" "}
+                  {fmtUnits(shortfallRaw, activeQuote.decimals)} more needed for this dev-buy.
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={swapping || !adapterPk}
+                  onClick={acquireQuoteToken}
+                  className="shrink-0"
+                >
+                  {swapping
+                    ? "Swapping…"
+                    : `Get ${fmtUnits(shortfallRaw, activeQuote.decimals)} ${activeQuote.symbol}${
+                        swapEst ? ` (~${(swapEst.inLamports / 1e9).toFixed(3)} SOL)` : ""
+                      }`}
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="border border-border bg-secondary/40 p-4">
